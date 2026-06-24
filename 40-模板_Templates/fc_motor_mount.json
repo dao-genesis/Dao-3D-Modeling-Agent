@@ -1,0 +1,45 @@
+{
+  "_comment": "ModelForge Golden Template — FreeCAD Motor Mount (NEMA17)",
+  "_engine": "FreeCAD PartDesign via freecad_backend.py",
+  "_pattern": "Sketch→Pad→Pocket→Fillet parametric chain",
+  "_usage": "python forge_v3.py fc_ops templates/fc_motor_mount.json",
+  "_params": {
+    "plate_size": "42mm (NEMA17 standard)",
+    "plate_t": "5mm mounting plate",
+    "hole_spacing": "31mm (NEMA17 standard)",
+    "hole_d": "3.2mm (M3 clearance)",
+    "center_d": "22mm (NEMA17 pilot)",
+    "standoff_h": "8mm support height",
+    "fillet_r": "2mm edge fillet"
+  },
+  "ops": [
+    {"op": "make_box", "id": "plate", "L": 50, "W": 50, "H": 5,
+     "pos": [-25, -25, 0]},
+
+    {"op": "make_cylinder", "id": "standoff1", "R": 5, "H": 8,
+     "pos": [-21, -21, 5]},
+    {"op": "make_cylinder", "id": "standoff2", "R": 5, "H": 8,
+     "pos": [21, -21, 5]},
+    {"op": "make_cylinder", "id": "standoff3", "R": 5, "H": 8,
+     "pos": [-21, 21, 5]},
+    {"op": "make_cylinder", "id": "standoff4", "R": 5, "H": 8,
+     "pos": [21, 21, 5]},
+
+    {"op": "fuse", "id": "body", "shapes": ["plate", "standoff1", "standoff2", "standoff3", "standoff4"]},
+
+    {"op": "make_cylinder", "id": "center_hole", "R": 11, "H": 20,
+     "pos": [0, 0, -1]},
+    {"op": "make_cylinder", "id": "m3_1", "R": 1.6, "H": 20, "pos": [-15.5, -15.5, -1]},
+    {"op": "make_cylinder", "id": "m3_2", "R": 1.6, "H": 20, "pos": [15.5, -15.5, -1]},
+    {"op": "make_cylinder", "id": "m3_3", "R": 1.6, "H": 20, "pos": [-15.5, 15.5, -1]},
+    {"op": "make_cylinder", "id": "m3_4", "R": 1.6, "H": 20, "pos": [15.5, 15.5, -1]},
+
+    {"op": "fuse", "id": "all_holes", "shapes": ["center_hole", "m3_1", "m3_2", "m3_3", "m3_4"]},
+
+    {"op": "cut", "id": "final", "base": "body", "tools": ["all_holes"]},
+
+    {"op": "export_stl", "shape": "final", "path": "output/motor_mount.stl"},
+    {"op": "export_step", "shape": "final", "path": "output/motor_mount.step"},
+    {"op": "shape_info", "shape": "final"}
+  ]
+}

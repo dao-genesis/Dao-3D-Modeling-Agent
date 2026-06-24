@@ -1,0 +1,62 @@
+{
+  "main_shaft": {
+    "faces": 2564,
+    "watertight": true,
+    "volume_mm3": 6868875.7,
+    "bbox_mm": [
+      1145.0,
+      90.0,
+      90.0
+    ]
+  },
+  "rotor_disc": {
+    "faces": 3040,
+    "watertight": true,
+    "volume_mm3": 4655481.1,
+    "bbox_mm": [
+      500.0,
+      499.8,
+      25.0
+    ]
+  },
+  "hammer": {
+    "faces": 520,
+    "watertight": true,
+    "volume_mm3": 381755.3,
+    "bbox_mm": [
+      80.0,
+      180.0,
+      40.0
+    ]
+  },
+  "hammer_pin": {
+    "faces": 2264,
+    "watertight": true,
+    "volume_mm3": 813759.3,
+    "bbox_mm": [
+      670.0,
+      40.0,
+      40.0
+    ]
+  },
+  "driven_pulley": {
+    "faces": 1004,
+    "watertight": true,
+    "volume_mm3": 3713458.3,
+    "bbox_mm": [
+      90.0,
+      240.0,
+      239.9
+    ]
+  },
+  "screen_plate": {
+    "faces": 4530,
+    "watertight": true,
+    "volume_mm3": 7882919.0,
+    "bbox_mm": [
+      603.0,
+      402.0,
+      800.0
+    ]
+  }
+}

@@ -1,0 +1,1611 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SR6 Studio</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
+        background: #1a1a2e;
+        color: #e0e0e0;
+        overflow: hidden;
+      }
+      #canvas {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+      }
+
+      /* Sidebar */
+      #sidebar {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 260px;
+        height: 100%;
+        background: rgba(16, 16, 32, 0.92);
+        backdrop-filter: blur(12px);
+        border-right: 1px solid rgba(255, 255, 255, 0.08);
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        transition: transform 0.3s;
+      }
+      #sidebar.hidden {
+        transform: translateX(-260px);
+      }
+      #sidebar h2 {
+        padding: 16px 16px 8px;
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: #8888cc;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .group-label {
+        padding: 10px 16px 4px;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: #6a6a9a;
+        letter-spacing: 1.5px;
+        cursor: pointer;
+        user-select: none;
+      }
+      .group-label:hover {
+        color: #9a9adf;
+      }
+      .part-item {
+        display: flex;
+        align-items: center;
+        padding: 3px 16px 3px 24px;
+        cursor: pointer;
+        font-size: 12px;
+        transition: background 0.15s;
+      }
+      .part-item:hover {
+        background: rgba(255, 255, 255, 0.06);
+      }
+      .part-item .swatch {
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+        margin-right: 8px;
+        flex-shrink: 0;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+      }
+      .part-item .name {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .part-item.hidden-part {
+        opacity: 0.35;
+      }
+      .part-list {
+        flex: 1;
+        overflow-y: auto;
+        padding-bottom: 12px;
+      }
+      .part-list::-webkit-scrollbar {
+        width: 4px;
+      }
+      .part-list::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 2px;
+      }
+
+      /* IK Panel */
+      #ik-panel {
+        padding: 12px 16px;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      #ik-panel h3 {
+        font-size: 11px;
+        text-transform: uppercase;
+        color: #6a6a9a;
+        letter-spacing: 1px;
+        margin-bottom: 8px;
+      }
+      .ik-slider {
+        margin-bottom: 6px;
+      }
+      .ik-slider label {
+        display: flex;
+        justify-content: space-between;
+        font-size: 11px;
+        margin-bottom: 2px;
+      }
+      .ik-slider input[type="range"] {
+        width: 100%;
+        height: 4px;
+        -webkit-appearance: none;
+        background: rgba(255, 255, 255, 0.12);
+        border-radius: 2px;
+        outline: none;
+      }
+      .ik-slider input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #6c6cff;
+        cursor: pointer;
+        border: 2px solid #1a1a2e;
+      }
+
+      /* Stats bar */
+      #stats {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 28px;
+        background: rgba(16, 16, 32, 0.85);
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        font-size: 11px;
+        color: #888;
+        gap: 20px;
+      }
+      #stats .val {
+        color: #aaa;
+      }
+
+      /* Toggle button */
+      #toggle-sidebar {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        z-index: 20;
+        width: 32px;
+        height: 32px;
+        background: rgba(16, 16, 32, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 6px;
+        color: #aaa;
+        cursor: pointer;
+        font-size: 16px;
+        display: none;
+        align-items: center;
+        justify-content: center;
+      }
+      #sidebar.hidden ~ #toggle-sidebar {
+        display: flex;
+        left: 12px;
+      }
+
+      /* Loading overlay */
+      #loading {
+        position: absolute;
+        inset: 0;
+        z-index: 100;
+        background: rgba(16, 16, 32, 0.95);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        transition: opacity 0.5s;
+      }
+      #loading.done {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #loading .bar {
+        width: 240px;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+      #loading .bar-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #4444cc, #8888ff);
+        border-radius: 2px;
+        width: 0%;
+        transition: width 0.3s;
+      }
+      #loading .text {
+        font-size: 13px;
+        color: #888;
+      }
+
+      /* View controls */
+      #view-controls {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        z-index: 10;
+        display: flex;
+        gap: 6px;
+      }
+      .view-btn {
+        background: rgba(16, 16, 32, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 6px;
+        color: #aaa;
+        cursor: pointer;
+        padding: 6px 12px;
+        font-size: 11px;
+        font-family: inherit;
+        transition: all 0.15s;
+      }
+      .view-btn:hover {
+        background: rgba(40, 40, 80, 0.9);
+        color: #fff;
+      }
+      .view-btn.active {
+        background: rgba(60, 60, 140, 0.8);
+        color: #fff;
+        border-color: rgba(100, 100, 255, 0.4);
+      }
+      #tooltip {
+        position: absolute;
+        z-index: 30;
+        background: rgba(16, 16, 32, 0.92);
+        border: 1px solid rgba(100, 100, 255, 0.3);
+        border-radius: 8px;
+        padding: 8px 12px;
+        font-size: 11px;
+        color: #ccc;
+        pointer-events: none;
+        display: none;
+        backdrop-filter: blur(8px);
+        max-width: 220px;
+        line-height: 1.5;
+      }
+      #tooltip .tt-name {
+        font-weight: 600;
+        color: #8888ff;
+        font-size: 12px;
+      }
+      #tooltip .tt-dim {
+        color: #999;
+      }
+      .panel-sep {
+        height: 1px;
+        background: rgba(255, 255, 255, 0.06);
+        margin: 8px 0;
+      }
+      /* Analyzer Panel */
+      #analyzer-panel {
+        position: absolute;
+        top: 50px;
+        right: 12px;
+        z-index: 20;
+        background: rgba(10, 10, 24, 0.94);
+        border: 1px solid rgba(100, 200, 255, 0.25);
+        border-radius: 10px;
+        padding: 14px 16px;
+        font-size: 11px;
+        min-width: 280px;
+        max-width: 340px;
+        max-height: 75vh;
+        overflow-y: auto;
+        display: none;
+        backdrop-filter: blur(12px);
+        box-shadow: 0 4px 24px rgba(0,0,0,0.6);
+      }
+      #analyzer-panel.visible { display: block; }
+      #analyzer-panel h3 {
+        font-size: 12px; font-weight: 700; color: #88aaff;
+        margin-bottom: 10px; letter-spacing: 0.5px;
+        border-bottom: 1px solid rgba(100,150,255,0.2); padding-bottom: 6px;
+      }
+      .az-section { margin-bottom: 12px; }
+      .az-section h4 { font-size: 10px; text-transform: uppercase; color: #6688cc; margin-bottom: 6px; }
+      .az-row { display: flex; justify-content: space-between; padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+      .az-row .az-key { color: #888; font-size: 10px; }
+      .az-row .az-val { color: #ccd; font-size: 10px; font-weight: 600; }
+      .az-row .az-val.good { color: #44cc88; }
+      .az-row .az-val.warn { color: #ffaa44; }
+      .az-row .az-val.bad { color: #ff5566; }
+      .az-grade-s { color: #44cc88; } .az-grade-a { color: #88ddff; }
+      .az-grade-b { color: #ffaa44; } .az-grade-c { color: #ff7744; }
+      .az-loading { color: #666; font-style: italic; padding: 8px 0; }
+      .az-toggle { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+      .az-toggle button {
+        background: rgba(40,40,80,0.8); border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 5px; color: #aaa; cursor: pointer; padding: 4px 10px;
+        font-size: 10px; font-family: inherit; transition: all 0.15s;
+      }
+      .az-toggle button:hover { background: rgba(60,60,120,0.9); color: #fff; }
+      .az-toggle button.active { background: rgba(40,80,160,0.8); color: #aaddff; border-color: rgba(80,140,255,0.5); }
+    </style>
+  </head>
+  <body>
+    <div id="loading">
+      <div class="text" id="load-text">Loading SR6 Studio...</div>
+      <div class="bar"><div class="bar-fill" id="load-bar"></div></div>
+    </div>
+
+    <div id="sidebar">
+      <h2>SR6 Parts</h2>
+      <div class="part-list" id="part-list"></div>
+      <div id="ik-panel">
+        <h3>IK Controls</h3>
+        <div class="ik-slider">
+          <label><span>Thrust (L0)</span><span id="v-thrust">0</span></label>
+          <input type="range" min="-60" max="60" value="0" id="s-thrust" />
+        </div>
+        <div class="ik-slider">
+          <label><span>Roll (R1)</span><span id="v-roll">0°</span></label>
+          <input type="range" min="-30" max="30" value="0" id="s-roll" />
+        </div>
+        <div class="ik-slider">
+          <label><span>Pitch (R2)</span><span id="v-pitch">0°</span></label>
+          <input type="range" min="-25" max="25" value="0" id="s-pitch" />
+        </div>
+        <div class="ik-slider">
+          <label><span>Twist (R0)</span><span id="v-twist">0°</span></label>
+          <input type="range" min="-135" max="135" value="0" id="s-twist" />
+        </div>
+        <div class="ik-slider">
+          <label><span>Fwd (L1)</span><span id="v-fwd">0</span></label>
+          <input type="range" min="-30" max="30" value="0" id="s-fwd" />
+        </div>
+        <div class="ik-slider">
+          <label><span>Side (L2)</span><span id="v-side">0</span></label>
+          <input type="range" min="-30" max="30" value="0" id="s-side" />
+        </div>
+        <div class="panel-sep"></div>
+        <div class="ik-slider">
+          <label><span>Explode</span><span id="v-explode">0%</span></label>
+          <input type="range" min="0" max="100" value="0" id="s-explode" />
+        </div>
+        <div class="ik-slider">
+          <label><span>Section</span><span id="v-section">OFF</span></label>
+          <input type="range" min="-10" max="280" value="280" id="s-section" />
+        </div>
+      </div>
+    </div>
+
+    <button id="toggle-sidebar" title="Toggle sidebar">☰</button>
+
+    <div id="view-controls">
+      <button class="view-btn" data-view="front">Front</button>
+      <button class="view-btn" data-view="side">Side</button>
+      <button class="view-btn" data-view="top">Top</button>
+      <button class="view-btn" data-view="iso">Iso</button>
+      <button class="view-btn" data-view="grid" id="btn-grid">Grid</button>
+      <button class="view-btn" data-view="axes" id="btn-axes">Axes</button>
+      <button class="view-btn" data-view="wireframe" id="btn-wire">Wire</button>
+      <button class="view-btn" data-view="animate" id="btn-anim">
+        Animate
+      </button>
+      <button class="view-btn" data-view="reset">Reset</button>
+      <button class="view-btn" id="btn-analyze">Analyze</button>
+      <button class="view-btn" id="btn-hub" title="Connect to ors6_hub :41927 &#10;IK sliders will send TCode to real device">Hub</button>
+    </div>
+    <div id="hub-status" style="display:none;position:absolute;top:48px;right:12px;z-index:11;font-size:10px;padding:3px 8px;border-radius:4px;background:rgba(10,10,24,0.88);border:1px solid rgba(100,255,150,0.3);color:#88ffaa;">&#9632; Hub :41927 <span id="hub-device-badge" style="margin-left:4px;padding:1px 5px;border-radius:3px;font-size:9px;"></span></div>
+
+    <!-- Analyzer Panel v3 -->
+    <div id="analyzer-panel">
+      <h3>⚡ SR6 深度分析 v3</h3>
+      <div class="az-toggle">
+        <button id="az-btn-mass" class="active">质量</button>
+        <button id="az-btn-quality">质检</button>
+        <button id="az-btn-workspace">工作空间</button>
+        <button id="az-btn-com">质心可视化</button>
+        <button id="az-btn-print">可打印性</button>
+      </div>
+      <div id="az-content"><div class="az-loading">点击按钮加载分析数据...</div></div>
+    </div>
+    <div id="tooltip"></div>
+
+    <div id="stats">
+      <span>Parts: <span class="val" id="st-parts">0</span></span>
+      <span>Triangles: <span class="val" id="st-tris">0</span></span>
+      <span>FPS: <span class="val" id="st-fps">0</span></span>
+      <span>Frame spacing: <span class="val">199.2mm (rectangular)</span></span>
+    </div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.183.1/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.183.1/examples/jsm/"
+        }
+      }
+    </script>
+    <script type="module">
+      import * as THREE from "three";
+      import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+      import { STLLoader } from "three/addons/loaders/STLLoader.js";
+      import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+
+      // ─── State ───
+      const state = {
+        parts: {}, // name → THREE.Mesh
+        partData: [], // from API
+        animating: false,
+        wireframe: false,
+        totalTris: 0,
+        partCenters: {}, // name → THREE.Vector3 (world center for explode)
+        explodeFactor: 0,
+        sectionY: 500,
+      };
+      // Expose state to window for Playwright/Agent verification
+      window.state = state;
+
+      // SR6 firmware constants (mm) — single source of truth from sr6_tools.py SR6 dict
+      const HOME_H_MM = 208.48; // servoPivotH(46) + baseH(162.48): receiver mount holes at home
+
+      // RECV_PARTS: only parts that physically move with the receiver platform.
+      // Lid, Tray, PowerBus etc. are STATIC base assembly parts — do NOT move with receiver.
+      const RECV_PARTS = new Set([
+        "Receiver",
+        // T-wist4 receiver assembly (replaces standard Receiver in T-wist build)
+        "Twist_Base", "Twist_Body", "Twist_Lid",
+        "RingGear", "ExchangeGear", "DriveGear",
+        "GrommetLink", "L_AngleLink", "R_AngleLink",
+      ]);
+
+      // ─── Scene Setup ───
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x1a1a2e);
+      scene.fog = new THREE.Fog(0x1a1a2e, 400, 800);
+
+      const camera = new THREE.PerspectiveCamera(
+        45,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        2000,
+      );
+      camera.position.set(200, 350, 400);
+
+      const renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: false,
+      });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.2;
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.localClippingEnabled = true;
+      document.body.appendChild(renderer.domElement);
+
+      const pmremGenerator = new THREE.PMREMGenerator(renderer);
+      scene.environment = pmremGenerator.fromScene(
+        new RoomEnvironment(renderer),
+        0.04,
+      ).texture;
+      pmremGenerator.dispose();
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.08;
+      controls.target.set(0, 120, 0);
+      controls.minDistance = 50;
+      controls.maxDistance = 800;
+
+      // ─── Lighting (studio-quality) ───
+      const ambientLight = new THREE.AmbientLight(0x404060, 0.6);
+      scene.add(ambientLight);
+
+      const keyLight = new THREE.DirectionalLight(0xfff5e6, 1.8);
+      keyLight.position.set(150, 200, 100);
+      keyLight.castShadow = true;
+      keyLight.shadow.mapSize.set(2048, 2048);
+      keyLight.shadow.camera.left = -200;
+      keyLight.shadow.camera.right = 200;
+      keyLight.shadow.camera.top = 200;
+      keyLight.shadow.camera.bottom = -200;
+      scene.add(keyLight);
+
+      const fillLight = new THREE.DirectionalLight(0xc0d0ff, 0.5);
+      fillLight.position.set(-100, 100, -80);
+      scene.add(fillLight);
+
+      const rimLight = new THREE.DirectionalLight(0xffffff, 0.3);
+      rimLight.position.set(0, -50, -150);
+      scene.add(rimLight);
+
+      const hemiLight = new THREE.HemisphereLight(0x8888cc, 0x444422, 0.4);
+      scene.add(hemiLight);
+
+      // ─── Ground ───
+      const gridHelper = new THREE.GridHelper(400, 40, 0x333355, 0x222244);
+      scene.add(gridHelper);
+
+      const axesHelper = new THREE.AxesHelper(100);
+      axesHelper.visible = false;
+      scene.add(axesHelper);
+
+      const groundGeo = new THREE.PlaneGeometry(800, 800);
+      const groundMat = new THREE.ShadowMaterial({ opacity: 0.15 });
+      const ground = new THREE.Mesh(groundGeo, groundMat);
+      ground.rotation.x = -Math.PI / 2;
+      ground.position.y = 0;
+      ground.receiveShadow = true;
+      scene.add(ground);
+
+      // ─── Section Clipping Plane ───
+      const sectionPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 500);
+
+      // ─── Materials (PBR, grouped by function) ───
+      const MAT = {
+        frame: new THREE.MeshPhysicalMaterial({
+          color: 0xcc2020,
+          roughness: 0.35,
+          metalness: 0.15,
+          clearcoat: 0.2,
+        }),
+        base: new THREE.MeshPhysicalMaterial({
+          color: 0xbb1a1a,
+          roughness: 0.32,
+          metalness: 0.12,
+          clearcoat: 0.15,
+        }),
+        receiver: new THREE.MeshPhysicalMaterial({
+          color: 0x2a3a6a,
+          roughness: 0.3,
+          metalness: 0.08,
+          transparent: true,
+          opacity: 0.88,
+          clearcoat: 0.3,
+        }),
+        gear: new THREE.MeshPhysicalMaterial({
+          color: 0x444444,
+          roughness: 0.3,
+          metalness: 0.6,
+          clearcoat: 0.1,
+        }),
+        metal: new THREE.MeshPhysicalMaterial({
+          color: 0xb0b0bb,
+          roughness: 0.12,
+          metalness: 0.9,
+        }),
+        white: new THREE.MeshPhysicalMaterial({
+          color: 0xe0ddd8,
+          roughness: 0.4,
+          metalness: 0.05,
+        }),
+        shield: new THREE.MeshPhysicalMaterial({
+          color: 0x333333,
+          roughness: 0.45,
+          metalness: 0.2,
+        }),
+        link: new THREE.MeshPhysicalMaterial({
+          color: 0xf0ede8,
+          roughness: 0.35,
+          metalness: 0.1,
+        }),
+      };
+
+      Object.values(MAT).forEach((m) => {
+        m.clippingPlanes = [sectionPlane];
+        m.clipShadows = true;
+        m.side = THREE.DoubleSide;
+      });
+
+      function getMaterial(name, colorHex) {
+        if (name === "Receiver") return MAT.receiver;
+        if (name === "Base") return MAT.base;
+        if (name.includes("Gear") || name.includes("Drive")) return MAT.gear;
+        if (name.includes("Shield")) return MAT.shield;
+        if (
+          name.includes("Link") ||
+          name.includes("Bearing") ||
+          name.includes("Spacer")
+        )
+          return MAT.metal;
+        if (
+          name.includes("Tray") ||
+          name.includes("PowerBus") ||
+          name.includes("Arm") ||
+          name === "Twist_Lid"
+        )
+          return MAT.white;
+        if (
+          name.includes("Frame") ||
+          name.includes("Pitcher") ||
+          name.includes("Twist") ||
+          name.includes("Lid") ||
+          name.includes("Angle")
+        )
+          return MAT.frame;
+        return MAT.link;
+      }
+
+      // ─── STL Loading ───
+      const stlLoader = new STLLoader();
+
+      async function loadAllParts() {
+        const resp = await fetch("/api/parts");
+        state.partData = await resp.json();
+
+        const existing = state.partData.filter((p) => p.exists);
+        let loaded = 0;
+
+        updateLoadingBar(0, `Loading ${existing.length} STL parts...`);
+
+        const promises = existing.map(
+          (part) =>
+            new Promise((resolve) => {
+              stlLoader.load(
+                part.url,
+                (geometry) => {
+                  geometry.computeVertexNormals();
+                  const material = getMaterial(part.name, part.color);
+                  const mesh = new THREE.Mesh(geometry, material);
+
+                  // STL is Z-up, Three.js is Y-up → rotate
+                  mesh.rotation.x = -Math.PI / 2;
+                  // RECV_PARTS start at home elevation so they appear above the base immediately
+                  if (part.recv) {
+                    mesh.position.set(0, HOME_H_MM, 0);
+                  }
+                  // Hide parts flagged by sr6_tools (alternatives, origin links, tiny parts)
+                  if (part.hidden) {
+                    mesh.visible = false;
+                  }
+                  mesh.castShadow = true;
+                  mesh.receiveShadow = true;
+                  mesh.userData = {
+                    partName: part.name,
+                    group: part.group,
+                    recv: !!part.recv,
+                    hidden: !!part.hidden,
+                    variantGroup: part.variant_group,
+                  };
+
+                  scene.add(mesh);
+                  state.parts[part.name] = mesh;
+                  state.totalTris += geometry.attributes.position.count / 3;
+
+                  loaded++;
+                  updateLoadingBar(
+                    (loaded / existing.length) * 100,
+                    `${part.name} (${loaded}/${existing.length})`,
+                  );
+                  resolve();
+                },
+                undefined,
+                () => {
+                  loaded++;
+                  updateLoadingBar(
+                    (loaded / existing.length) * 100,
+                    `Failed: ${part.name}`,
+                  );
+                  resolve();
+                },
+              );
+            }),
+        );
+
+        await Promise.all(promises);
+
+        Object.entries(state.parts).forEach(([name, mesh]) => {
+          const box = new THREE.Box3().setFromObject(mesh);
+          state.partCenters[name] = box.getCenter(new THREE.Vector3());
+        });
+
+        updateLoadingBar(100, "Complete!");
+        setTimeout(
+          () => document.getElementById("loading").classList.add("done"),
+          500,
+        );
+
+        buildPartList();
+        updateStats();
+        state.needsApply = true; // Signal render loop to call applyIK on next frame
+        // Load multi-instance assembly (4 arms + 6 link rods)
+        loadAssemblyInstances();
+      }
+
+      function updateLoadingBar(pct, text) {
+        document.getElementById("load-bar").style.width = pct + "%";
+        document.getElementById("load-text").textContent = text;
+      }
+
+      // ─── Assembly Instancing (4 arms + 6 link rods) ───
+      // STL coord (sx,sy,sz) → Three.js world (sx, sz, -sy) after rotateX(-PI/2)
+      function stlToWorld(sx, sy, sz) {
+        return new THREE.Vector3(sx, sz, -sy);
+      }
+
+      async function loadAssemblyInstances() {
+        let data;
+        try {
+          const resp = await fetch("/api/instances");
+          data = await resp.json();
+        } catch (e) {
+          console.warn("Assembly instances not available:", e);
+          return;
+        }
+
+        state.armClones = [];
+        state.linkRods = [];
+
+        // ── Clone Arm for 4 main servo positions ──
+        const armMesh = state.parts["Arm"];
+        if (armMesh && data.arms) {
+          // Hide original single Arm (it's at native STL position, not a real servo)
+          armMesh.visible = false;
+
+          data.arms.forEach((inst) => {
+            const clone = new THREE.Mesh(
+              armMesh.geometry.clone(),
+              MAT.white.clone(),
+            );
+            clone.rotation.x = -Math.PI / 2;
+            // Convert STL translate to Three.js world position
+            const t = inst.translate;
+            clone.position.set(t[0], t[2], -t[1]);
+            if (inst.mirror_x) {
+              clone.scale.x = -1;
+            }
+            clone.castShadow = true;
+            clone.receiveShadow = true;
+            clone.userData = {
+              partName: `Arm_${inst.servo}`,
+              group: "core",
+            };
+            clone.material.clippingPlanes = [sectionPlane];
+            clone.material.clipShadows = true;
+            clone.material.side = THREE.DoubleSide;
+            scene.add(clone);
+            state.armClones.push(clone);
+            state.parts[`Arm_${inst.servo}`] = clone;
+          });
+        }
+
+        // ── Create 6 parametric link rods ──
+        const ROD_RADIUS = 2.0; // mm radius for visual rod
+        const rodMat = new THREE.MeshPhysicalMaterial({
+          color: 0xc0c0c0,
+          roughness: 0.2,
+          metalness: 0.8,
+          clippingPlanes: [sectionPlane],
+          clipShadows: true,
+          side: THREE.DoubleSide,
+        });
+
+        if (data.links) {
+          data.links.forEach((link) => {
+            const tip = stlToWorld(
+              link.arm_tip[0],
+              link.arm_tip[1],
+              link.arm_tip[2],
+            );
+            const mount = stlToWorld(
+              link.recv_mount[0],
+              link.recv_mount[1],
+              link.recv_mount[2],
+            );
+            const dir = new THREE.Vector3().subVectors(mount, tip);
+            const length = dir.length();
+            const mid = new THREE.Vector3()
+              .addVectors(tip, mount)
+              .multiplyScalar(0.5);
+
+            const geo = new THREE.CylinderGeometry(
+              ROD_RADIUS,
+              ROD_RADIUS,
+              length,
+              8,
+            );
+            const rod = new THREE.Mesh(geo, rodMat.clone());
+            rod.position.copy(mid);
+            // Orient cylinder (default Y-axis) to point from tip to mount
+            rod.quaternion.setFromUnitVectors(
+              new THREE.Vector3(0, 1, 0),
+              dir.clone().normalize(),
+            );
+            rod.castShadow = true;
+            rod.userData = {
+              partName: `Rod_${link.servo}`,
+              group: "linkage",
+              isRod: true,
+              tipSTL: link.arm_tip,
+              mountSTL: link.recv_mount,
+            };
+            scene.add(rod);
+            state.linkRods.push(rod);
+            state.parts[`Rod_${link.servo}`] = rod;
+          });
+        }
+
+        console.log(
+          `Assembly: ${state.armClones.length} arm clones, ${state.linkRods.length} link rods`,
+        );
+        updateStats();
+      }
+
+      // ─── Part List UI ───
+      function buildPartList() {
+        const container = document.getElementById("part-list");
+        const groups = {};
+
+        state.partData.forEach((p) => {
+          if (!groups[p.group]) groups[p.group] = [];
+          groups[p.group].push(p);
+        });
+
+        const groupNames = {
+          core: "☰ Core",
+          linkage: "⚙ Linkage",
+          shield: "🛡 Shield",
+          tray: "☷ Tray",
+          twist: "↻ Twist",
+        };
+
+        for (const [gkey, parts] of Object.entries(groups)) {
+          const label = document.createElement("div");
+          label.className = "group-label";
+          label.textContent = groupNames[gkey] || gkey;
+          label.onclick = () => {
+            const items = container.querySelectorAll(
+              `.part-item[data-group="${gkey}"]`,
+            );
+            const allVisible = [...items].every(
+              (i) => !i.classList.contains("hidden-part"),
+            );
+            items.forEach((i) => {
+              const mesh = state.parts[i.dataset.name];
+              if (mesh) {
+                mesh.visible = !allVisible;
+                i.classList.toggle("hidden-part", allVisible);
+              }
+            });
+          };
+          container.appendChild(label);
+
+          parts.forEach((p) => {
+            const item = document.createElement("div");
+            item.className = "part-item";
+            item.dataset.name = p.name;
+            item.dataset.group = p.group;
+            if (!p.exists || p.hidden) item.classList.add("hidden-part");
+
+            const swatch = document.createElement("div");
+            swatch.className = "swatch";
+            swatch.style.background = "#" + p.color;
+
+            const name = document.createElement("span");
+            name.className = "name";
+            name.textContent = p.name;
+
+            item.appendChild(swatch);
+            item.appendChild(name);
+
+            item.onclick = (e) => {
+              e.stopPropagation();
+              const mesh = state.parts[p.name];
+              if (!mesh) return;
+              mesh.visible = !mesh.visible;
+              item.classList.toggle("hidden-part", !mesh.visible);
+            };
+
+            item.ondblclick = (e) => {
+              e.stopPropagation();
+              const mesh = state.parts[p.name];
+              if (!mesh) return;
+              // Focus camera on part
+              const box = new THREE.Box3().setFromObject(mesh);
+              const center = box.getCenter(new THREE.Vector3());
+              const size = box.getSize(new THREE.Vector3());
+              const maxDim = Math.max(size.x, size.y, size.z);
+              controls.target.copy(center);
+              camera.position
+                .copy(center)
+                .add(
+                  new THREE.Vector3(maxDim * 1.5, maxDim * 1.5, maxDim * 1.5),
+                );
+            };
+
+            container.appendChild(item);
+          });
+        }
+      }
+
+      // ─── IK Controls ───
+      const ikSliders = {
+        thrust: document.getElementById("s-thrust"),
+        roll: document.getElementById("s-roll"),
+        pitch: document.getElementById("s-pitch"),
+        twist: document.getElementById("s-twist"),
+        fwd: document.getElementById("s-fwd"),
+        side: document.getElementById("s-side"),
+      };
+
+      const ikValues = {
+        thrust: document.getElementById("v-thrust"),
+        roll: document.getElementById("v-roll"),
+        pitch: document.getElementById("v-pitch"),
+        twist: document.getElementById("v-twist"),
+        fwd: document.getElementById("v-fwd"),
+        side: document.getElementById("v-side"),
+      };
+
+      function getIKValues() {
+        return {
+          thrust: +ikSliders.thrust.value,
+          roll: (+ikSliders.roll.value * Math.PI) / 180,
+          pitch: (+ikSliders.pitch.value * Math.PI) / 180,
+          twist: (+ikSliders.twist.value * Math.PI) / 180,
+          fwd: +ikSliders.fwd.value,
+          side: +ikSliders.side.value,
+        };
+      }
+
+      function updateIKLabels() {
+        ikValues.thrust.textContent = ikSliders.thrust.value + "mm";
+        ikValues.roll.textContent = ikSliders.roll.value + "°";
+        ikValues.pitch.textContent = ikSliders.pitch.value + "°";
+        ikValues.twist.textContent = ikSliders.twist.value + "°";
+        ikValues.fwd.textContent = ikSliders.fwd.value + "mm";
+        ikValues.side.textContent = ikSliders.side.value + "mm";
+      }
+
+      Object.values(ikSliders).forEach((s) => {
+        s.addEventListener("input", () => {
+          updateIKLabels();
+          applyIK();
+        });
+      });
+
+      function updateParts() {
+        const ik = getIKValues();
+        const asmCenter = new THREE.Vector3(0, 120, 0); // midpoint of full assembly (base 0mm to receiver top ~240mm)
+        const ef = state.explodeFactor;
+
+        Object.entries(state.parts).forEach(([name, mesh]) => {
+          // Skip rod and arm clone instances — handled separately
+          if (mesh.userData && (mesh.userData.isRod || name.startsWith("Arm_")))
+            return;
+
+          let ox = 0,
+            oy = 0,
+            oz = 0;
+          if (ef > 0) {
+            const center = state.partCenters[name];
+            if (center) {
+              const dir = center.clone().sub(asmCenter);
+              if (dir.length() > 0.1) {
+                dir.multiplyScalar(ef * 0.02);
+                ox = dir.x;
+                oy = dir.y;
+                oz = dir.z;
+              }
+            }
+          }
+          if (mesh.userData && mesh.userData.recv) {
+            // HOME_H_MM: receiver mount holes at correct assembly height above base.
+            // ik.thrust is offset in mm from home (slider range: -60..+60mm).
+            mesh.position.set(ik.side + ox, HOME_H_MM + ik.thrust + oy, -ik.fwd + oz);
+            mesh.rotation.set(-Math.PI / 2 + ik.pitch, ik.twist, ik.roll);
+          } else {
+            mesh.position.set(ox, oy, oz);
+          }
+        });
+
+        // Update link rods: tips stay static, mounts move with receiver
+        if (state.linkRods) {
+          state.linkRods.forEach((rod) => {
+            const ud = rod.userData;
+            if (!ud.tipSTL || !ud.mountSTL) return;
+            const tip = stlToWorld(ud.tipSTL[0], ud.tipSTL[1], ud.tipSTL[2]);
+            // Mount moves with receiver IK
+            const ms = ud.mountSTL;
+            const mountBase = stlToWorld(ms[0], ms[1], ms[2]);
+            // Apply receiver transform (simplified: translation only)
+            mountBase.x += ik.side;
+            mountBase.y += ik.thrust;
+            mountBase.z += -ik.fwd;
+
+            const dir = new THREE.Vector3().subVectors(mountBase, tip);
+            const length = dir.length();
+            const mid = new THREE.Vector3()
+              .addVectors(tip, mountBase)
+              .multiplyScalar(0.5);
+
+            rod.position.copy(mid);
+            rod.quaternion.setFromUnitVectors(
+              new THREE.Vector3(0, 1, 0),
+              dir.normalize(),
+            );
+            rod.scale.y = length / rod.geometry.parameters.height;
+          });
+        }
+      }
+
+      function applyIK() {
+        updateParts();
+      }
+
+      function applyExplode(factor) {
+        state.explodeFactor = factor;
+        updateParts();
+      }
+
+      function updateSection(y) {
+        state.sectionY = y;
+        sectionPlane.constant = y;
+      }
+
+      // ─── Animation ───
+      function animateIK(time) {
+        if (!state.animating) return;
+        const t = time * 0.001;
+        ikSliders.thrust.value = Math.sin(t * 1.2) * 40;
+        ikSliders.roll.value = Math.sin(t * 0.8) * 20;
+        ikSliders.pitch.value = Math.sin(t * 0.6) * 15;
+        ikSliders.twist.value = Math.sin(t * 0.4) * 90;
+        ikSliders.fwd.value = Math.sin(t * 1.0) * 20;
+        ikSliders.side.value = Math.sin(t * 0.7) * 20;
+        updateIKLabels();
+        applyIK();
+      }
+
+      // ─── View Controls ───
+      document.querySelectorAll(".view-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const view = btn.dataset.view;
+          const d = 300;
+          const target = new THREE.Vector3(0, 120, 0);
+
+          switch (view) {
+            case "front":
+              camera.position.set(0, 180, d);
+              controls.target.copy(target);
+              break;
+            case "side":
+              camera.position.set(d, 180, 0);
+              controls.target.copy(target);
+              break;
+            case "top":
+              camera.position.set(0, d, 1);
+              controls.target.copy(target);
+              break;
+            case "iso":
+              camera.position.set(200, 350, 400);
+              controls.target.copy(target);
+              break;
+            case "grid":
+              gridHelper.visible = !gridHelper.visible;
+              btn.classList.toggle("active", gridHelper.visible);
+              break;
+            case "axes":
+              axesHelper.visible = !axesHelper.visible;
+              btn.classList.toggle("active", axesHelper.visible);
+              break;
+            case "wireframe":
+              state.wireframe = !state.wireframe;
+              Object.values(MAT).forEach((m) => {
+                m.wireframe = state.wireframe;
+              });
+              btn.classList.toggle("active", state.wireframe);
+              break;
+            case "animate":
+              state.animating = !state.animating;
+              btn.classList.toggle("active", state.animating);
+              if (!state.animating) {
+                Object.values(ikSliders).forEach((s) => {
+                  s.value = 0;
+                });
+                updateIKLabels();
+                applyIK();
+              }
+              break;
+            case "reset":
+              Object.values(ikSliders).forEach((s) => {
+                s.value = 0;
+              });
+              document.getElementById("s-explode").value = 0;
+              document.getElementById("s-section").value = 280;
+              document.getElementById("v-explode").textContent = "0%";
+              document.getElementById("v-section").textContent = "OFF";
+              updateIKLabels();
+              applyExplode(0);
+              updateSection(500);
+              state.animating = false;
+              document.getElementById("btn-anim").classList.remove("active");
+              camera.position.set(200, 350, 400);
+              controls.target.set(0, 120, 0);
+              break;
+          }
+        });
+      });
+
+      document.getElementById("btn-grid").classList.add("active");
+
+      // ─── Explode & Section Sliders ───
+      const explodeSlider = document.getElementById("s-explode");
+      const sectionSlider = document.getElementById("s-section");
+      explodeSlider.addEventListener("input", () => {
+        const val = +explodeSlider.value;
+        document.getElementById("v-explode").textContent = val + "%";
+        applyExplode(val);
+      });
+      sectionSlider.addEventListener("input", () => {
+        const val = +sectionSlider.value;
+        if (val >= 280) {
+          document.getElementById("v-section").textContent = "OFF";
+          updateSection(500);
+        } else {
+          document.getElementById("v-section").textContent = val + "mm";
+          updateSection(val);
+        }
+      });
+
+      // ─── Raycaster (hover tooltip) ───
+      const raycaster = new THREE.Raycaster();
+      const mouse = new THREE.Vector2();
+      const tooltip = document.getElementById("tooltip");
+      renderer.domElement.addEventListener("mousemove", (e) => {
+        mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+        const meshes = Object.values(state.parts).filter((m) => m.visible);
+        const hits = raycaster.intersectObjects(meshes, false);
+        if (hits.length > 0) {
+          const name = hits[0].object.userData.partName || "?";
+          const data = state.partData.find((p) => p.name === name);
+          let html = `<div class="tt-name">${name}</div>`;
+          if (data && data.size) {
+            html += `<div class="tt-dim">${data.size[0].toFixed(1)} × ${data.size[1].toFixed(1)} × ${data.size[2].toFixed(1)} mm</div>`;
+          }
+          if (data) html += `<div class="tt-dim">Group: ${data.group}</div>`;
+          tooltip.innerHTML = html;
+          tooltip.style.display = "block";
+          tooltip.style.left = e.clientX + 12 + "px";
+          tooltip.style.top = e.clientY + 12 + "px";
+          renderer.domElement.style.cursor = "pointer";
+        } else {
+          tooltip.style.display = "none";
+          renderer.domElement.style.cursor = "grab";
+        }
+      });
+      renderer.domElement.addEventListener("mouseleave", () => {
+        tooltip.style.display = "none";
+      });
+
+      // ─── Sidebar toggle ───
+      document
+        .getElementById("toggle-sidebar")
+        .addEventListener("click", () => {
+          document.getElementById("sidebar").classList.toggle("hidden");
+        });
+
+      // ─── Stats ───
+      let frameCount = 0,
+        lastFpsTime = performance.now();
+
+      function updateStats() {
+        document.getElementById("st-parts").textContent = Object.keys(
+          state.parts,
+        ).length;
+        document.getElementById("st-tris").textContent = Math.round(
+          state.totalTris,
+        ).toLocaleString();
+      }
+
+      function updateFPS() {
+        frameCount++;
+        const now = performance.now();
+        if (now - lastFpsTime > 1000) {
+          document.getElementById("st-fps").textContent = Math.round(
+            (frameCount * 1000) / (now - lastFpsTime),
+          );
+          frameCount = 0;
+          lastFpsTime = now;
+        }
+      }
+
+      // ─── Resize ───
+      window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      // ─── Render Loop ───
+      function render(time) {
+        if (state.needsApply) {
+          state.needsApply = false;
+          applyIK(); // Apply HOME_H_MM elevation on first frame after parts load
+        }
+        controls.update();
+        animateIK(time);
+        updateFPS();
+        renderer.render(scene, camera);
+      }
+      renderer.setAnimationLoop(render);
+      window.__applyIK = () => applyIK(); // Expose for Playwright testing
+
+      // ─── Hub Connect (W7: 数字孪生打通物理设备) ────────────────────
+      let hubConnected = false;
+      const hubUrl = 'http://localhost:41927';
+      const hubStatusEl = document.getElementById('hub-status');
+
+      document.getElementById('btn-hub').addEventListener('click', async () => {
+        if (!hubConnected) {
+          // Test connection
+          try {
+            const r = await fetch(hubUrl + '/api/health', { mode: 'cors', signal: AbortSignal.timeout(2000) });
+            const d = await r.json();
+            if (d.status === 'ok') {
+              hubConnected = true;
+              document.getElementById('btn-hub').classList.add('active');
+              hubStatusEl.style.display = 'block';
+              // Fetch device info and update badge
+              try {
+                const di = await fetch(hubUrl + '/api/device_info', { mode: 'cors', signal: AbortSignal.timeout(1000) });
+                const dev = await di.json();
+                const badge = document.getElementById('hub-device-badge');
+                if (dev.type === 'real') {
+                  badge.textContent = '🔌 ' + (dev.port || 'ESP32');
+                  badge.style.background = 'rgba(0,200,100,0.25)';
+                  badge.style.color = '#55ffaa';
+                } else {
+                  badge.textContent = '⚡ 虚拟';
+                  badge.style.background = 'rgba(100,100,200,0.25)';
+                  badge.style.color = '#aabbff';
+                }
+              } catch(e) { /* badge stays empty */ }
+              // Send current IK positions immediately
+              sendIKToHub();
+            } else throw new Error('unhealthy');
+          } catch(e) {
+            document.getElementById('btn-hub').textContent = 'Hub 离线';
+            setTimeout(() => { document.getElementById('btn-hub').textContent = 'Hub'; }, 2000);
+          }
+        } else {
+          hubConnected = false;
+          document.getElementById('btn-hub').classList.remove('active');
+          hubStatusEl.style.display = 'none';
+        }
+      });
+
+      function ikToTCode(axis, val, minVal, maxVal) {
+        const pos = Math.round(((val - minVal) / (maxVal - minVal)) * 9999);
+        return axis + String(Math.max(0, Math.min(9999, pos))).padStart(4, '0') + 'I200';
+      }
+
+      async function sendIKToHub() {
+        if (!hubConnected) return;
+        const cmds = [
+          ikToTCode('L0', +ikSliders.thrust.value, -60, 60),
+          ikToTCode('L1', +ikSliders.fwd.value, -30, 30),
+          ikToTCode('L2', +ikSliders.side.value, -30, 30),
+          ikToTCode('R0', +ikSliders.twist.value, -135, 135),
+          ikToTCode('R1', +ikSliders.roll.value, -30, 30),
+          ikToTCode('R2', +ikSliders.pitch.value, -25, 25),
+        ];
+        // Send all 6 axes in parallel
+        await Promise.all(cmds.map(cmd =>
+          fetch(hubUrl + '/api/send/' + encodeURIComponent(cmd), { mode: 'cors', signal: AbortSignal.timeout(500) })
+            .catch(() => { hubConnected = false; document.getElementById('btn-hub').classList.remove('active'); hubStatusEl.style.display = 'none'; })
+        ));
+      }
+
+      // Add hub send as additional listener (won't disturb existing listeners)
+      Object.values(ikSliders).forEach(s => {
+        s.addEventListener('input', () => {
+          if (hubConnected) sendIKToHub();
+        });
+      });
+
+      // ─── Analyzer v3 ──────────────────────────────────────────────
+      const analyzerPanel = document.getElementById('analyzer-panel');
+      const azContent = document.getElementById('az-content');
+      let comSpheres = []; // CoM visualization spheres
+      let workspaceBox = null; // Workspace envelope box
+      let azMassData = null; // Cached mass data
+      let azQualityData = null; // Cached quality data
+
+      document.getElementById('btn-analyze').addEventListener('click', () => {
+        analyzerPanel.classList.toggle('visible');
+        if (analyzerPanel.classList.contains('visible') && !azMassData) {
+          loadMassData();
+        }
+      });
+
+      async function loadMassData() {
+        azContent.innerHTML = '<div class="az-loading">加载质量数据 (~3s)...</div>';
+        try {
+          const resp = await fetch('/api/mass');
+          azMassData = await resp.json();
+          renderMassPanel();
+        } catch(e) {
+          azContent.innerHTML = `<div class="az-loading">Error: ${e.message}</div>`;
+        }
+      }
+
+      function renderMassPanel() {
+        if (!azMassData) return;
+        const s = azMassData.summary;
+        let html = '<div class="az-section">';
+        html += '<h4>装配总质量 (PLA 1240 kg/m³)</h4>';
+        html += `<div class="az-row"><span class="az-key">总质量</span><span class="az-val good">${s.total_mass_g.toFixed(1)}g (${(s.total_mass_g/1000).toFixed(3)}kg)</span></div>`;
+        if (s.assembly_com_mm) {
+          const c = s.assembly_com_mm;
+          html += `<div class="az-row"><span class="az-key">装配质心</span><span class="az-val">X=${c[0].toFixed(1)} Y=${c[1].toFixed(1)} Z=${c[2].toFixed(1)}mm</span></div>`;
+        }
+        html += `<div class="az-row"><span class="az-key">可计算零件</span><span class="az-val">${s.watertight_parts}/${s.total_parts}</span></div>`;
+        html += '</div><div class="az-section"><h4>各零件质量 (g)</h4>';
+        const parts = azMassData.parts;
+        const sortedParts = Object.entries(parts).sort((a,b) => (b[1].mass_g||0) - (a[1].mass_g||0));
+        for (const [name, p] of sortedParts) {
+          if (p.mass_g) {
+            const com = p.center_of_mass_mm;
+            html += `<div class="az-row"><span class="az-key">${name}</span><span class="az-val">${p.mass_g.toFixed(1)}g · ${p.volume_cm3.toFixed(2)}cm³</span></div>`;
+          } else {
+            html += `<div class="az-row"><span class="az-key">${name}</span><span class="az-val warn">非水密</span></div>`;
+          }
+        }
+        html += '</div>';
+        azContent.innerHTML = html;
+      }
+
+      async function loadQualityData() {
+        azContent.innerHTML = '<div class="az-loading">加载质检数据 (~30s)...</div>';
+        try {
+          const resp = await fetch('/api/quality');
+          azQualityData = await resp.json();
+          renderQualityPanel();
+        } catch(e) {
+          azContent.innerHTML = `<div class="az-loading">Error: ${e.message}</div>`;
+        }
+      }
+
+      function renderQualityPanel() {
+        if (!azQualityData) return;
+        const s = azQualityData.summary;
+        let html = '<div class="az-section">';
+        html += '<h4>网格质量总览</h4>';
+        html += `<div class="az-row"><span class="az-key">Grade S (完美)</span><span class="az-val good">${s.grades.S}/${s.total}</span></div>`;
+        html += `<div class="az-row"><span class="az-key">Grade A/B/C</span><span class="az-val">${s.grades.A}/${s.grades.B}/${s.grades.C}</span></div>`;
+        html += `<div class="az-row"><span class="az-key">全水密</span><span class="az-val ${s.all_watertight ? 'good' : 'warn'}">${s.all_watertight ? '✓ 是' : '✗ 否'}</span></div>`;
+        html += '</div><div class="az-section"><h4>零件质检</h4>';
+        for (const [name, qc] of Object.entries(azQualityData.parts)) {
+          const gc = qc.grade === 'S' ? 'az-grade-s' : qc.grade === 'A' ? 'az-grade-a' : qc.grade === 'B' ? 'az-grade-b' : 'az-grade-c';
+          const issues = qc.issues && qc.issues.length ? qc.issues.join(', ') : '✓';
+          html += `<div class="az-row"><span class="az-key">${name}</span><span class="az-val ${gc}">${qc.grade}: ${issues.length > 20 ? issues.substring(0,20)+'…' : issues}</span></div>`;
+        }
+        html += '</div>';
+        azContent.innerHTML = html;
+      }
+
+      async function loadWorkspaceData() {
+        azContent.innerHTML = '<div class="az-loading">计算工作空间...</div>';
+        try {
+          const resp = await fetch('/api/workspace?resolution=10');
+          const ws = await resp.json();
+          renderWorkspacePanel(ws);
+          showWorkspaceEnvelope(ws);
+        } catch(e) {
+          azContent.innerHTML = `<div class="az-loading">Error: ${e.message}</div>`;
+        }
+      }
+
+      function renderWorkspacePanel(ws) {
+        const lw = ws.linear_workspace_mm;
+        const tr = ws.theoretical_ranges;
+        let html = '<div class="az-section"><h4>线性工作空间</h4>';
+        html += `<div class="az-row"><span class="az-key">X (前后)</span><span class="az-val">${lw.x.min}~${lw.x.max}mm / ${lw.x.range}mm</span></div>`;
+        html += `<div class="az-row"><span class="az-key">Y (左右)</span><span class="az-val">${lw.y.min}~${lw.y.max}mm / ${lw.y.range}mm</span></div>`;
+        html += `<div class="az-row"><span class="az-key">Z (高度)</span><span class="az-val">${lw.z.min.toFixed(1)}~${lw.z.max.toFixed(1)}mm</span></div>`;
+        html += `<div class="az-row"><span class="az-key">工作空间体积</span><span class="az-val good">${ws.workspace_volume_cm3} cm³</span></div>`;
+        html += '</div><div class="az-section"><h4>旋转范围</h4>';
+        html += `<div class="az-row"><span class="az-key">扭转 (Twist)</span><span class="az-val">${tr.twist_deg.min}° ~ ${tr.twist_deg.max}° (${tr.twist_deg.total}°)</span></div>`;
+        html += `<div class="az-row"><span class="az-key">横滚 (Roll)</span><span class="az-val">${tr.roll_deg.min}° ~ ${tr.roll_deg.max}°</span></div>`;
+        html += `<div class="az-row"><span class="az-key">俯仰 (Pitch)</span><span class="az-val">${tr.pitch_deg.min}° ~ ${tr.pitch_deg.max}°</span></div>`;
+        html += `</div><div class="az-section"><h4>IK常数</h4>`;
+        const ik = ws.ik_constants;
+        html += `<div class="az-row"><span class="az-key">baseH</span><span class="az-val">${ik.baseH}mm</span></div>`;
+        html += `<div class="az-row"><span class="az-key">mainArm/mainRod</span><span class="az-val">${ik.mainArm}mm / ${ik.mainRod}mm</span></div>`;
+        html += `<div class="az-row"><span class="az-key">pitchArm</span><span class="az-val">${ik.pitchArm}mm</span></div>`;
+        html += `<div class="az-row"><span class="az-key">DOF</span><span class="az-val good">${ws.dof}</span></div>`;
+        html += `<div class="az-row"><span class="az-key">采样点</span><span class="az-val">${ws.sample_points}</span></div>`;
+        html += '</div>';
+        azContent.innerHTML = html;
+      }
+
+      function showWorkspaceEnvelope(ws) {
+        if (workspaceBox) { scene.remove(workspaceBox); workspaceBox = null; }
+        const lw = ws.linear_workspace_mm;
+        const cx = (lw.x.min + lw.x.max) / 2;
+        const cy = (lw.z.min + lw.z.max) / 2;  // Z→Y in Three.js
+        const cz = (lw.y.min + lw.y.max) / 2;
+        const sx = lw.x.range; const sy = lw.z.range; const sz = lw.y.range;
+        const geo = new THREE.BoxGeometry(sx, sy, sz);
+        const edges = new THREE.EdgesGeometry(geo);
+        workspaceBox = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x44ffaa, linewidth: 1, opacity: 0.6, transparent: true }));
+        workspaceBox.position.set(cx, cy, cz);
+        scene.add(workspaceBox);
+      }
+
+      function showCoMSpheres() {
+        comSpheres.forEach(s => scene.remove(s));
+        comSpheres = [];
+        if (!azMassData) return;
+        const sphereGeo = new THREE.SphereGeometry(3, 8, 8);
+        const sphereMat = new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.8 });
+        for (const [name, p] of Object.entries(azMassData.parts)) {
+          if (p.center_of_mass_mm && state.parts[name]) {
+            const [cx, cy, cz] = p.center_of_mass_mm;
+            const sphere = new THREE.Mesh(sphereGeo, sphereMat.clone());
+            // CoM is in STL local frame (Z-up), need to transform to Three.js (Y-up)
+            // After mesh.rotation.x = -PI/2, the mesh's local Z becomes world Y
+            const meshPos = state.parts[name].position;
+            // Approximate: use bounding box center offset
+            sphere.position.set(meshPos.x + cx/1, meshPos.y + cz/1, meshPos.z - cy/1);
+            sphere.userData = { type: 'com', partName: name };
+            scene.add(sphere);
+            comSpheres.push(sphere);
+          }
+        }
+      }
+
+      function hideCoMSpheres() {
+        comSpheres.forEach(s => scene.remove(s));
+        comSpheres = [];
+      }
+
+      // Analyzer button handlers
+      const azButtons = {
+        mass: document.getElementById('az-btn-mass'),
+        quality: document.getElementById('az-btn-quality'),
+        workspace: document.getElementById('az-btn-workspace'),
+        com: document.getElementById('az-btn-com'),
+        print: document.getElementById('az-btn-print'),
+      };
+      let comVisible = false;
+
+      function setActiveAzBtn(key) {
+        Object.values(azButtons).forEach(b => b.classList.remove('active'));
+        if (azButtons[key]) azButtons[key].classList.add('active');
+      }
+
+      azButtons.mass.addEventListener('click', () => {
+        setActiveAzBtn('mass');
+        if (!azMassData) loadMassData(); else renderMassPanel();
+      });
+      azButtons.print.addEventListener('click', () => {
+        setActiveAzBtn('print');
+        loadPrintabilityData();
+      });
+      azButtons.quality.addEventListener('click', () => {
+        setActiveAzBtn('quality');
+        if (!azQualityData) loadQualityData(); else renderQualityPanel();
+      });
+      azButtons.workspace.addEventListener('click', () => {
+        setActiveAzBtn('workspace');
+        loadWorkspaceData();
+      });
+      azButtons.com.addEventListener('click', () => {
+        comVisible = !comVisible;
+        azButtons.com.classList.toggle('active', comVisible);
+        if (comVisible) {
+          if (!azMassData) {
+            azContent.innerHTML = '<div class="az-loading">加载质量数据以显示质心...</div>';
+            loadMassData().then(() => showCoMSpheres());
+          } else showCoMSpheres();
+          azContent.innerHTML = '<div class="az-loading">质心可视化已开启（红色球体=各零件质心）</div>';
+        } else {
+          hideCoMSpheres();
+          azContent.innerHTML = '<div class="az-loading">质心可视化已关闭</div>';
+        }
+      });
+
+      // ─── Printability Analysis (via ModelHub :8872) ───────────────
+      const modelHubUrl = 'http://localhost:8872';
+      let azPrintData = null;
+
+      async function loadPrintabilityData() {
+        azContent.innerHTML = '<div class="az-loading">连接 ModelHub :8872 进行可打印性分析...</div>';
+        // First check if ModelHub is online
+        let hubOk = false;
+        try {
+          const hc = await fetch(modelHubUrl + '/api/health', { mode: 'cors', signal: AbortSignal.timeout(2000) });
+          const hd = await hc.json();
+          hubOk = hd.status === 'ok';
+        } catch(e) {}
+
+        if (!hubOk) {
+          azContent.innerHTML = `<div class="az-loading" style="color:#ff8866">
+            ModelHub :8872 未连接<br>
+            <small>启动: python 3D建模Agent/model_hub.py</small><br>
+            <small style="color:#888">提示: 可用 forge_v3.py printability &lt;stl&gt; 直接分析</small>
+          </div>`;
+          return;
+        }
+
+        // Get parts list from local studio API
+        let parts = [];
+        try {
+          const pr = await fetch('/api/parts');
+          parts = await pr.json();
+        } catch(e) {}
+
+        // Analyze 3 key structural parts
+        const TARGET_PARTS = ['Base', 'L_Frame', 'Receiver'];
+        const toAnalyze = TARGET_PARTS.filter(n => parts.some && parts.some(p => p.name === n || (typeof p === 'string' && p === n)));
+        if (toAnalyze.length === 0) toAnalyze.push(...TARGET_PARTS.slice(0, 2));
+
+        azContent.innerHTML = `<div class="az-loading">分析 ${TARGET_PARTS.join(', ')} 可打印性 (~10s)...</div>`;
+        const results = [];
+        for (const partName of TARGET_PARTS) {
+          const stlData = parts.find ? parts.find(p => p.name === partName) : null;
+          if (!stlData || !stlData.stl_path) { continue; }
+          try {
+            const enc = encodeURIComponent(stlData.stl_path);
+            const r = await fetch(`${modelHubUrl}/api/printability?stl=${enc}&tech=fdm`, {
+              mode: 'cors', signal: AbortSignal.timeout(30000)
+            });
+            const d = await r.json();
+            results.push({ name: partName, ...d });
+          } catch(e) {
+            results.push({ name: partName, error: e.message });
+          }
+        }
+        azPrintData = results;
+        renderPrintabilityPanel();
+      }
+
+      function renderPrintabilityPanel() {
+        if (!azPrintData || azPrintData.length === 0) {
+          azContent.innerHTML = '<div class="az-loading">无可打印性数据 — 需要STL路径</div>';
+          return;
+        }
+        const gradeColor = { S: '#44cc88', A: '#88ddff', B: '#ffaa44', C: '#ff7744' };
+        let html = '<div class="az-section"><div class="az-row"><span>可打印性分析 (FDM)</span></div>';
+        for (const p of azPrintData) {
+          if (p.error) {
+            html += `<div class="az-row"><span>${p.name}</span><span class="az-val bad">ERR: ${p.error}</span></div>`;
+            continue;
+          }
+          const gc = gradeColor[p.grade] || '#aaa';
+          html += `<div class="az-row" style="border-top:1px solid rgba(255,255,255,0.06);padding-top:4px;margin-top:4px">
+            <span style="font-weight:600">${p.name}</span>
+            <span class="az-val" style="color:${gc}">Grade ${p.grade}</span>
+          </div>`;
+          if (p.wall_thickness_mm && !p.wall_thickness_mm.error) {
+            const w = p.wall_thickness_mm;
+            html += `<div class="az-row"><span>壁厚 min/mean</span><span class="az-val ${w.min < 1.2 ? 'bad' : ''}">${w.min}/${w.mean}mm</span></div>`;
+          }
+          if (p.overhangs && !p.overhangs.error) {
+            const o = p.overhangs;
+            html += `<div class="az-row"><span>悬垂面积</span><span class="az-val ${o.pct_area > 50 ? 'bad' : ''}">${o.pct_area}% (${o.overhang_faces}面)</span></div>`;
+          }
+          if (p.bed_contact && !p.bed_contact.error) {
+            const b = p.bed_contact;
+            html += `<div class="az-row"><span>床面接触</span><span class="az-val ${b.is_flat ? '' : 'bad'}">${b.area_mm2}mm² ${b.is_flat ? '✓' : '✗'}</span></div>`;
+          }
+          if (p.issues && p.issues.length > 0) {
+            html += `<div class="az-row"><span>问题</span><span class="az-val bad">${p.issues.join('; ')}</span></div>`;
+          }
+          if (p.warnings && p.warnings.length > 0) {
+            html += `<div class="az-row"><span>警告</span><span class="az-val" style="color:#ffaa44">${p.warnings.join('; ')}</span></div>`;
+          }
+        }
+        html += '</div>';
+        azContent.innerHTML = html;
+      }
+
+      // ─── Init ───
+      loadAllParts();
+    </script>
+  </body>
+</html>

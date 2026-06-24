@@ -1,0 +1,648 @@
+{
+  "schema": "kinematics_audit/v1",
+  "timestamp": "2026-04-19T02:28:15",
+  "elapsed_s": 0.15,
+  "available": true,
+  "score": 100,
+  "ok": true,
+  "defects": [],
+  "warnings": [],
+  "operating_conditions": {
+    "shaft_rpm": 1200,
+    "omega_rad_s": 125.664,
+    "tip_speed_ms": 43.98,
+    "period_ms": 50.0,
+    "hammer_tip_R_mm": 350.0,
+    "pin_R_mm": 220.0,
+    "n_discs": 4,
+    "n_hammers_total": 16
+  },
+  "masses": {
+    "single_hammer_kg": 4.493,
+    "rotor_disc_kg": 38.5,
+    "shaft_kg": 57.2,
+    "total_rotor_kg": 305.6
+  },
+  "interference": {
+    "screen_plate": {
+      "severity": "OK",
+      "r_tip_mm": 350.0,
+      "screen_Ri_mm": 390.0,
+      "penetration_mm": -40.0,
+      "screen_arc_deg": 120,
+      "screen_zone_deg": [
+        -150.0,
+        -30.0
+      ],
+      "issues": [
+        "✅ 锤头未伸入筛板内径 (间隙 40.0mm)"
+      ]
+    },
+    "casing": {
+      "ok": true,
+      "r_tip_mm": 350.0,
+      "casing_Ri_mm": 430,
+      "clearance_mm": 80.0,
+      "issues": [
+        "✅ 锤头-机壳间隙 80.0mm 充足"
+      ]
+    },
+    "hammers_mutual": {
+      "ok": true,
+      "arc_between_pins_at_pinR_mm": 345.6,
+      "arc_between_tips_at_tipR_mm": 549.8,
+      "hammer_width_mm": 80.0,
+      "issues": [
+        "✅ 同盘锤头相互不干涉: 刃尖弧间距550mm >> 锤宽80.0mm"
+      ]
+    },
+    "adjacent_discs": {
+      "ok": true,
+      "min_disc_spacing_mm": 200.0,
+      "hammer_thickness_mm": 40.0,
+      "axial_clearance_mm": 160.0,
+      "issues": [
+        "✅ 相邻盘轴向间隙 160mm 充足 (盘间距200mm)"
+      ]
+    }
+  },
+  "dynamic_balance_scenarios": {
+    "new_ideal_gmm": 0.0,
+    "solo_30pct_gmm": 417830.4,
+    "pair_30pct_gmm": 0.0,
+    "uniform_30pct_gmm": 0.0,
+    "iso_allowable_per_plane_gmm": 9727.9,
+    "pair_ok": true,
+    "wear_solo_critical_pct": 0.7
+  },
+  "critical_speed_rpm": 3372.0,
+  "critical_speed_safety": 2.81,
+  "centrifugal_force_kN": 21.994,
+  "pin_shear_MPa": 17.5,
+  "transmission_error_pct": 1.78,
+  "universal_kinematics": {
+    "available": true,
+    "n_consistent": 5,
+    "n_inconsistent": 0,
+    "consistencies": [
+      "转子质量 local=305.6 kg vs universal=305.6 kg (Δ=0.00%)",
+      "临界转速 local=3372 vs universal=3372 rpm (Δ=0)",
+      "离心力 local=21994 N vs universal=21994 N (Δ=0.0%)",
+      "独磨不平衡 local=417830 vs universal=417830 g·mm (Δ=0.0%)",
+      "仿真周期 expected=50.00 vs universal=50.00 ms (Δ=0.00)"
+    ],
+    "inconsistencies": [],
+    "universal_score": 80,
+    "universal_ok": false,
+    "universal_issues": [
+      "运动仿真检测到 460 次硬干涉"
+    ]
+  },
+  "timeline": {
+    "n_frames": 24,
+    "period_ms": 50.0,
+    "sample_frames": [
+      {
+        "frame": 0,
+        "angle_deg": 0.0,
+        "t_ms": 0.0,
+        "hammer_count": 16,
+        "hammers": [
+          {
+            "disc_x": 207.0,
+            "pin_idx": 0,
+            "pin_pos": [
+              207.0,
+              220.0,
+              0.0
+            ],
+            "tip_pos": [
+              207.0,
+              350.0,
+              0.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 0.0
+          },
+          {
+            "disc_x": 207.0,
+            "pin_idx": 1,
+            "pin_pos": [
+              207.0,
+              0.0,
+              220.0
+            ],
+            "tip_pos": [
+              207.0,
+              0.0,
+              350.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 90.0
+          },
+          {
+            "disc_x": 207.0,
+            "pin_idx": 2,
+            "pin_pos": [
+              207.0,
+              -220.0,
+              0.0
+            ],
+            "tip_pos": [
+              207.0,
+              -350.0,
+              0.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 180.0
+          },
+          {
+            "disc_x": 207.0,
+            "pin_idx": 3,
+            "pin_pos": [
+              207.0,
+              -0.0,
+              -220.0
+            ],
+            "tip_pos": [
+              207.0,
+              -0.0,
+              -350.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 270.0
+          },
+          {
+            "disc_x": 408.0,
+            "pin_idx": 0,
+            "pin_pos": [
+              408.0,
+              220.0,
+              0.0
+            ],
+            "tip_pos": [
+              408.0,
+              350.0,
+              0.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 0.0
+          },
+          {
+            "disc_x": 408.0,
+            "pin_idx": 1,
+            "pin_pos": [
+              408.0,
+              0.0,
+              220.0
+            ],
+            "tip_pos": [
+              408.0,
+              0.0,
+              350.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 90.0
+          },
+          {
+            "disc_x": 408.0,
+            "pin_idx": 2,
+            "pin_pos": [
+              408.0,
+              -220.0,
+              0.0
+            ],
+            "tip_pos": [
+              408.0,
+              -350.0,
+              0.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 180.0
+          },
+          {
+            "disc_x": 408.0,
+            "pin_idx": 3,
+            "pin_pos": [
+              408.0,
+              -0.0,
+              -220.0
+            ],
+            "tip_pos": [
+              408.0,
+              -0.0,
+              -350.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 270.0
+          },
+          {
+            "disc_x": 610.0,
+            "pin_idx": 0,
+            "pin_pos": [
+              610.0,
+              220.0,
+              0.0
+            ],
+            "tip_pos": [
+              610.0,
+              350.0,
+              0.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 0.0
+          },
+          {
+            "disc_x": 610.0,
+            "pin_idx": 1,
+            "pin_pos": [
+              610.0,
+              0.0,
+              220.0
+            ],
+            "tip_pos": [
+              610.0,
+              0.0,
+              350.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 90.0
+          },
+          {
+            "disc_x": 610.0,
+            "pin_idx": 2,
+            "pin_pos": [
+              610.0,
+              -220.0,
+              0.0
+            ],
+            "tip_pos": [
+              610.0,
+              -350.0,
+              0.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 180.0
+          },
+          {
+            "disc_x": 610.0,
+            "pin_idx": 3,
+            "pin_pos": [
+              610.0,
+              -0.0,
+              -220.0
+            ],
+            "tip_pos": [
+              610.0,
+              -0.0,
+              -350.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 270.0
+          },
+          {
+            "disc_x": 810.0,
+            "pin_idx": 0,
+            "pin_pos": [
+              810.0,
+              220.0,
+              0.0
+            ],
+            "tip_pos": [
+              810.0,
+              350.0,
+              0.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 0.0
+          },
+          {
+            "disc_x": 810.0,
+            "pin_idx": 1,
+            "pin_pos": [
+              810.0,
+              0.0,
+              220.0
+            ],
+            "tip_pos": [
+              810.0,
+              0.0,
+              350.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 90.0
+          },
+          {
+            "disc_x": 810.0,
+            "pin_idx": 2,
+            "pin_pos": [
+              810.0,
+              -220.0,
+              0.0
+            ],
+            "tip_pos": [
+              810.0,
+              -350.0,
+              0.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 180.0
+          },
+          {
+            "disc_x": 810.0,
+            "pin_idx": 3,
+            "pin_pos": [
+              810.0,
+              -0.0,
+              -220.0
+            ],
+            "tip_pos": [
+              810.0,
+              -0.0,
+              -350.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 270.0
+          }
+        ]
+      },
+      {
+        "frame": 6,
+        "angle_deg": 90.0,
+        "t_ms": 12.5,
+        "hammer_count": 16,
+        "hammers": [
+          {
+            "disc_x": 207.0,
+            "pin_idx": 0,
+            "pin_pos": [
+              207.0,
+              0.0,
+              220.0
+            ],
+            "tip_pos": [
+              207.0,
+              0.0,
+              350.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 90.0
+          },
+          {
+            "disc_x": 207.0,
+            "pin_idx": 1,
+            "pin_pos": [
+              207.0,
+              -220.0,
+              0.0
+            ],
+            "tip_pos": [
+              207.0,
+              -350.0,
+              0.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 180.0
+          },
+          {
+            "disc_x": 207.0,
+            "pin_idx": 2,
+            "pin_pos": [
+              207.0,
+              -0.0,
+              -220.0
+            ],
+            "tip_pos": [
+              207.0,
+              -0.0,
+              -350.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 270.0
+          },
+          {
+            "disc_x": 207.0,
+            "pin_idx": 3,
+            "pin_pos": [
+              207.0,
+              220.0,
+              -0.0
+            ],
+            "tip_pos": [
+              207.0,
+              350.0,
+              -0.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 0.0
+          },
+          {
+            "disc_x": 408.0,
+            "pin_idx": 0,
+            "pin_pos": [
+              408.0,
+              0.0,
+              220.0
+            ],
+            "tip_pos": [
+              408.0,
+              0.0,
+              350.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 90.0
+          },
+          {
+            "disc_x": 408.0,
+            "pin_idx": 1,
+            "pin_pos": [
+              408.0,
+              -220.0,
+              0.0
+            ],
+            "tip_pos": [
+              408.0,
+              -350.0,
+              0.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 180.0
+          },
+          {
+            "disc_x": 408.0,
+            "pin_idx": 2,
+            "pin_pos": [
+              408.0,
+              -0.0,
+              -220.0
+            ],
+            "tip_pos": [
+              408.0,
+              -0.0,
+              -350.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 270.0
+          },
+          {
+            "disc_x": 408.0,
+            "pin_idx": 3,
+            "pin_pos": [
+              408.0,
+              220.0,
+              -0.0
+            ],
+            "tip_pos": [
+              408.0,
+              350.0,
+              -0.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 0.0
+          },
+          {
+            "disc_x": 610.0,
+            "pin_idx": 0,
+            "pin_pos": [
+              610.0,
+              0.0,
+              220.0
+            ],
+            "tip_pos": [
+              610.0,
+              0.0,
+              350.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 90.0
+          },
+          {
+            "disc_x": 610.0,
+            "pin_idx": 1,
+            "pin_pos": [
+              610.0,
+              -220.0,
+              0.0
+            ],
+            "tip_pos": [
+              610.0,
+              -350.0,
+              0.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 180.0
+          },
+          {
+            "disc_x": 610.0,
+            "pin_idx": 2,
+            "pin_pos": [
+              610.0,
+              -0.0,
+              -220.0
+            ],
+            "tip_pos": [
+              610.0,
+              -0.0,
+              -350.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 270.0
+          },
+          {
+            "disc_x": 610.0,
+            "pin_idx": 3,
+            "pin_pos": [
+              610.0,
+              220.0,
+              -0.0
+            ],
+            "tip_pos": [
+              610.0,
+              350.0,
+              -0.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 0.0
+          },
+          {
+            "disc_x": 810.0,
+            "pin_idx": 0,
+            "pin_pos": [
+              810.0,
+              0.0,
+              220.0
+            ],
+            "tip_pos": [
+              810.0,
+              0.0,
+              350.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 90.0
+          },
+          {
+            "disc_x": 810.0,
+            "pin_idx": 1,
+            "pin_pos": [
+              810.0,
+              -220.0,
+              0.0
+            ],
+            "tip_pos": [
+              810.0,
+              -350.0,
+              0.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 180.0
+          },
+          {
+            "disc_x": 810.0,
+            "pin_idx": 2,
+            "pin_pos": [
+              810.0,
+              -0.0,
+              -220.0
+            ],
+            "tip_pos": [
+              810.0,
+              -0.0,
+              -350.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 270.0
+          },
+          {
+            "disc_x": 810.0,
+            "pin_idx": 3,
+            "pin_pos": [
+              810.0,
+              220.0,
+              -0.0
+            ],
+            "tip_pos": [
+              810.0,
+              350.0,
+              -0.0
+            ],
+            "r_tip": 350.0,
+            "pin_theta_deg": 0.0
+          }
+        ]
+      }
+    ]
+  },
+  "universal_simulation_summary": {
+    "driving_joint": "shaft",
+    "rpm": 1200,
+    "total_dof": 1,
+    "n_links": 18,
+    "n_interference_events": 1476,
+    "n_severe_events": 1444,
+    "swept_size_mm": [
+      1145.0,
+      986.18,
+      986.18
+    ]
+  }
+}

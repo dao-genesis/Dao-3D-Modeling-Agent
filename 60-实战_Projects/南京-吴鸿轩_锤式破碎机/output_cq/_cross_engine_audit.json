@@ -1,0 +1,314 @@
+{
+  "schema": "cross_engine_audit/v1",
+  "timestamp": "2026-04-19T02:28:15",
+  "thresholds": {
+    "volume_pct": 5.0,
+    "bbox_mm": 2.0
+  },
+  "summary": {
+    "n_parts": 11,
+    "n_have_cq": 11,
+    "n_have_dao": 0,
+    "n_have_fc": 11,
+    "n_with_warns": 0
+  },
+  "parts": {
+    "main_shaft": {
+      "part": "main_shaft",
+      "cq_stl": {
+        "faces": 2564,
+        "volume_mm3": 6868875.747861032,
+        "bbox_mm": [
+          1145.0,
+          90.0,
+          89.972
+        ]
+      },
+      "dao_stl": null,
+      "fc_step": {
+        "volume_mm3": 6871715.428,
+        "bbox_mm": [
+          1145.0,
+          90.0,
+          90.0
+        ]
+      },
+      "delta_cq_vs_fc_pct": 0.041,
+      "delta_cq_vs_dao_pct": null,
+      "delta_dao_vs_fc_pct": null,
+      "bbox_delta_cq_vs_fc_mm": 0.028,
+      "bbox_delta_cq_vs_dao_mm": null,
+      "warns": []
+    },
+    "rotor_disc": {
+      "part": "rotor_disc",
+      "cq_stl": {
+        "faces": 3040,
+        "volume_mm3": 4655481.060982127,
+        "bbox_mm": [
+          500.0,
+          499.845,
+          25.0
+        ]
+      },
+      "dao_stl": null,
+      "fc_step": {
+        "volume_mm3": 4657411.109,
+        "bbox_mm": [
+          500.0,
+          500.0,
+          25.0
+        ]
+      },
+      "delta_cq_vs_fc_pct": 0.041,
+      "delta_cq_vs_dao_pct": null,
+      "delta_dao_vs_fc_pct": null,
+      "bbox_delta_cq_vs_fc_mm": 0.155,
+      "bbox_delta_cq_vs_dao_mm": null,
+      "warns": []
+    },
+    "hammer": {
+      "part": "hammer",
+      "cq_stl": {
+        "faces": 520,
+        "volume_mm3": 381755.3449026847,
+        "bbox_mm": [
+          80.0,
+          180.0,
+          40.0
+        ]
+      },
+      "dao_stl": null,
+      "fc_step": {
+        "volume_mm3": 381734.518,
+        "bbox_mm": [
+          80.0,
+          180.0,
+          40.0
+        ]
+      },
+      "delta_cq_vs_fc_pct": 0.005,
+      "delta_cq_vs_dao_pct": null,
+      "delta_dao_vs_fc_pct": null,
+      "bbox_delta_cq_vs_fc_mm": 0.0,
+      "bbox_delta_cq_vs_dao_mm": null,
+      "warns": []
+    },
+    "hammer_pin": {
+      "part": "hammer_pin",
+      "cq_stl": {
+        "faces": 2264,
+        "volume_mm3": 150529.8655765425,
+        "bbox_mm": [
+          142.0,
+          40.0,
+          39.988
+        ]
+      },
+      "dao_stl": null,
+      "fc_step": {
+        "volume_mm3": 150593.291,
+        "bbox_mm": [
+          142.0,
+          40.0,
+          40.0
+        ]
+      },
+      "delta_cq_vs_fc_pct": 0.042,
+      "delta_cq_vs_dao_pct": null,
+      "delta_dao_vs_fc_pct": null,
+      "bbox_delta_cq_vs_fc_mm": 0.012,
+      "bbox_delta_cq_vs_dao_mm": null,
+      "warns": []
+    },
+    "driven_pulley": {
+      "part": "driven_pulley",
+      "cq_stl": {
+        "faces": 1004,
+        "volume_mm3": 3713458.2659238046,
+        "bbox_mm": [
+          90.0,
+          240.0,
+          239.925
+        ]
+      },
+      "dao_stl": null,
+      "fc_step": {
+        "volume_mm3": 3715008.524,
+        "bbox_mm": [
+          90.0,
+          240.0,
+          240.0
+        ]
+      },
+      "delta_cq_vs_fc_pct": 0.042,
+      "delta_cq_vs_dao_pct": null,
+      "delta_dao_vs_fc_pct": null,
+      "bbox_delta_cq_vs_fc_mm": 0.075,
+      "bbox_delta_cq_vs_dao_mm": null,
+      "warns": []
+    },
+    "screen_plate": {
+      "part": "screen_plate",
+      "cq_stl": {
+        "faces": 4530,
+        "volume_mm3": 7882919.005747097,
+        "bbox_mm": [
+          603.0,
+          401.974,
+          800.0
+        ]
+      },
+      "dao_stl": null,
+      "fc_step": {
+        "volume_mm3": 7886267.573,
+        "bbox_mm": [
+          603.0,
+          402.0,
+          800.0
+        ]
+      },
+      "delta_cq_vs_fc_pct": 0.042,
+      "delta_cq_vs_dao_pct": null,
+      "delta_dao_vs_fc_pct": null,
+      "bbox_delta_cq_vs_fc_mm": 0.026,
+      "bbox_delta_cq_vs_dao_mm": null,
+      "warns": []
+    },
+    "drive_pulley": {
+      "part": "drive_pulley",
+      "cq_stl": {
+        "faces": 3822,
+        "volume_mm3": 2449379.8805185677,
+        "bbox_mm": [
+          120.0,
+          190.0,
+          190.0
+        ]
+      },
+      "dao_stl": null,
+      "fc_step": {
+        "volume_mm3": 2450099.195,
+        "bbox_mm": [
+          120.0,
+          190.001,
+          190.0
+        ]
+      },
+      "delta_cq_vs_fc_pct": 0.029,
+      "delta_cq_vs_dao_pct": null,
+      "delta_dao_vs_fc_pct": null,
+      "bbox_delta_cq_vs_fc_mm": 0.001,
+      "bbox_delta_cq_vs_dao_mm": null,
+      "warns": []
+    },
+    "casing_lower": {
+      "part": "casing_lower",
+      "cq_stl": {
+        "faces": 552,
+        "volume_mm3": 54690478.18879695,
+        "bbox_mm": [
+          960.0,
+          610.0,
+          460.0
+        ]
+      },
+      "dao_stl": null,
+      "fc_step": {
+        "volume_mm3": 54690380.551,
+        "bbox_mm": [
+          960.0,
+          610.0,
+          460.0
+        ]
+      },
+      "delta_cq_vs_fc_pct": 0.0,
+      "delta_cq_vs_dao_pct": null,
+      "delta_dao_vs_fc_pct": null,
+      "bbox_delta_cq_vs_fc_mm": 0.0,
+      "bbox_delta_cq_vs_dao_mm": null,
+      "warns": []
+    },
+    "casing_upper": {
+      "part": "casing_upper",
+      "cq_stl": {
+        "faces": 584,
+        "volume_mm3": 65065478.18879689,
+        "bbox_mm": [
+          960.0,
+          610.0,
+          610.0
+        ]
+      },
+      "dao_stl": null,
+      "fc_step": {
+        "volume_mm3": 65065380.551,
+        "bbox_mm": [
+          960.0,
+          610.0,
+          610.0
+        ]
+      },
+      "delta_cq_vs_fc_pct": 0.0,
+      "delta_cq_vs_dao_pct": null,
+      "delta_dao_vs_fc_pct": null,
+      "bbox_delta_cq_vs_fc_mm": 0.0,
+      "bbox_delta_cq_vs_dao_mm": null,
+      "warns": []
+    },
+    "motor_body": {
+      "part": "motor_body",
+      "cq_stl": {
+        "faces": 682,
+        "volume_mm3": 59837232.94146238,
+        "bbox_mm": [
+          685.0,
+          590.0,
+          394.5
+        ]
+      },
+      "dao_stl": null,
+      "fc_step": {
+        "volume_mm3": 59837341.239,
+        "bbox_mm": [
+          685.0,
+          590.0,
+          394.5
+        ]
+      },
+      "delta_cq_vs_fc_pct": 0.0,
+      "delta_cq_vs_dao_pct": null,
+      "delta_dao_vs_fc_pct": null,
+      "bbox_delta_cq_vs_fc_mm": 0.0,
+      "bbox_delta_cq_vs_dao_mm": null,
+      "warns": []
+    },
+    "frame_base": {
+      "part": "frame_base",
+      "cq_stl": {
+        "faces": 2172,
+        "volume_mm3": 31182125.77457232,
+        "bbox_mm": [
+          1300.0,
+          820.0,
+          520.0
+        ]
+      },
+      "dao_stl": null,
+      "fc_step": {
+        "volume_mm3": 31182061.96,
+        "bbox_mm": [
+          1300.0,
+          820.0,
+          520.0
+        ]
+      },
+      "delta_cq_vs_fc_pct": 0.0,
+      "delta_cq_vs_dao_pct": null,
+      "delta_dao_vs_fc_pct": null,
+      "bbox_delta_cq_vs_fc_mm": 0.0,
+      "bbox_delta_cq_vs_dao_mm": null,
+      "warns": []
+    }
+  }
+}

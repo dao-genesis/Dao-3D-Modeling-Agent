@@ -1,0 +1,42 @@
+{
+  "timestamp": 1778404753,
+  "poses": [
+    {
+      "pose": "home",
+      "ok": true,
+      "objects": 25,
+      "doc": "ORS6_home",
+      "duration_s": 9.8
+    },
+    {
+      "pose": "forward",
+      "ok": true,
+      "objects": 25,
+      "doc": "ORS6_forward",
+      "duration_s": 7.74
+    },
+    {
+      "pose": "side_right",
+      "ok": true,
+      "objects": 25,
+      "doc": "ORS6_side_right",
+      "duration_s": 8.66
+    },
+    {
+      "pose": "pitch_up",
+      "ok": true,
+      "objects": 25,
+      "doc": "ORS6_pitch_up",
+      "duration_s": 7.65
+    },
+    {
+      "pose": "roll_left",
+      "ok": true,
+      "objects": 25,
+      "doc": "ORS6_roll_left",
+      "duration_s": 9.73
+    }
+  ],
+  "pass": 5,
+  "total": 5
+}

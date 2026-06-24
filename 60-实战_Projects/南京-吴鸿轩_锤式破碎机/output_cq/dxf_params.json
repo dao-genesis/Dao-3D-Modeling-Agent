@@ -1,0 +1,345 @@
+{
+  "assembly": {
+    "part": "assembly",
+    "raw": {
+      "source": "assembly_A3.dxf",
+      "line_count": 8,
+      "text_count": 7,
+      "texts": [
+        "L=1300 H=860  (Front View)",
+        "W=820  (Top View)",
+        "Rotor %%c700mm",
+        "Hammer Crusher Assembly",
+        "Motor Y180L-4 22kW 1470rpm",
+        "Rotor 1200rpm  tip 43.98m/s",
+        "Nanjing Tech. College  Wu Hongxuan 2025"
+      ],
+      "bbox": {
+        "minx": 0.0,
+        "miny": -870.0,
+        "maxx": 1300.0,
+        "maxy": 860.0,
+        "width": 1300.0,
+        "height": 1730.0
+      },
+      "dims": {
+        "top10_lengths": [
+          1300.0,
+          1300.0,
+          1300.0,
+          1300.0,
+          860.0,
+          860.0,
+          820.0,
+          820.0
+        ],
+        "top10_horizontal": [
+          860.0,
+          820.0
+        ],
+        "top10_vertical": [
+          1300.0
+        ]
+      }
+    },
+    "parsed_dims": {
+      "diameters_mm": [
+        700.0
+      ],
+      "lengths_mm": [],
+      "threads": [],
+      "bare_nums": [],
+      "all_dims": [
+        700.0
+      ]
+    },
+    "_raw_line_count": 8,
+    "_raw_bbox": {
+      "minx": 0.0,
+      "miny": -870.0,
+      "maxx": 1300.0,
+      "maxy": 860.0,
+      "width": 1300.0,
+      "height": 1730.0
+    }
+  },
+  "shaft": {
+    "part": "main_shaft",
+    "total_length_est": 4885.5,
+    "max_radius_est": 90.0,
+    "keyway_noted": true,
+    "segment_x_coords": [
+      925.0,
+      70.0,
+      30.0,
+      20.0
+    ],
+    "texts": [
+      "L=1145mm",
+      "%%c90 (shaft main dia)",
+      "Keyway 20x70",
+      "%%c60 (thread M60x2 R)",
+      "%%c60 (thread M60x2 L)",
+      "%%c80 (bearing seat)",
+      "45钢 / Material: 45 Steel"
+    ],
+    "nominal": {
+      "L": 1145,
+      "D_max": 90,
+      "D_mid": 80,
+      "D_end": 60
+    },
+    "parsed_dims": {
+      "diameters_mm": [
+        90.0,
+        80.0,
+        60.0
+      ],
+      "lengths_mm": [],
+      "threads": [
+        {
+          "major": 60,
+          "pitch": 2.0
+        },
+        {
+          "major": 60,
+          "pitch": 2.0
+        }
+      ],
+      "bare_nums": [],
+      "all_dims": [
+        90.0,
+        80.0,
+        60.0
+      ]
+    },
+    "_raw_line_count": 23,
+    "_raw_bbox": {
+      "minx": 0.0,
+      "miny": -45.0,
+      "maxx": 1145.0,
+      "maxy": 57.0,
+      "width": 1145.0,
+      "height": 102.0
+    }
+  },
+  "rotor_disc": {
+    "part": "rotor_disc",
+    "max_radius_est": 500.0,
+    "texts": [
+      "%%c500 (OD)",
+      "bore %%c80 PCD%%c440",
+      "Pin holes 4x%%c40 thk=25mm",
+      "thk=25mm",
+      "Q345 / rotor disc"
+    ],
+    "nominal": {
+      "OD": 500,
+      "bore": 80,
+      "thk": 25,
+      "pin_holes": 4,
+      "pin_pcd": 440
+    },
+    "parsed_dims": {
+      "diameters_mm": [
+        500.0,
+        440.0,
+        80.0,
+        40.0
+      ],
+      "lengths_mm": [],
+      "threads": [],
+      "bare_nums": [],
+      "all_dims": [
+        500.0,
+        440.0,
+        80.0,
+        40.0
+      ]
+    },
+    "_raw_line_count": 4,
+    "_raw_bbox": {
+      "minx": -550.0,
+      "miny": -250.0,
+      "maxx": 250.0,
+      "maxy": 250.0,
+      "width": 800.0,
+      "height": 500.0
+    }
+  },
+  "hammer": {
+    "part": "hammer",
+    "height_est": 180.0,
+    "width_est": 80.0,
+    "texts": [
+      "H=180  W_bot=80  W_top=40",
+      "hole %%c40",
+      "thk=40mm",
+      "ZGMn13 / hammer head"
+    ],
+    "nominal": {
+      "H": 180,
+      "W_bot": 80,
+      "W_top": 40,
+      "thk": 40,
+      "hole_d": 40,
+      "hole_y": 120
+    },
+    "parsed_dims": {
+      "diameters_mm": [
+        40.0
+      ],
+      "lengths_mm": [],
+      "threads": [],
+      "bare_nums": [],
+      "all_dims": [
+        40.0
+      ]
+    },
+    "_raw_line_count": 8,
+    "_raw_bbox": {
+      "minx": -40.0,
+      "miny": 0.0,
+      "maxx": 160.0,
+      "maxy": 180.0,
+      "width": 200.0,
+      "height": 180.0
+    }
+  },
+  "hammer_pin": {
+    "part": "hammer_pin",
+    "total_length_est": 92.0,
+    "body_radius_est": 30.0,
+    "texts": [
+      "L=142mm total",
+      "body %%c40x92",
+      "M30x2",
+      "M30x2",
+      "45钢 / Material: 45 Steel"
+    ],
+    "nominal": {
+      "body_d": 40,
+      "body_l": 92,
+      "thread_d": 30,
+      "thread_l": 25,
+      "total_l": 142
+    },
+    "parsed_dims": {
+      "diameters_mm": [
+        40.0
+      ],
+      "lengths_mm": [
+        92.0
+      ],
+      "threads": [
+        {
+          "major": 30,
+          "pitch": 2.0
+        },
+        {
+          "major": 30,
+          "pitch": 2.0
+        }
+      ],
+      "bare_nums": [],
+      "all_dims": [
+        92.0,
+        40.0
+      ]
+    },
+    "_raw_line_count": 12,
+    "_raw_bbox": {
+      "minx": 0.0,
+      "miny": -20.0,
+      "maxx": 142.0,
+      "maxy": 20.0,
+      "width": 142.0,
+      "height": 40.0
+    }
+  },
+  "driven_pulley": {
+    "part": "driven_pulley",
+    "od_est": 240.0,
+    "width_est": 90.0,
+    "texts": [
+      "OD %%c240 PD %%c224",
+      "bore %%c70  B=90mm",
+      "4 grooves B-type",
+      "HT200 cast iron"
+    ],
+    "nominal": {
+      "OD": 240,
+      "bore": 70,
+      "width": 90,
+      "grooves": 4,
+      "type": "B"
+    },
+    "parsed_dims": {
+      "diameters_mm": [
+        240.0,
+        224.0,
+        70.0
+      ],
+      "lengths_mm": [],
+      "threads": [],
+      "bare_nums": [],
+      "all_dims": [
+        240.0,
+        224.0,
+        70.0
+      ]
+    },
+    "_raw_line_count": 8,
+    "_raw_bbox": {
+      "minx": -250.0,
+      "miny": -120.0,
+      "maxx": 120.0,
+      "maxy": 120.0,
+      "width": 370.0,
+      "height": 240.0
+    }
+  },
+  "screen_plate": {
+    "part": "screen_plate",
+    "width_est": 800.0,
+    "od_est": 696.284,
+    "texts": [
+      "Ri=%%c390 Ro=%%c402",
+      "B=800mm arc=120",
+      "t=12mm  hole %%c15",
+      "不锈钢 / Stainless Steel"
+    ],
+    "nominal": {
+      "Ri": 390,
+      "Ro": 402,
+      "thk": 12,
+      "width": 800,
+      "arc": 120,
+      "hole_d": 15
+    },
+    "parsed_dims": {
+      "diameters_mm": [
+        402.0,
+        390.0,
+        15.0
+      ],
+      "lengths_mm": [],
+      "threads": [],
+      "bare_nums": [],
+      "all_dims": [
+        402.0,
+        390.0,
+        15.0
+      ]
+    },
+    "_raw_line_count": 8,
+    "_raw_bbox": {
+      "minx": -900.0,
+      "miny": -348.142,
+      "maxx": 201.0,
+      "maxy": 348.142,
+      "width": 1101.0,
+      "height": 696.284
+    }
+  }
+}

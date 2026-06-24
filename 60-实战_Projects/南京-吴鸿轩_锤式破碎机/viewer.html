@@ -1,0 +1,912 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>锤式破碎机 · 整机3D装配体 v4</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        background: #0a0c14;
+        color: #e2e8f0;
+        font-family: "Segoe UI", system-ui, sans-serif;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      #header {
+        padding: 10px 18px;
+        background: linear-gradient(90deg, #111420, #1a1f35);
+        border-bottom: 1px solid #1e2744;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        flex-shrink: 0;
+      }
+      #header h1 {
+        font-size: 15px;
+        font-weight: 700;
+        color: #7dd3fc;
+        letter-spacing: 0.5px;
+      }
+      #header .sub {
+        font-size: 11px;
+        color: #64748b;
+        margin-top: 2px;
+      }
+      .badge {
+        padding: 3px 9px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+      }
+      .badge-green {
+        background: #052e16;
+        color: #4ade80;
+        border: 1px solid #14532d;
+      }
+      .badge-blue {
+        background: #0c1a3d;
+        color: #60a5fa;
+        border: 1px solid #1d3f6e;
+      }
+      .badge-gold {
+        background: #2d1a00;
+        color: #fbbf24;
+        border: 1px solid #5c3900;
+      }
+      #toolbar {
+        padding: 6px 12px;
+        background: #0f1221;
+        border-bottom: 1px solid #1e2744;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+      }
+      .btn {
+        background: #1a1f35;
+        border: 1px solid #2d3a5c;
+        color: #cbd5e1;
+        padding: 5px 12px;
+        border-radius: 5px;
+        font-size: 11px;
+        cursor: pointer;
+        transition: all 0.15s;
+        white-space: nowrap;
+      }
+      .btn:hover {
+        background: #263052;
+        border-color: #4a6fa5;
+        color: #fff;
+      }
+      .btn.active {
+        background: #1d3a6e;
+        border-color: #3b82f6;
+        color: #93c5fd;
+      }
+      .sep-v {
+        width: 1px;
+        height: 20px;
+        background: #1e2744;
+        margin: 0 4px;
+      }
+      select.btn {
+        padding: 4px 8px;
+      }
+      #main {
+        flex: 1;
+        display: flex;
+        overflow: hidden;
+      }
+      #canvas-wrap {
+        flex: 1;
+        position: relative;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      /* Sidebar */
+      #sidebar {
+        width: 260px;
+        background: #0d1020;
+        border-left: 1px solid #1e2744;
+        overflow-y: auto;
+        padding: 0;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      #sidebar::-webkit-scrollbar {
+        width: 5px;
+      }
+      #sidebar::-webkit-scrollbar-track {
+        background: #0a0c14;
+      }
+      #sidebar::-webkit-scrollbar-thumb {
+        background: #2d3a5c;
+        border-radius: 2px;
+      }
+
+      .panel {
+        padding: 12px;
+        border-bottom: 1px solid #1a2035;
+      }
+      .panel-title {
+        font-size: 10px;
+        font-weight: 700;
+        color: #475569;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 10px;
+      }
+      .stat-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 3px 0;
+        font-size: 11px;
+      }
+      .stat-row .label {
+        color: #64748b;
+      }
+      .stat-row .value {
+        color: #93c5fd;
+        font-weight: 600;
+      }
+
+      /* BOM */
+      .bom-section {
+        padding: 8px 12px 4px;
+      }
+      .bom-section-title {
+        font-size: 9px;
+        font-weight: 700;
+        color: #334155;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        padding: 4px 0;
+        border-bottom: 1px solid #1a2035;
+        margin-bottom: 6px;
+      }
+      .part-item {
+        padding: 6px 8px;
+        border-radius: 5px;
+        margin-bottom: 3px;
+        background: #111827;
+        border: 1px solid #1e2535;
+        cursor: pointer;
+        transition: all 0.12s;
+      }
+      .part-item:hover {
+        background: #1a2540;
+        border-color: #3b4f72;
+      }
+      .part-item.highlight {
+        background: #172554;
+        border-color: #3b82f6;
+        box-shadow: 0 0 8px rgba(59, 130, 246, 0.3);
+      }
+      .part-item .name {
+        font-size: 12px;
+        font-weight: 600;
+        color: #cbd5e1;
+      }
+      .part-item .en {
+        font-size: 10px;
+        color: #475569;
+      }
+      .part-item .detail {
+        display: flex;
+        gap: 6px;
+        margin-top: 3px;
+      }
+      .part-item .mat {
+        font-size: 9px;
+        color: #374151;
+        background: #0f172a;
+        padding: 1px 5px;
+        border-radius: 3px;
+      }
+      .part-item .qty {
+        font-size: 9px;
+        color: #7dd3fc;
+        background: #0c1a3d;
+        padding: 1px 5px;
+        border-radius: 3px;
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        margin-top: 3px;
+      }
+
+      /* Loading */
+      #loading {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #0a0c14;
+        z-index: 10;
+        gap: 16px;
+      }
+      #loading-bar-wrap {
+        width: 280px;
+        height: 3px;
+        background: #1a1f35;
+        border-radius: 2px;
+        overflow: hidden;
+      }
+      #loading-bar {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+        border-radius: 2px;
+        transition: width 0.25s;
+      }
+      #loading p {
+        font-size: 13px;
+        color: #64748b;
+      }
+      #loading-detail {
+        font-size: 10px;
+        color: #374151;
+      }
+      #loading-title {
+        font-size: 18px;
+        color: #7dd3fc;
+        font-weight: 700;
+      }
+
+      /* Info overlay */
+      #info-overlay {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        pointer-events: none;
+      }
+      .info-badge {
+        background: rgba(13, 16, 32, 0.92);
+        border: 1px solid #1e2744;
+        border-radius: 6px;
+        padding: 6px 10px;
+        font-size: 10px;
+        backdrop-filter: blur(8px);
+      }
+      .info-badge .val {
+        color: #4ade80;
+        font-weight: 700;
+        font-size: 12px;
+      }
+
+      /* Controls overlay */
+      #controls {
+        position: absolute;
+        bottom: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 6px;
+      }
+      #hint {
+        position: absolute;
+        bottom: 52px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 10px;
+        color: #374151;
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="header">
+      <div style="display: flex; gap: 10px; align-items: center">
+        <span style="font-size: 20px">🔨</span>
+        <div>
+          <h1>锤式破碎机 · Hammer Crusher</h1>
+          <div class="sub">
+            南京工业职业技术大学 · 吴鸿轩 · CadQuery参数化建模 v4.0 · 万法归宗
+          </div>
+        </div>
+      </div>
+      <span class="badge badge-green">万法归宗 12零件 32实例</span>
+      <span class="badge badge-blue">Y180L-4 22kW</span>
+      <span class="badge badge-gold">Ø700×800 转子</span>
+    </div>
+
+    <div id="toolbar">
+      <button
+        class="btn"
+        onclick="loadAssembly('output_cq/assembly_complete_v4.glb')"
+      >
+        🔩 完整整机(V带)
+      </button>
+      <button
+        class="btn"
+        onclick="loadAssembly('output_cq/assembly_complete.glb')"
+      >
+        ⚙️ 无V带
+      </button>
+      <button class="btn" onclick="loadAssembly('output_cq/assembly.glb')">
+        ⚙️ 旋转部件
+      </button>
+      <button
+        class="btn"
+        onclick="loadAssembly('hammer_crusher_total_machine.glb')"
+      >
+        🏭 总机
+      </button>
+      <div class="sep-v"></div>
+      <button class="btn" id="btn-wire" onclick="toggleWire()">线框</button>
+      <button class="btn" id="btn-rotate" onclick="toggleRotate()">
+        自动旋转
+      </button>
+      <button class="btn" onclick="resetCamera()">复位</button>
+      <div class="sep-v"></div>
+      <input
+        type="file"
+        id="file-input"
+        accept=".glb,.gltf"
+        style="display: none"
+        onchange="loadFile(event)"
+      />
+      <button
+        class="btn"
+        onclick="document.getElementById('file-input').click()"
+      >
+        📂 打开GLB
+      </button>
+      <button class="btn" onclick="screenshotModel()">📸 截图</button>
+    </div>
+
+    <div id="main">
+      <div id="canvas-wrap">
+        <div id="loading">
+          <div id="loading-title">🔨 锤式破碎机</div>
+          <p>加载整机3D装配体...</p>
+          <div id="loading-bar-wrap"><div id="loading-bar"></div></div>
+          <p id="loading-detail">初始化Three.js渲染引擎</p>
+        </div>
+
+        <div id="info-overlay">
+          <div class="info-badge">
+            <div style="color: #64748b; font-size: 9px">六相验证</div>
+            <div class="val">65✅ 0⚠️</div>
+          </div>
+          <div class="info-badge">
+            <div style="color: #64748b; font-size: 9px">面片数</div>
+            <div class="val" id="face-count">—</div>
+          </div>
+        </div>
+
+        <div id="controls">
+          <button class="btn" onclick="resetCamera()">复位视角</button>
+          <button class="btn" onclick="toggleWire()">线框切换</button>
+          <button class="btn" onclick="toggleRotate()">自动旋转</button>
+          <button class="btn" onclick="screenshotModel()">截图</button>
+        </div>
+        <div id="hint">鼠标左键旋转 · 右键平移 · 滚轮缩放</div>
+      </div>
+
+      <div id="sidebar">
+        <!-- Stats -->
+        <div class="panel">
+          <div class="panel-title">整机参数</div>
+          <div class="stat-row">
+            <span class="label">整机外形</span
+            ><span class="value">1300×820×860mm</span>
+          </div>
+          <div class="stat-row">
+            <span class="label">转子直径</span><span class="value">Ø700mm</span>
+          </div>
+          <div class="stat-row">
+            <span class="label">转子转速</span
+            ><span class="value">1200 r/min</span>
+          </div>
+          <div class="stat-row">
+            <span class="label">锤头线速</span
+            ><span class="value">43.98 m/s</span>
+          </div>
+          <div class="stat-row">
+            <span class="label">主轴总长</span><span class="value">1145mm</span>
+          </div>
+          <div class="stat-row">
+            <span class="label">筛板弧角</span
+            ><span class="value">120° Ri=390mm</span>
+          </div>
+          <div class="stat-row">
+            <span class="label">V带中心距</span
+            ><span class="value">600mm 传动比1.23</span>
+          </div>
+          <div class="stat-row">
+            <span class="label">电动机</span
+            ><span class="value">Y180L-4 22kW</span>
+          </div>
+        </div>
+
+        <!-- BOM: 旋转部件 -->
+        <div class="bom-section">
+          <div class="bom-section-title">旋转部件 Rotating Assembly</div>
+          <div id="bom-rotating"></div>
+        </div>
+
+        <!-- BOM: 整机结构 -->
+        <div class="bom-section">
+          <div class="bom-section-title">整机结构 Machine Structure</div>
+          <div id="bom-machine"></div>
+        </div>
+
+        <!-- Verify -->
+        <div class="panel" style="margin-top: auto">
+          <div class="panel-title">万法归宗 六相验证</div>
+          <div class="stat-row">
+            <span class="label">Phase 1 DXF源</span
+            ><span class="value" style="color: #4ade80">8✅</span>
+          </div>
+          <div class="stat-row">
+            <span class="label">Phase 2 几何质量</span
+            ><span class="value" style="color: #4ade80">11✅</span>
+          </div>
+          <div class="stat-row">
+            <span class="label">Phase 3 装配完整</span
+            ><span class="value" style="color: #4ade80">16✅</span>
+          </div>
+          <div class="stat-row">
+            <span class="label">Phase 4 DXF↔模型</span
+            ><span class="value" style="color: #4ade80">17✅</span>
+          </div>
+          <div class="stat-row">
+            <span class="label">Phase 5 论文文档</span
+            ><span class="value" style="color: #4ade80">6✅</span>
+          </div>
+          <div class="stat-row" style="margin-top: 4px">
+            <span class="label">总计</span
+            ><span class="value" style="color: #fbbf24">65/65 100%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.166.1/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.166.1/examples/jsm/"
+        }
+      }
+    </script>
+    <script type="module">
+      import * as THREE from "three";
+      import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+      import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+
+      // ── BOM ───────────────────────────────────────────────────────
+      const BOM_ROTATING = [
+        {
+          id: 1,
+          name: "主轴",
+          en: "Main Shaft",
+          mat: "45钢",
+          qty: 1,
+          dim: "Ø60-80-90 L=1145mm",
+          color: "#7c8cde",
+        },
+        {
+          id: 2,
+          name: "转子盘",
+          en: "Rotor Disc",
+          mat: "Q345钢",
+          qty: 4,
+          dim: "Ø500×25, 4销孔PCD440",
+          color: "#6b7db3",
+        },
+        {
+          id: 3,
+          name: "锤头",
+          en: "Hammer",
+          mat: "ZGMn13",
+          qty: 16,
+          dim: "梯形180×80×40, Ø40孔",
+          color: "#fbbf24",
+        },
+        {
+          id: 4,
+          name: "销轴",
+          en: "Hammer Pin",
+          mat: "45钢",
+          qty: 4,
+          dim: "Ø40×142 M30×2两端",
+          color: "#94a3b8",
+        },
+        {
+          id: 5,
+          name: "从动带轮",
+          en: "Driven Pulley",
+          mat: "HT200铸铁",
+          qty: 1,
+          dim: "B型4槽 PD224 孔Ø70",
+          color: "#475569",
+        },
+        {
+          id: 6,
+          name: "筛板",
+          en: "Screen Plate",
+          mat: "不锈钢",
+          qty: 1,
+          dim: "弧120° Ri=390 t=12 B=800",
+          color: "#67e8f9",
+        },
+      ];
+
+      const BOM_MACHINE = [
+        {
+          id: 7,
+          name: "主动带轮",
+          en: "Drive Pulley",
+          mat: "HT200铸铁",
+          qty: 1,
+          dim: "B型4槽 PD180 孔Ø55",
+          color: "#475569",
+        },
+        {
+          id: 8,
+          name: "下机壳",
+          en: "Casing Lower",
+          mat: "Q235焊接",
+          qty: 1,
+          dim: "960×610×460mm 壁厚30mm",
+          color: "#7a8a9a",
+        },
+        {
+          id: 9,
+          name: "上机壳",
+          en: "Casing Upper",
+          mat: "Q235焊接",
+          qty: 1,
+          dim: "960×610×460mm + 进料斗",
+          color: "#8a9aaa",
+        },
+        {
+          id: 10,
+          name: "电动机",
+          en: "Motor Y180L-4",
+          mat: "Y系列",
+          qty: 1,
+          dim: "22kW 590×280×350mm",
+          color: "#374151",
+        },
+        {
+          id: 11,
+          name: "机架底座",
+          en: "Frame Base",
+          mat: "Q235焊接",
+          qty: 1,
+          dim: "1300×820×100mm + 4立柱",
+          color: "#4b5563",
+        },
+      ];
+
+      function renderBOM(items, containerId) {
+        const el = document.getElementById(containerId);
+        items.forEach((b) => {
+          const div = document.createElement("div");
+          div.className = "part-item";
+          div.innerHTML = `
+      <div style="display:flex;align-items:center;gap:6px">
+        <div class="dot" style="background:${b.color}"></div>
+        <div class="name">${b.id}. ${b.name} <span style="color:#334155;font-weight:400">×${b.qty}</span></div>
+      </div>
+      <div class="en">${b.en}</div>
+      <div class="detail">
+        <span class="mat">${b.mat}</span>
+        <span class="qty">${b.dim}</span>
+      </div>`;
+          el.appendChild(div);
+        });
+      }
+
+      renderBOM(BOM_ROTATING, "bom-rotating");
+      renderBOM(BOM_MACHINE, "bom-machine");
+
+      // ── Renderer ──────────────────────────────────────────────────
+      const canvas = document.createElement("canvas");
+      document.getElementById("canvas-wrap").appendChild(canvas);
+
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.3;
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0a0c14);
+      scene.fog = new THREE.FogExp2(0x0a0c14, 0.00025);
+
+      const camera = new THREE.PerspectiveCamera(45, 1, 1, 100000);
+      camera.position.set(2000, 1200, 2000);
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.07;
+      controls.minDistance = 50;
+      controls.maxDistance = 20000;
+
+      // Lighting
+      const amb = new THREE.AmbientLight(0xffffff, 0.55);
+      scene.add(amb);
+      const dir1 = new THREE.DirectionalLight(0xffffff, 1.3);
+      dir1.position.set(1500, 3000, 1500);
+      dir1.castShadow = true;
+      dir1.shadow.mapSize.set(2048, 2048);
+      scene.add(dir1);
+      const dir2 = new THREE.DirectionalLight(0x6680cc, 0.45);
+      dir2.position.set(-1500, 500, -800);
+      scene.add(dir2);
+      const dir3 = new THREE.DirectionalLight(0xffd080, 0.25);
+      dir3.position.set(0, -800, 1200);
+      scene.add(dir3);
+      const hemi = new THREE.HemisphereLight(0x304060, 0x120b1a, 0.5);
+      scene.add(hemi);
+
+      // Grid
+      const grid = new THREE.GridHelper(8000, 80, 0x111830, 0x111830);
+      grid.position.y = -80;
+      scene.add(grid);
+
+      let currentModel = null;
+      let wireframe = false;
+      let autoRot = false;
+      window.wireframe = false;
+      window.autoRot = false;
+
+      function setLoading(pct, detail = "") {
+        const el = document.getElementById("loading");
+        const bar = document.getElementById("loading-bar");
+        const det = document.getElementById("loading-detail");
+        if (el) el.style.display = pct > 0 ? "flex" : "none";
+        if (bar) bar.style.width = pct + "%";
+        if (det && detail) det.textContent = detail;
+      }
+
+      window.loadAssembly = function (url) {
+        setLoading(5, `尝试加载 ${url}...`);
+        const loader = new GLTFLoader();
+        loader.load(
+          url,
+          (gltf) => onLoaded(gltf, url),
+          (xhr) => {
+            const pct = xhr.total
+              ? Math.round((xhr.loaded / xhr.total) * 80) + 8
+              : 30;
+            setLoading(pct, `下载中 ${Math.round(xhr.loaded / 1024)}KB...`);
+          },
+          (err) => {
+            console.warn("Cannot auto-load (CORS/file mode):", err.message);
+            setLoading(0);
+            showPlaceholder();
+          },
+        );
+      };
+
+      function onLoaded(gltf, src) {
+        setLoading(90, "处理模型...");
+        if (currentModel) scene.remove(currentModel);
+        const model = gltf.scene;
+        let faceCount = 0;
+
+        model.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+            if (child.material) {
+              const m = child.material;
+              if (!m.metalness || m.metalness < 0.3) m.metalness = 0.45;
+              if (!m.roughness || m.roughness > 0.8) m.roughness = 0.55;
+            }
+            if (child.geometry && child.geometry.index)
+              faceCount += child.geometry.index.count / 3;
+          }
+        });
+
+        const box = new THREE.Box3().setFromObject(model);
+        const center = box.getCenter(new THREE.Vector3());
+        model.position.sub(center);
+
+        scene.add(model);
+        currentModel = model;
+
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const dist = maxDim * 1.8;
+        camera.position.set(dist, dist * 0.6, dist);
+        controls.target.set(0, 0, 0);
+        controls.update();
+
+        const fc = document.getElementById("face-count");
+        if (fc)
+          fc.textContent =
+            faceCount > 0 ? `${Math.round(faceCount / 1000)}k` : "—";
+
+        setLoading(0);
+        console.log(`✅ 加载成功: ${src}  面片: ${faceCount}`);
+      }
+
+      function showPlaceholder() {
+        if (currentModel) return;
+        const group = new THREE.Group();
+        const cfg = [
+          // shaft
+          {
+            geo: new THREE.CylinderGeometry(35, 35, 800, 32),
+            pos: [0, 0, 0],
+            rot: [0, 0, Math.PI / 2],
+            color: 0x7c8cde,
+          },
+          // rotor disc x4
+          ...[-280, -90, 90, 280].map((x) => ({
+            geo: new THREE.CylinderGeometry(230, 230, 20, 48),
+            pos: [x, 0, 0],
+            rot: [0, 0, Math.PI / 2],
+            color: 0x6b7db3,
+          })),
+          // hammer (simplified)
+          ...[0, 90, 180, 270].map((a) => ({
+            geo: new THREE.BoxGeometry(25, 90, 30),
+            pos: [
+              Math.cos((a * Math.PI) / 180) * 220,
+              Math.sin((a * Math.PI) / 180) * 220,
+              0,
+            ],
+            rot: [0, 0, (a * Math.PI) / 180],
+            color: 0xfbbf24,
+          })),
+          // screen
+          {
+            geo: new THREE.TorusGeometry(350, 8, 8, 32, (Math.PI * 2) / 3),
+            pos: [0, -350, 0],
+            rot: [Math.PI / 2, 0, 0],
+            color: 0x67e8f9,
+          },
+          // casing lower
+          {
+            geo: new THREE.BoxGeometry(600, 80, 500),
+            pos: [0, -250, 0],
+            rot: [0, 0, 0],
+            color: 0x4b5a6a,
+          },
+          // motor
+          {
+            geo: new THREE.BoxGeometry(280, 160, 180),
+            pos: [0, -200, -450],
+            rot: [0, 0, 0],
+            color: 0x374151,
+          },
+        ];
+        cfg.forEach((c) => {
+          const mesh = new THREE.Mesh(
+            c.geo,
+            new THREE.MeshStandardMaterial({
+              color: c.color,
+              metalness: 0.5,
+              roughness: 0.5,
+            }),
+          );
+          mesh.position.set(...c.pos);
+          mesh.rotation.set(...c.rot);
+          mesh.castShadow = true;
+          group.add(mesh);
+        });
+        scene.add(group);
+        currentModel = group;
+        document.getElementById("loading").style.display = "none";
+      }
+
+      window.loadFile = function (evt) {
+        const file = evt.target.files[0];
+        if (!file) return;
+        const url = URL.createObjectURL(file);
+        const loader = new GLTFLoader();
+        setLoading(5, `读取 ${file.name}...`);
+        loader.load(
+          url,
+          (gltf) => onLoaded(gltf, file.name),
+          (xhr) => {
+            const p = xhr.total
+              ? Math.round((xhr.loaded / xhr.total) * 80) + 8
+              : 30;
+            setLoading(p, `${Math.round(xhr.loaded / 1024)}KB...`);
+          },
+          () => {
+            setLoading(0);
+            showPlaceholder();
+          },
+        );
+      };
+
+      window.resetCamera = function () {
+        if (!currentModel) return;
+        const box = new THREE.Box3().setFromObject(currentModel);
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const dist = maxDim * 1.8;
+        camera.position.set(dist, dist * 0.6, dist);
+        controls.target.set(0, 0, 0);
+        controls.update();
+      };
+
+      window.toggleWire = function () {
+        wireframe = !wireframe;
+        const btn = document.getElementById("btn-wire");
+        if (btn) btn.classList.toggle("active", wireframe);
+        if (currentModel)
+          currentModel.traverse((c) => {
+            if (c.isMesh && c.material) c.material.wireframe = wireframe;
+          });
+      };
+
+      window.toggleRotate = function () {
+        autoRot = !autoRot;
+        controls.autoRotate = autoRot;
+        controls.autoRotateSpeed = 1.2;
+        const btn = document.getElementById("btn-rotate");
+        if (btn) btn.classList.toggle("active", autoRot);
+      };
+
+      window.screenshotModel = function () {
+        renderer.render(scene, camera);
+        const a = document.createElement("a");
+        a.download = `hammer_crusher_${Date.now()}.png`;
+        a.href = renderer.domElement.toDataURL("image/png");
+        a.click();
+      };
+
+      function resize() {
+        const wrap = document.getElementById("canvas-wrap");
+        const w = wrap.clientWidth,
+          h = wrap.clientHeight;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+      }
+      window.addEventListener("resize", resize);
+      resize();
+
+      function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      // Auto-load v4 (with V-belts), fallback to v3
+      fetch("output_cq/assembly_complete_v4.glb", { method: "HEAD" })
+        .then((r) =>
+          window.loadAssembly(
+            r.ok
+              ? "output_cq/assembly_complete_v4.glb"
+              : "output_cq/assembly_complete.glb",
+          ),
+        )
+        .catch(() => window.loadAssembly("output_cq/assembly_complete.glb"));
+    </script>
+  </body>
+</html>

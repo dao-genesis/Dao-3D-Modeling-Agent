@@ -1,0 +1,1211 @@
+{
+  "timestamp": "2026-04-25T13:27:46.049048",
+  "assembly": "D:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\南京-吴鸿轩_锤式破碎机\\交付包_最终\\锤式破碎机_总装配.SLDASM",
+  "skip_motion": true,
+  "sw_revision": "31.0.1",
+  "phase2_self_check": {
+    "rebuild_ok": true,
+    "components_total": 34,
+    "components_resolved": 33,
+    "components_suppressed": 1,
+    "components_visible": 34,
+    "comp_list": [
+      {
+        "name": "screen_plate-1",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          108.0,
+          -301.5,
+          -402.0,
+          908.0,
+          301.5,
+          0.0
+        ]
+      },
+      {
+        "name": "main_shaft-1",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          0.0,
+          -45.0,
+          -45.0,
+          1145.0,
+          45.0,
+          45.0
+        ]
+      },
+      {
+        "name": "rotor_disc-1",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          194.5,
+          -250.0,
+          -250.0,
+          219.5,
+          250.0,
+          250.0
+        ]
+      },
+      {
+        "name": "rotor_disc-2",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          395.5,
+          -250.0,
+          -250.0,
+          420.5,
+          250.0,
+          250.0
+        ]
+      },
+      {
+        "name": "hammer_pin-2",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          173.0,
+          -240.0,
+          -20.0,
+          843.0,
+          -200.0,
+          20.0
+        ]
+      },
+      {
+        "name": "hammer_pin-3",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          173.0,
+          -20.0,
+          200.0,
+          843.0,
+          20.0,
+          240.0
+        ]
+      },
+      {
+        "name": "rotor_disc-3",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          597.5,
+          -250.0,
+          -250.0,
+          622.5,
+          250.0,
+          250.0
+        ]
+      },
+      {
+        "name": "hammer_pin-1",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          173.0,
+          200.0,
+          -20.0,
+          843.0,
+          240.0,
+          20.0
+        ]
+      },
+      {
+        "name": "driven_pulley-1",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          -90.0,
+          -120.0,
+          -120.0,
+          0.0,
+          120.0,
+          120.0
+        ]
+      },
+      {
+        "name": "rotor_disc-4",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          797.5,
+          -250.0,
+          -250.0,
+          822.5,
+          250.0,
+          250.0
+        ]
+      },
+      {
+        "name": "hammer_pin-4",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          173.0,
+          -20.0,
+          -240.0,
+          843.0,
+          20.0,
+          -200.0
+        ]
+      },
+      {
+        "name": "hammer-3",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          167.0,
+          -400.0,
+          -20.0,
+          247.0,
+          -220.0,
+          20.0
+        ]
+      },
+      {
+        "name": "frame_base-1",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          -77.5,
+          -410.0,
+          -980.0,
+          1222.5,
+          410.0,
+          -460.0
+        ]
+      },
+      {
+        "name": "casing_upper-1",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          92.5,
+          -440.0,
+          0.0,
+          1052.5,
+          440.0,
+          610.0
+        ]
+      },
+      {
+        "name": "hammer-11",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          570.0,
+          -400.0,
+          -20.0,
+          650.0,
+          -220.0,
+          20.0
+        ]
+      },
+      {
+        "name": "hammer-1",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          167.0,
+          220.0,
+          -20.0,
+          247.0,
+          400.0,
+          20.0
+        ]
+      },
+      {
+        "name": "drive_pulley-1",
+        "suppressed": true,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": null
+      },
+      {
+        "name": "hammer-2",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          167.0,
+          -20.0,
+          220.0,
+          247.0,
+          20.0,
+          400.0
+        ]
+      },
+      {
+        "name": "casing_lower-1",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          92.5,
+          -440.0,
+          -460.0,
+          1052.5,
+          440.0,
+          0.0
+        ]
+      },
+      {
+        "name": "hammer-7",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          368.0,
+          -400.0,
+          -20.0,
+          448.0,
+          -220.0,
+          20.0
+        ]
+      },
+      {
+        "name": "hammer-6",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          368.0,
+          -20.0,
+          220.0,
+          448.0,
+          20.0,
+          400.0
+        ]
+      },
+      {
+        "name": "hammer-4",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          167.0,
+          -20.0,
+          -400.0,
+          247.0,
+          20.0,
+          -220.0
+        ]
+      },
+      {
+        "name": "hammer-8",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          368.0,
+          -20.0,
+          -400.0,
+          448.0,
+          20.0,
+          -220.0
+        ]
+      },
+      {
+        "name": "hammer-9",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          570.0,
+          220.0,
+          -20.0,
+          650.0,
+          400.0,
+          20.0
+        ]
+      },
+      {
+        "name": "hammer-10",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          570.0,
+          -20.0,
+          220.0,
+          650.0,
+          20.0,
+          400.0
+        ]
+      },
+      {
+        "name": "hammer-5",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          368.0,
+          220.0,
+          -20.0,
+          448.0,
+          400.0,
+          20.0
+        ]
+      },
+      {
+        "name": "hammer-15",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          770.0,
+          -400.0,
+          -20.0,
+          850.0,
+          -220.0,
+          20.0
+        ]
+      },
+      {
+        "name": "hammer-12",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          570.0,
+          -20.0,
+          -400.0,
+          650.0,
+          20.0,
+          -220.0
+        ]
+      },
+      {
+        "name": "hammer-13",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          770.0,
+          220.0,
+          -20.0,
+          850.0,
+          400.0,
+          20.0
+        ]
+      },
+      {
+        "name": "hammer-16",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          770.0,
+          -20.0,
+          -400.0,
+          850.0,
+          20.0,
+          -220.0
+        ]
+      },
+      {
+        "name": "v_belt-6",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          -82.0,
+          -110.0,
+          -690.0,
+          -8.0,
+          110.0,
+          110.0
+        ]
+      },
+      {
+        "name": "motor_body-2",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          -860.0,
+          -180.0,
+          -793.0,
+          -90.0,
+          180.0,
+          -265.0
+        ]
+      },
+      {
+        "name": "hammer-14",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          770.0,
+          -20.0,
+          220.0,
+          850.0,
+          20.0,
+          400.0
+        ]
+      },
+      {
+        "name": "motor_mount-1",
+        "suppressed": false,
+        "visible_state": 1,
+        "fixed": true,
+        "bbox_mm": [
+          -792.5,
+          -300.0,
+          -973.0,
+          -72.5,
+          300.0,
+          -793.0
+        ]
+      }
+    ],
+    "suppressed_names": [
+      "drive_pulley-1"
+    ]
+  },
+  "phase3_interference": {
+    "ok": false,
+    "count": 63,
+    "interferences": [
+      {
+        "volume_m3": 9.041896356113109e-05,
+        "components": [
+          "main_shaft-1",
+          "casing_upper-1"
+        ]
+      },
+      {
+        "volume_m3": 9.041896356113115e-05,
+        "components": [
+          "main_shaft-1",
+          "casing_lower-1"
+        ]
+      },
+      {
+        "volume_m3": 9.041896356113107e-05,
+        "components": [
+          "main_shaft-1",
+          "casing_lower-1"
+        ]
+      },
+      {
+        "volume_m3": 9.041896356113117e-05,
+        "components": [
+          "main_shaft-1",
+          "casing_upper-1"
+        ]
+      },
+      {
+        "volume_m3": 8.484023516064181e-05,
+        "components": [
+          "screen_plate-1",
+          "casing_lower-1"
+        ]
+      },
+      {
+        "volume_m3": 6.282816886617998e-05,
+        "components": [
+          "driven_pulley-1",
+          "v_belt-6"
+        ]
+      },
+      {
+        "volume_m3": 6.282816886617971e-05,
+        "components": [
+          "driven_pulley-1",
+          "v_belt-6"
+        ]
+      },
+      {
+        "volume_m3": 6.282816886617979e-05,
+        "components": [
+          "driven_pulley-1",
+          "v_belt-6"
+        ]
+      },
+      {
+        "volume_m3": 6.282816886617984e-05,
+        "components": [
+          "driven_pulley-1",
+          "v_belt-6"
+        ]
+      },
+      {
+        "volume_m3": 4.908071023955097e-05,
+        "components": [
+          "hammer_pin-3",
+          "hammer-10"
+        ]
+      },
+      {
+        "volume_m3": 4.9080710239551014e-05,
+        "components": [
+          "hammer_pin-4",
+          "hammer-8"
+        ]
+      },
+      {
+        "volume_m3": 4.9080710239550946e-05,
+        "components": [
+          "hammer_pin-2",
+          "hammer-7"
+        ]
+      },
+      {
+        "volume_m3": 4.908071023955086e-05,
+        "components": [
+          "hammer_pin-2",
+          "hammer-11"
+        ]
+      },
+      {
+        "volume_m3": 4.908071023955093e-05,
+        "components": [
+          "hammer_pin-3",
+          "hammer-6"
+        ]
+      },
+      {
+        "volume_m3": 4.908071023955101e-05,
+        "components": [
+          "hammer_pin-4",
+          "hammer-12"
+        ]
+      },
+      {
+        "volume_m3": 4.9080409036648774e-05,
+        "components": [
+          "hammer_pin-1",
+          "hammer-5"
+        ]
+      },
+      {
+        "volume_m3": 4.908040903664882e-05,
+        "components": [
+          "hammer_pin-1",
+          "hammer-9"
+        ]
+      },
+      {
+        "volume_m3": 3.900000000000039e-05,
+        "components": [
+          "frame_base-1",
+          "motor_mount-1"
+        ]
+      },
+      {
+        "volume_m3": 3.894056028569246e-05,
+        "components": [
+          "hammer_pin-1",
+          "hammer-1"
+        ]
+      },
+      {
+        "volume_m3": 3.8940469766812916e-05,
+        "components": [
+          "hammer_pin-3",
+          "hammer-2"
+        ]
+      },
+      {
+        "volume_m3": 3.8940469766812916e-05,
+        "components": [
+          "hammer_pin-2",
+          "hammer-3"
+        ]
+      },
+      {
+        "volume_m3": 3.894046976681292e-05,
+        "components": [
+          "hammer_pin-4",
+          "hammer-4"
+        ]
+      },
+      {
+        "volume_m3": 3.831268685208108e-05,
+        "components": [
+          "hammer_pin-3",
+          "hammer-14"
+        ]
+      },
+      {
+        "volume_m3": 3.8312686852081106e-05,
+        "components": [
+          "hammer_pin-4",
+          "hammer-16"
+        ]
+      },
+      {
+        "volume_m3": 3.831268685208103e-05,
+        "components": [
+          "hammer_pin-2",
+          "hammer-15"
+        ]
+      },
+      {
+        "volume_m3": 3.831246622586081e-05,
+        "components": [
+          "hammer_pin-1",
+          "hammer-13"
+        ]
+      },
+      {
+        "volume_m3": 3.337942194439157e-05,
+        "components": [
+          "main_shaft-1",
+          "rotor_disc-2"
+        ]
+      },
+      {
+        "volume_m3": 3.337942194439157e-05,
+        "components": [
+          "main_shaft-1",
+          "rotor_disc-1"
+        ]
+      },
+      {
+        "volume_m3": 3.337942194439157e-05,
+        "components": [
+          "main_shaft-1",
+          "rotor_disc-4"
+        ]
+      },
+      {
+        "volume_m3": 3.337942194439157e-05,
+        "components": [
+          "main_shaft-1",
+          "rotor_disc-3"
+        ]
+      },
+      {
+        "volume_m3": 2.1756430360471363e-05,
+        "components": [
+          "screen_plate-1",
+          "hammer-8"
+        ]
+      },
+      {
+        "volume_m3": 2.175643036047134e-05,
+        "components": [
+          "screen_plate-1",
+          "hammer-12"
+        ]
+      },
+      {
+        "volume_m3": 2.175643036047143e-05,
+        "components": [
+          "screen_plate-1",
+          "hammer-4"
+        ]
+      },
+      {
+        "volume_m3": 2.175643036047132e-05,
+        "components": [
+          "screen_plate-1",
+          "hammer-16"
+        ]
+      },
+      {
+        "volume_m3": 1.724738236867074e-05,
+        "components": [
+          "screen_plate-1",
+          "casing_lower-1"
+        ]
+      },
+      {
+        "volume_m3": 1.5188783891620144e-05,
+        "components": [
+          "screen_plate-1",
+          "hammer-15"
+        ]
+      },
+      {
+        "volume_m3": 1.5188783891620144e-05,
+        "components": [
+          "screen_plate-1",
+          "hammer-3"
+        ]
+      },
+      {
+        "volume_m3": 1.5188783891620156e-05,
+        "components": [
+          "screen_plate-1",
+          "hammer-7"
+        ]
+      },
+      {
+        "volume_m3": 1.518878389162015e-05,
+        "components": [
+          "screen_plate-1",
+          "hammer-11"
+        ]
+      },
+      {
+        "volume_m3": 1.4025113478414401e-05,
+        "components": [
+          "rotor_disc-3",
+          "hammer-10"
+        ]
+      },
+      {
+        "volume_m3": 1.4025113478414357e-05,
+        "components": [
+          "rotor_disc-2",
+          "hammer-8"
+        ]
+      },
+      {
+        "volume_m3": 1.4025113478414406e-05,
+        "components": [
+          "rotor_disc-4",
+          "hammer-15"
+        ]
+      },
+      {
+        "volume_m3": 1.4025113478414364e-05,
+        "components": [
+          "rotor_disc-4",
+          "hammer-16"
+        ]
+      },
+      {
+        "volume_m3": 1.4025113478414384e-05,
+        "components": [
+          "rotor_disc-4",
+          "hammer-13"
+        ]
+      },
+      {
+        "volume_m3": 1.4025113478414401e-05,
+        "components": [
+          "rotor_disc-4",
+          "hammer-14"
+        ]
+      },
+      {
+        "volume_m3": 1.4025113478414384e-05,
+        "components": [
+          "rotor_disc-3",
+          "hammer-9"
+        ]
+      },
+      {
+        "volume_m3": 1.402511347841436e-05,
+        "components": [
+          "rotor_disc-1",
+          "hammer-4"
+        ]
+      },
+      {
+        "volume_m3": 1.4025113478414398e-05,
+        "components": [
+          "rotor_disc-1",
+          "hammer-2"
+        ]
+      },
+      {
+        "volume_m3": 1.4025113478414405e-05,
+        "components": [
+          "rotor_disc-1",
+          "hammer-3"
+        ]
+      },
+      {
+        "volume_m3": 1.4025113478414383e-05,
+        "components": [
+          "rotor_disc-1",
+          "hammer-1"
+        ]
+      },
+      {
+        "volume_m3": 1.4025113478414381e-05,
+        "components": [
+          "rotor_disc-2",
+          "hammer-5"
+        ]
+      },
+      {
+        "volume_m3": 1.4025113478414395e-05,
+        "components": [
+          "rotor_disc-2",
+          "hammer-6"
+        ]
+      },
+      {
+        "volume_m3": 1.4025113478414403e-05,
+        "components": [
+          "rotor_disc-2",
+          "hammer-7"
+        ]
+      },
+      {
+        "volume_m3": 1.4025113478414364e-05,
+        "components": [
+          "rotor_disc-3",
+          "hammer-12"
+        ]
+      },
+      {
+        "volume_m3": 1.4025113478414406e-05,
+        "components": [
+          "rotor_disc-3",
+          "hammer-11"
+        ]
+      },
+      {
+        "volume_m3": 3.521957186698388e-06,
+        "components": [
+          "frame_base-1",
+          "v_belt-6"
+        ]
+      },
+      {
+        "volume_m3": 3.5219571867024553e-06,
+        "components": [
+          "frame_base-1",
+          "v_belt-6"
+        ]
+      },
+      {
+        "volume_m3": 3.2052446070737867e-06,
+        "components": [
+          "screen_plate-1",
+          "casing_lower-1"
+        ]
+      },
+      {
+        "volume_m3": 2.9690453916254643e-06,
+        "components": [
+          "screen_plate-1",
+          "casing_lower-1"
+        ]
+      },
+      {
+        "volume_m3": 2.80651529668078e-06,
+        "components": [
+          "screen_plate-1",
+          "casing_lower-1"
+        ]
+      },
+      {
+        "volume_m3": 2.7184956362532706e-06,
+        "components": [
+          "screen_plate-1",
+          "casing_lower-1"
+        ]
+      },
+      {
+        "volume_m3": 2.7044655280049454e-06,
+        "components": [
+          "screen_plate-1",
+          "casing_lower-1"
+        ]
+      },
+      {
+        "volume_m3": 2.2654994726501515e-06,
+        "components": [
+          "screen_plate-1",
+          "casing_lower-1"
+        ]
+      }
+    ]
+  },
+  "phase4_mass_properties": {
+    "assembly": {
+      "mass_kg": 1238.051,
+      "volume_m3": 0.321526,
+      "surface_m2": 22.6128,
+      "cg_m": [
+        0.0957,
+        -0.0031,
+        -0.436
+      ],
+      "principal_moments_kgm2": [
+        199.81954,
+        510.50196,
+        620.36816
+      ],
+      "principal_axes": null,
+      "moment_at_cg": null
+    },
+    "components": [
+      {
+        "mass_kg": 61.907,
+        "volume_m3": 0.007886,
+        "surface_m2": 1.3692,
+        "cg_m": [
+          0.162,
+          0.2848,
+          0.0036
+        ],
+        "principal_moments_kgm2": [
+          3.05782,
+          3.47546,
+          6.08888
+        ],
+        "principal_axes": null,
+        "moment_at_cg": null,
+        "name": "screen_plate-1",
+        "doc_path": "screen_plate.SLDPRT"
+      },
+      {
+        "mass_kg": 53.943,
+        "volume_m3": 0.006872,
+        "surface_m2": 0.328,
+        "cg_m": [
+          0.5719,
+          -0.0,
+          -0.0001
+        ],
+        "principal_moments_kgm2": [
+          0.05263,
+          5.36692,
+          5.36709
+        ],
+        "principal_axes": null,
+        "moment_at_cg": null,
+        "name": "main_shaft-1",
+        "doc_path": "main_shaft.SLDPRT"
+      },
+      {
+        "mass_kg": 36.561,
+        "volume_m3": 0.004657,
+        "surface_m2": 0.4307,
+        "cg_m": [
+          0.0,
+          -0.0,
+          0.0125
+        ],
+        "principal_moments_kgm2": [
+          0.57963,
+          0.57963,
+          1.15544
+        ],
+        "principal_axes": null,
+        "moment_at_cg": null,
+        "name": "rotor_disc-1",
+        "doc_path": "rotor_disc.SLDPRT"
+      },
+      {
+        "mass_kg": 0.814,
+        "volume_m3": 0.000814,
+        "surface_m2": 0.0849,
+        "cg_m": [
+          0.335,
+          -0.0,
+          0.0
+        ],
+        "principal_moments_kgm2": [
+          0.00016,
+          0.02867,
+          0.02867
+        ],
+        "principal_axes": null,
+        "moment_at_cg": null,
+        "name": "hammer_pin-2",
+        "doc_path": "hammer_pin.SLDPRT"
+      },
+      {
+        "mass_kg": 3.524,
+        "volume_m3": 0.003524,
+        "surface_m2": 0.2263,
+        "cg_m": [
+          0.0452,
+          -0.0,
+          0.0
+        ],
+        "principal_moments_kgm2": [
+          0.01564,
+          0.01564,
+          0.02645
+        ],
+        "principal_axes": null,
+        "moment_at_cg": null,
+        "name": "driven_pulley-1",
+        "doc_path": "driven_pulley.SLDPRT"
+      },
+      {
+        "mass_kg": 2.997,
+        "volume_m3": 0.000382,
+        "surface_m2": 0.0434,
+        "cg_m": [
+          -0.0,
+          0.0747,
+          0.02
+        ],
+        "principal_moments_kgm2": [
+          0.00149,
+          0.00846,
+          0.00915
+        ],
+        "principal_axes": null,
+        "moment_at_cg": null,
+        "name": "hammer-3",
+        "doc_path": "hammer.SLDPRT"
+      },
+      {
+        "mass_kg": 243.22,
+        "volume_m3": 0.031182,
+        "surface_m2": 3.1216,
+        "cg_m": [
+          0.0,
+          -0.0,
+          0.1043
+        ],
+        "principal_moments_kgm2": [
+          26.18818,
+          53.78863,
+          64.76739
+        ],
+        "principal_axes": null,
+        "moment_at_cg": null,
+        "name": "frame_base-1",
+        "doc_path": "frame_base.SLDPRT"
+      },
+      {
+        "mass_kg": 79.807,
+        "volume_m3": 0.079807,
+        "surface_m2": 5.2351,
+        "cg_m": [
+          0.0014,
+          0.0,
+          0.0942
+        ],
+        "principal_moments_kgm2": [
+          9.46321,
+          10.60829,
+          15.95176
+        ],
+        "principal_axes": null,
+        "moment_at_cg": null,
+        "name": "casing_upper-1",
+        "doc_path": "casing_upper.SLDPRT"
+      },
+      {
+        "mass_kg": 69.432,
+        "volume_m3": 0.069432,
+        "surface_m2": 4.8777,
+        "cg_m": [
+          0.0016,
+          0.0,
+          -0.0634
+        ],
+        "principal_moments_kgm2": [
+          8.82395,
+          9.87306,
+          15.63125
+        ],
+        "principal_axes": null,
+        "moment_at_cg": null,
+        "name": "casing_lower-1",
+        "doc_path": "casing_lower.SLDPRT"
+      },
+      {
+        "mass_kg": 1.107,
+        "volume_m3": 0.001107,
+        "surface_m2": 0.3655,
+        "cg_m": [
+          -0.045,
+          -0.0,
+          -0.2853
+        ],
+        "principal_moments_kgm2": [
+          0.00893,
+          0.07071,
+          0.07861
+        ],
+        "principal_axes": null,
+        "moment_at_cg": null,
+        "name": "v_belt-6",
+        "doc_path": "v_belt.SLDPRT"
+      },
+      {
+        "mass_kg": 503.935,
+        "volume_m3": 0.069991,
+        "surface_m2": 1.5183,
+        "cg_m": [
+          -0.3137,
+          -0.0,
+          0.0129
+        ],
+        "principal_moments_kgm2": [
+          9.89812,
+          20.15058,
+          22.22384
+        ],
+        "principal_axes": null,
+        "moment_at_cg": null,
+        "name": "motor_body-2",
+        "doc_path": "motor_body.SLDPRT"
+      },
+      {
+        "mass_kg": 23.731,
+        "volume_m3": 0.023731,
+        "surface_m2": 2.8142,
+        "cg_m": [
+          -0.0,
+          0.0,
+          -0.09
+        ],
+        "principal_moments_kgm2": [
+          0.92854,
+          1.26067,
+          1.94599
+        ],
+        "principal_axes": null,
+        "moment_at_cg": null,
+        "name": "motor_mount-1",
+        "doc_path": "motor_mount.SLDPRT"
+      }
+    ]
+  },
+  "phase5_mates": {
+    "total": 0,
+    "by_type": {},
+    "mates": []
+  },
+  "phase6_motion": {
+    "available": false,
+    "name": null,
+    "duration_s": 0.5,
+    "frames": 30,
+    "rpm": 1200,
+    "solved": false,
+    "note": "user_skipped"
+  },
+  "phase7_render_export": {
+    "snapshots": {
+      "iso": "D:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\南京-吴鸿轩_锤式破碎机\\交付包_最终\\渲染图\\sw_iso.png",
+      "front": "D:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\南京-吴鸿轩_锤式破碎机\\交付包_最终\\渲染图\\sw_front.png",
+      "back": "D:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\南京-吴鸿轩_锤式破碎机\\交付包_最终\\渲染图\\sw_back.png",
+      "right": "D:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\南京-吴鸿轩_锤式破碎机\\交付包_最终\\渲染图\\sw_right.png",
+      "left": "D:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\南京-吴鸿轩_锤式破碎机\\交付包_最终\\渲染图\\sw_left.png",
+      "top": "D:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\南京-吴鸿轩_锤式破碎机\\交付包_最终\\渲染图\\sw_top.png",
+      "bottom": "D:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\南京-吴鸿轩_锤式破碎机\\交付包_最终\\渲染图\\sw_bottom.png"
+    },
+    "step": "D:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\南京-吴鸿轩_锤式破碎机\\交付包_最终\\锤式破碎机_总装配.STEP",
+    "stl": "D:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\南京-吴鸿轩_锤式破碎机\\交付包_最终"
+  },
+  "elapsed_s": 24.32
+}

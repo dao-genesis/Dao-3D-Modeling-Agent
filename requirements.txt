@@ -1,0 +1,8 @@
+trimesh>=4.0
+numpy>=1.20
+Pillow>=10.0
+rtree>=1.0
+scipy>=1.10
+cadquery>=2.4
+build123d>=0.7
+OCP>=7.7

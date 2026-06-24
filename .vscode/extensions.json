@@ -1,0 +1,15 @@
+﻿{
+  "recommendations": [
+    "ms-python.python",
+    "codeium.windsurfPyright",
+    "ms-python.debugpy",
+    "ms-python.vscode-python-envs",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "mads-hartmann.bash-ide-vscode",
+    "redhat.vscode-yaml",
+    "eamodio.gitlens",
+    "gruntfuggly.todo-tree",
+    "christian-kohler.path-intellisense"
+  ]
+}

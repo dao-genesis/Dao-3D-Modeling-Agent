@@ -1,0 +1,191 @@
+{
+  "title": "dao 本源五器 · 锤式破碎机自验证",
+  "subtitle": "只使用 00-本源_Origin 的模块, 脱离项目脚本独立审查",
+  "started_at": "2026-04-18T01:51:00",
+  "phases": [
+    {
+      "title": "P1 — DXF 工程图 (dao_dxf)",
+      "checks": [
+        {
+          "tag": "dxf/assembly_A3",
+          "status": "PASS",
+          "message": "assembly_A3.dxf: 187 lines · 106 texts · W=394mm · 0 diameters",
+          "data": null,
+          "icon": "✅"
+        },
+        {
+          "tag": "dxf/driven_pulley_A3",
+          "status": "PASS",
+          "message": "driven_pulley_A3.dxf: 32 lines · 38 texts · W=390mm · 3 diameters",
+          "data": null,
+          "icon": "✅"
+        },
+        {
+          "tag": "dxf/hammer_A3",
+          "status": "PASS",
+          "message": "hammer_A3.dxf: 61 lines · 40 texts · W=390mm · 1 diameters",
+          "data": null,
+          "icon": "✅"
+        },
+        {
+          "tag": "dxf/hammer_pin_A3",
+          "status": "PASS",
+          "message": "hammer_pin_A3.dxf: 52 lines · 35 texts · W=390mm · 1 diameters",
+          "data": null,
+          "icon": "✅"
+        },
+        {
+          "tag": "dxf/rotor_disc_A3",
+          "status": "PASS",
+          "message": "rotor_disc_A3.dxf: 50 lines · 38 texts · W=391mm · 4 diameters",
+          "data": null,
+          "icon": "✅"
+        },
+        {
+          "tag": "dxf/screen_plate_A3",
+          "status": "PASS",
+          "message": "screen_plate_A3.dxf: 49 lines · 40 texts · W=390mm · 2 diameters",
+          "data": null,
+          "icon": "✅"
+        },
+        {
+          "tag": "dxf/shaft_A3",
+          "status": "PASS",
+          "message": "shaft_A3.dxf: 116 lines · 46 texts · W=640mm · 4 diameters",
+          "data": null,
+          "icon": "✅"
+        }
+      ],
+      "summary": {
+        "pass": 7,
+        "warn": 0,
+        "fail": 0,
+        "total": 7
+      },
+      "elapsed_ms": 9.0
+    },
+    {
+      "title": "P2 — STL/GLB 网格 (dao_mesh)",
+      "checks": [
+        {
+          "tag": "stl/main_shaft",
+          "status": "PASS",
+          "message": "2564 faces · bbox=(1145.0, 90.0, 90.0) · vol=6.87×10⁶mm³",
+          "data": null,
+          "icon": "✅"
+        },
+        {
+          "tag": "stl/rotor_disc",
+          "status": "PASS",
+          "message": "3040 faces · bbox=(500.0, 499.8, 25.0) · vol=4.66×10⁶mm³",
+          "data": null,
+          "icon": "✅"
+        },
+        {
+          "tag": "stl/hammer",
+          "status": "PASS",
+          "message": "520 faces · bbox=(80.0, 180.0, 40.0) · vol=0.38×10⁶mm³",
+          "data": null,
+          "icon": "✅"
+        },
+        {
+          "tag": "stl/hammer_pin",
+          "status": "PASS",
+          "message": "2264 faces · bbox=(142.0, 40.0, 40.0) · vol=0.15×10⁶mm³",
+          "data": null,
+          "icon": "✅"
+        },
+        {
+          "tag": "stl/driven_pulley",
+          "status": "PASS",
+          "message": "1004 faces · bbox=(90.0, 240.0, 239.9) · vol=3.71×10⁶mm³",
+          "data": null,
+          "icon": "✅"
+        },
+        {
+          "tag": "stl/screen_plate",
+          "status": "PASS",
+          "message": "4530 faces · bbox=(603.0, 402.0, 800.0) · vol=7.88×10⁶mm³",
+          "data": null,
+          "icon": "✅"
+        },
+        {
+          "tag": "glb/assembly_v4",
+          "status": "PASS",
+          "message": "50342 faces · bbox=(1873, 1115, 1200)mm · vol=256.8×10⁶mm³",
+          "data": null,
+          "icon": "✅"
+        }
+      ],
+      "summary": {
+        "pass": 7,
+        "warn": 0,
+        "fail": 0,
+        "total": 7
+      },
+      "elapsed_ms": 101.33
+    },
+    {
+      "title": "P3 — 论文 docx (dao_docx)",
+      "checks": [
+        {
+          "tag": "docx/paragraphs",
+          "status": "PASS",
+          "message": "672 段落",
+          "data": null,
+          "icon": "✅"
+        },
+        {
+          "tag": "docx/images",
+          "status": "PASS",
+          "message": "9 图片 (共 2518KB)",
+          "data": null,
+          "icon": "✅"
+        },
+        {
+          "tag": "docx/tables",
+          "status": "PASS",
+          "message": "4 表格",
+          "data": null,
+          "icon": "✅"
+        },
+        {
+          "tag": "docx/figures",
+          "status": "PASS",
+          "message": "8 图题",
+          "data": null,
+          "icon": "✅"
+        },
+        {
+          "tag": "docx/sections",
+          "status": "PASS",
+          "message": "222 章节",
+          "data": null,
+          "icon": "✅"
+        },
+        {
+          "tag": "docx/fig2.2",
+          "status": "PASS",
+          "message": "图2.2 (整机结构) 存在",
+          "data": null,
+          "icon": "✅"
+        }
+      ],
+      "summary": {
+        "pass": 6,
+        "warn": 0,
+        "fail": 0,
+        "total": 6
+      },
+      "elapsed_ms": 37.03
+    }
+  ],
+  "summary": {
+    "pass": 20,
+    "warn": 0,
+    "fail": 0,
+    "total": 20,
+    "score": 100,
+    "all_passed": true
+  }
+}

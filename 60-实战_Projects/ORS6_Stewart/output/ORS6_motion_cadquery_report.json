@@ -1,0 +1,1388 @@
+{
+  "engine": "cadquery",
+  "poses_built": 15,
+  "poses_total": 15,
+  "elapsed_s": 310.0,
+  "results": [
+    {
+      "ok": true,
+      "label": "home",
+      "engine": "cadquery+ocp",
+      "pose": {
+        "L0": 5000,
+        "L1": 5000,
+        "L2": 5000,
+        "R0": 5000,
+        "R1": 5000,
+        "R2": 5000
+      },
+      "receiver": {
+        "tx": 0.0,
+        "ty": 0.0,
+        "tz_stl": 208.48,
+        "home_h": 208.48,
+        "roll_deg": 0.0,
+        "pitch_deg": 0.0,
+        "twist_deg": -0.0
+      },
+      "arm_angles_deg": {
+        "LowerLeft": -10.56,
+        "UpperLeft": -10.56,
+        "LeftPitch": 16.35,
+        "RightPitch": 16.35,
+        "UpperRight": -10.56,
+        "LowerRight": -10.56
+      },
+      "rods": [
+        {
+          "servo": "LowerLeft",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "UpperLeft",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "LeftPitch",
+          "type": "pitch",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "RightPitch",
+          "type": "pitch",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "UpperRight",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "LowerRight",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        }
+      ],
+      "parts_count": 25,
+      "static_count": 6,
+      "arm_count": 6,
+      "recv_count": 7,
+      "step_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_home.step",
+      "step_kb": 117.5,
+      "full_step_path": null,
+      "full_step_kb": 0,
+      "stl_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_home.stl",
+      "stl_kb": 10297.5,
+      "build_s": 5.09,
+      "total_s": 20.45
+    },
+    {
+      "ok": true,
+      "label": "thrust_up",
+      "engine": "cadquery+ocp",
+      "pose": {
+        "L0": 9999,
+        "L1": 5000,
+        "L2": 5000,
+        "R0": 5000,
+        "R1": 5000,
+        "R2": 5000
+      },
+      "receiver": {
+        "tx": 0.0,
+        "ty": 0.0,
+        "tz_stl": 268.48,
+        "home_h": 208.48,
+        "roll_deg": 0.0,
+        "pitch_deg": 0.0,
+        "twist_deg": -0.0
+      },
+      "arm_angles_deg": {
+        "LowerLeft": 81.86,
+        "UpperLeft": 81.86,
+        "LeftPitch": 67.92,
+        "RightPitch": 67.92,
+        "UpperRight": 81.86,
+        "LowerRight": 81.86
+      },
+      "rods": [
+        {
+          "servo": "LowerLeft",
+          "type": "main",
+          "rod_3d_mm": 177.135,
+          "stress_pct": 1.2202,
+          "reachable": false,
+          "src": "3d_ik_clamped"
+        },
+        {
+          "servo": "UpperLeft",
+          "type": "main",
+          "rod_3d_mm": 177.135,
+          "stress_pct": 1.2202,
+          "reachable": false,
+          "src": "3d_ik_clamped"
+        },
+        {
+          "servo": "LeftPitch",
+          "type": "pitch",
+          "rod_3d_mm": 197.268,
+          "stress_pct": 12.7246,
+          "reachable": false,
+          "src": "3d_ik_clamped"
+        },
+        {
+          "servo": "RightPitch",
+          "type": "pitch",
+          "rod_3d_mm": 197.268,
+          "stress_pct": 12.7246,
+          "reachable": false,
+          "src": "3d_ik_clamped"
+        },
+        {
+          "servo": "UpperRight",
+          "type": "main",
+          "rod_3d_mm": 177.135,
+          "stress_pct": 1.2202,
+          "reachable": false,
+          "src": "3d_ik_clamped"
+        },
+        {
+          "servo": "LowerRight",
+          "type": "main",
+          "rod_3d_mm": 177.135,
+          "stress_pct": 1.2202,
+          "reachable": false,
+          "src": "3d_ik_clamped"
+        }
+      ],
+      "parts_count": 25,
+      "static_count": 6,
+      "arm_count": 6,
+      "recv_count": 7,
+      "step_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_thrust_up.step",
+      "step_kb": 126.2,
+      "full_step_path": null,
+      "full_step_kb": 0,
+      "stl_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_thrust_up.stl",
+      "stl_kb": 10309.5,
+      "build_s": 4.99,
+      "total_s": 19.53
+    },
+    {
+      "ok": true,
+      "label": "thrust_down",
+      "engine": "cadquery+ocp",
+      "pose": {
+        "L0": 0,
+        "L1": 5000,
+        "L2": 5000,
+        "R0": 5000,
+        "R1": 5000,
+        "R2": 5000
+      },
+      "receiver": {
+        "tx": 0.0,
+        "ty": 0.0,
+        "tz_stl": 148.48,
+        "home_h": 208.48,
+        "roll_deg": 0.0,
+        "pitch_deg": 0.0,
+        "twist_deg": -0.0
+      },
+      "arm_angles_deg": {
+        "LowerLeft": -107.38,
+        "UpperLeft": -107.38,
+        "LeftPitch": -30.04,
+        "RightPitch": -30.04,
+        "UpperRight": -107.38,
+        "LowerRight": -107.38
+      },
+      "rods": [
+        {
+          "servo": "LowerLeft",
+          "type": "main",
+          "rod_3d_mm": 160.142,
+          "stress_pct": 8.4904,
+          "reachable": false,
+          "src": "3d_ik_clamped"
+        },
+        {
+          "servo": "UpperLeft",
+          "type": "main",
+          "rod_3d_mm": 160.142,
+          "stress_pct": 8.4904,
+          "reachable": false,
+          "src": "3d_ik_clamped"
+        },
+        {
+          "servo": "LeftPitch",
+          "type": "pitch",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "RightPitch",
+          "type": "pitch",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "UpperRight",
+          "type": "main",
+          "rod_3d_mm": 160.142,
+          "stress_pct": 8.4904,
+          "reachable": false,
+          "src": "3d_ik_clamped"
+        },
+        {
+          "servo": "LowerRight",
+          "type": "main",
+          "rod_3d_mm": 160.142,
+          "stress_pct": 8.4904,
+          "reachable": false,
+          "src": "3d_ik_clamped"
+        }
+      ],
+      "parts_count": 25,
+      "static_count": 6,
+      "arm_count": 6,
+      "recv_count": 7,
+      "step_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_thrust_down.step",
+      "step_kb": 184.5,
+      "full_step_path": null,
+      "full_step_kb": 0,
+      "stl_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_thrust_down.stl",
+      "stl_kb": 10355.0,
+      "build_s": 5.1,
+      "total_s": 20.86
+    },
+    {
+      "ok": true,
+      "label": "forward",
+      "engine": "cadquery+ocp",
+      "pose": {
+        "L0": 5000,
+        "L1": 9999,
+        "L2": 5000,
+        "R0": 5000,
+        "R1": 5000,
+        "R2": 5000
+      },
+      "receiver": {
+        "tx": 0.0,
+        "ty": 30.0,
+        "tz_stl": 208.48,
+        "home_h": 208.48,
+        "roll_deg": 0.0,
+        "pitch_deg": 0.0,
+        "twist_deg": -0.0
+      },
+      "arm_angles_deg": {
+        "LowerLeft": -15.17,
+        "UpperLeft": 0.42,
+        "LeftPitch": 28.06,
+        "RightPitch": 10.75,
+        "UpperRight": 0.42,
+        "LowerRight": -15.17
+      },
+      "rods": [
+        {
+          "servo": "LowerLeft",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "UpperLeft",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "LeftPitch",
+          "type": "pitch",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "RightPitch",
+          "type": "pitch",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "UpperRight",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "LowerRight",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        }
+      ],
+      "parts_count": 25,
+      "static_count": 6,
+      "arm_count": 6,
+      "recv_count": 7,
+      "step_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_forward.step",
+      "step_kb": 222.3,
+      "full_step_path": null,
+      "full_step_kb": 0,
+      "stl_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_forward.stl",
+      "stl_kb": 10334.8,
+      "build_s": 4.91,
+      "total_s": 19.32
+    },
+    {
+      "ok": true,
+      "label": "backward",
+      "engine": "cadquery+ocp",
+      "pose": {
+        "L0": 5000,
+        "L1": 0,
+        "L2": 5000,
+        "R0": 5000,
+        "R1": 5000,
+        "R2": 5000
+      },
+      "receiver": {
+        "tx": 0.0,
+        "ty": -30.0,
+        "tz_stl": 208.48,
+        "home_h": 208.48,
+        "roll_deg": 0.0,
+        "pitch_deg": 0.0,
+        "twist_deg": -0.0
+      },
+      "arm_angles_deg": {
+        "LowerLeft": 0.42,
+        "UpperLeft": -15.17,
+        "LeftPitch": 10.75,
+        "RightPitch": 28.06,
+        "UpperRight": -15.17,
+        "LowerRight": 0.42
+      },
+      "rods": [
+        {
+          "servo": "LowerLeft",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "UpperLeft",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "LeftPitch",
+          "type": "pitch",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "RightPitch",
+          "type": "pitch",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "UpperRight",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "LowerRight",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        }
+      ],
+      "parts_count": 25,
+      "static_count": 6,
+      "arm_count": 6,
+      "recv_count": 7,
+      "step_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_backward.step",
+      "step_kb": 218.5,
+      "full_step_path": null,
+      "full_step_kb": 0,
+      "stl_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_backward.stl",
+      "stl_kb": 10324.4,
+      "build_s": 6.34,
+      "total_s": 20.75
+    },
+    {
+      "ok": true,
+      "label": "side_right",
+      "engine": "cadquery+ocp",
+      "pose": {
+        "L0": 5000,
+        "L1": 5000,
+        "L2": 9999,
+        "R0": 5000,
+        "R1": 5000,
+        "R2": 5000
+      },
+      "receiver": {
+        "tx": 30.0,
+        "ty": 0.0,
+        "tz_stl": 208.48,
+        "home_h": 208.48,
+        "roll_deg": 0.0,
+        "pitch_deg": 0.0,
+        "twist_deg": -0.0
+      },
+      "arm_angles_deg": {
+        "LowerLeft": -11.07,
+        "UpperLeft": -11.07,
+        "LeftPitch": 23.9,
+        "RightPitch": 14.55,
+        "UpperRight": -3.56,
+        "LowerRight": -3.56
+      },
+      "rods": [
+        {
+          "servo": "LowerLeft",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "UpperLeft",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "LeftPitch",
+          "type": "pitch",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "RightPitch",
+          "type": "pitch",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "UpperRight",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "LowerRight",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        }
+      ],
+      "parts_count": 25,
+      "static_count": 6,
+      "arm_count": 6,
+      "recv_count": 7,
+      "step_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_side_right.step",
+      "step_kb": 203.2,
+      "full_step_path": null,
+      "full_step_kb": 0,
+      "stl_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_side_right.stl",
+      "stl_kb": 10287.3,
+      "build_s": 4.76,
+      "total_s": 19.66
+    },
+    {
+      "ok": true,
+      "label": "side_left",
+      "engine": "cadquery+ocp",
+      "pose": {
+        "L0": 5000,
+        "L1": 5000,
+        "L2": 0,
+        "R0": 5000,
+        "R1": 5000,
+        "R2": 5000
+      },
+      "receiver": {
+        "tx": -30.0,
+        "ty": 0.0,
+        "tz_stl": 208.48,
+        "home_h": 208.48,
+        "roll_deg": 0.0,
+        "pitch_deg": 0.0,
+        "twist_deg": -0.0
+      },
+      "arm_angles_deg": {
+        "LowerLeft": -3.56,
+        "UpperLeft": -3.56,
+        "LeftPitch": 14.55,
+        "RightPitch": 23.9,
+        "UpperRight": -11.07,
+        "LowerRight": -11.07
+      },
+      "rods": [
+        {
+          "servo": "LowerLeft",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "UpperLeft",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "LeftPitch",
+          "type": "pitch",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "RightPitch",
+          "type": "pitch",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "UpperRight",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "LowerRight",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        }
+      ],
+      "parts_count": 25,
+      "static_count": 6,
+      "arm_count": 6,
+      "recv_count": 7,
+      "step_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_side_left.step",
+      "step_kb": 200.2,
+      "full_step_path": null,
+      "full_step_kb": 0,
+      "stl_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_side_left.stl",
+      "stl_kb": 10288.1,
+      "build_s": 5.78,
+      "total_s": 20.45
+    },
+    {
+      "ok": true,
+      "label": "roll_right",
+      "engine": "cadquery+ocp",
+      "pose": {
+        "L0": 5000,
+        "L1": 5000,
+        "L2": 5000,
+        "R0": 5000,
+        "R1": 9999,
+        "R2": 5000
+      },
+      "receiver": {
+        "tx": 0.0,
+        "ty": 0.0,
+        "tz_stl": 208.48,
+        "home_h": 208.48,
+        "roll_deg": 30.0,
+        "pitch_deg": 0.0,
+        "twist_deg": -0.0
+      },
+      "arm_angles_deg": {
+        "LowerLeft": 28.92,
+        "UpperLeft": 28.92,
+        "LeftPitch": 15.73,
+        "RightPitch": 12.63,
+        "UpperRight": -59.55,
+        "LowerRight": -59.55
+      },
+      "rods": [
+        {
+          "servo": "LowerLeft",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "UpperLeft",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "LeftPitch",
+          "type": "pitch",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "RightPitch",
+          "type": "pitch",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "UpperRight",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "LowerRight",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        }
+      ],
+      "parts_count": 25,
+      "static_count": 6,
+      "arm_count": 6,
+      "recv_count": 7,
+      "step_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_roll_right.step",
+      "step_kb": 120.5,
+      "full_step_path": null,
+      "full_step_kb": 0,
+      "stl_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_roll_right.stl",
+      "stl_kb": 10286.8,
+      "build_s": 5.31,
+      "total_s": 19.45
+    },
+    {
+      "ok": true,
+      "label": "roll_left",
+      "engine": "cadquery+ocp",
+      "pose": {
+        "L0": 5000,
+        "L1": 5000,
+        "L2": 5000,
+        "R0": 5000,
+        "R1": 0,
+        "R2": 5000
+      },
+      "receiver": {
+        "tx": 0.0,
+        "ty": 0.0,
+        "tz_stl": 208.48,
+        "home_h": 208.48,
+        "roll_deg": -30.0,
+        "pitch_deg": 0.0,
+        "twist_deg": -0.0
+      },
+      "arm_angles_deg": {
+        "LowerLeft": -59.55,
+        "UpperLeft": -59.55,
+        "LeftPitch": 12.63,
+        "RightPitch": 15.73,
+        "UpperRight": 28.92,
+        "LowerRight": 28.92
+      },
+      "rods": [
+        {
+          "servo": "LowerLeft",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "UpperLeft",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "LeftPitch",
+          "type": "pitch",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "RightPitch",
+          "type": "pitch",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "UpperRight",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "LowerRight",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        }
+      ],
+      "parts_count": 25,
+      "static_count": 6,
+      "arm_count": 6,
+      "recv_count": 7,
+      "step_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_roll_left.step",
+      "step_kb": 120.4,
+      "full_step_path": null,
+      "full_step_kb": 0,
+      "stl_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_roll_left.stl",
+      "stl_kb": 10287.0,
+      "build_s": 5.17,
+      "total_s": 20.04
+    },
+    {
+      "ok": true,
+      "label": "pitch_up",
+      "engine": "cadquery+ocp",
+      "pose": {
+        "L0": 5000,
+        "L1": 5000,
+        "L2": 5000,
+        "R0": 5000,
+        "R1": 5000,
+        "R2": 9999
+      },
+      "receiver": {
+        "tx": 0.0,
+        "ty": 0.0,
+        "tz_stl": 208.48,
+        "home_h": 208.48,
+        "roll_deg": 0.0,
+        "pitch_deg": 25.0,
+        "twist_deg": -0.0
+      },
+      "arm_angles_deg": {
+        "LowerLeft": -10.55,
+        "UpperLeft": -10.22,
+        "LeftPitch": 31.26,
+        "RightPitch": -1.88,
+        "UpperRight": -10.22,
+        "LowerRight": -10.55
+      },
+      "rods": [
+        {
+          "servo": "LowerLeft",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "UpperLeft",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "LeftPitch",
+          "type": "pitch",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "RightPitch",
+          "type": "pitch",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "UpperRight",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "LowerRight",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        }
+      ],
+      "parts_count": 25,
+      "static_count": 6,
+      "arm_count": 6,
+      "recv_count": 7,
+      "step_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_pitch_up.step",
+      "step_kb": 224.0,
+      "full_step_path": null,
+      "full_step_kb": 0,
+      "stl_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_pitch_up.stl",
+      "stl_kb": 10320.2,
+      "build_s": 5.04,
+      "total_s": 19.53
+    },
+    {
+      "ok": true,
+      "label": "pitch_down",
+      "engine": "cadquery+ocp",
+      "pose": {
+        "L0": 5000,
+        "L1": 5000,
+        "L2": 5000,
+        "R0": 5000,
+        "R1": 5000,
+        "R2": 0
+      },
+      "receiver": {
+        "tx": 0.0,
+        "ty": 0.0,
+        "tz_stl": 208.48,
+        "home_h": 208.48,
+        "roll_deg": 0.0,
+        "pitch_deg": -25.0,
+        "twist_deg": -0.0
+      },
+      "arm_angles_deg": {
+        "LowerLeft": -10.22,
+        "UpperLeft": -10.55,
+        "LeftPitch": -1.88,
+        "RightPitch": 31.26,
+        "UpperRight": -10.55,
+        "LowerRight": -10.22
+      },
+      "rods": [
+        {
+          "servo": "LowerLeft",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "UpperLeft",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "LeftPitch",
+          "type": "pitch",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "RightPitch",
+          "type": "pitch",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "UpperRight",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "LowerRight",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        }
+      ],
+      "parts_count": 25,
+      "static_count": 6,
+      "arm_count": 6,
+      "recv_count": 7,
+      "step_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_pitch_down.step",
+      "step_kb": 229.0,
+      "full_step_path": null,
+      "full_step_kb": 0,
+      "stl_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_pitch_down.stl",
+      "stl_kb": 10321.7,
+      "build_s": 5.32,
+      "total_s": 20.01
+    },
+    {
+      "ok": true,
+      "label": "twist_cw",
+      "engine": "cadquery+ocp",
+      "pose": {
+        "L0": 5000,
+        "L1": 5000,
+        "L2": 5000,
+        "R0": 9999,
+        "R1": 5000,
+        "R2": 5000
+      },
+      "receiver": {
+        "tx": 0.0,
+        "ty": 0.0,
+        "tz_stl": 208.48,
+        "home_h": 208.48,
+        "roll_deg": 0.0,
+        "pitch_deg": 0.0,
+        "twist_deg": 89.95
+      },
+      "arm_angles_deg": {
+        "LowerLeft": -10.56,
+        "UpperLeft": -10.56,
+        "LeftPitch": 16.35,
+        "RightPitch": 16.35,
+        "UpperRight": -10.56,
+        "LowerRight": -10.56
+      },
+      "rods": [
+        {
+          "servo": "LowerLeft",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "UpperLeft",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "LeftPitch",
+          "type": "pitch",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "RightPitch",
+          "type": "pitch",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "UpperRight",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "LowerRight",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        }
+      ],
+      "parts_count": 25,
+      "static_count": 6,
+      "arm_count": 6,
+      "recv_count": 7,
+      "step_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_twist_cw.step",
+      "step_kb": 117.6,
+      "full_step_path": null,
+      "full_step_kb": 0,
+      "stl_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_twist_cw.stl",
+      "stl_kb": 10297.5,
+      "build_s": 5.31,
+      "total_s": 19.92
+    },
+    {
+      "ok": true,
+      "label": "twist_ccw",
+      "engine": "cadquery+ocp",
+      "pose": {
+        "L0": 5000,
+        "L1": 5000,
+        "L2": 5000,
+        "R0": 0,
+        "R1": 5000,
+        "R2": 5000
+      },
+      "receiver": {
+        "tx": 0.0,
+        "ty": 0.0,
+        "tz_stl": 208.48,
+        "home_h": 208.48,
+        "roll_deg": 0.0,
+        "pitch_deg": 0.0,
+        "twist_deg": -89.95
+      },
+      "arm_angles_deg": {
+        "LowerLeft": -10.56,
+        "UpperLeft": -10.56,
+        "LeftPitch": 16.35,
+        "RightPitch": 16.35,
+        "UpperRight": -10.56,
+        "LowerRight": -10.56
+      },
+      "rods": [
+        {
+          "servo": "LowerLeft",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "UpperLeft",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "LeftPitch",
+          "type": "pitch",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "RightPitch",
+          "type": "pitch",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "UpperRight",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "LowerRight",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        }
+      ],
+      "parts_count": 25,
+      "static_count": 6,
+      "arm_count": 6,
+      "recv_count": 7,
+      "step_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_twist_ccw.step",
+      "step_kb": 117.6,
+      "full_step_path": null,
+      "full_step_kb": 0,
+      "stl_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_twist_ccw.stl",
+      "stl_kb": 10297.5,
+      "build_s": 6.09,
+      "total_s": 20.53
+    },
+    {
+      "ok": true,
+      "label": "combo_diag",
+      "engine": "cadquery+ocp",
+      "pose": {
+        "L0": 7000,
+        "L1": 7000,
+        "L2": 3000,
+        "R0": 6000,
+        "R1": 7000,
+        "R2": 6000
+      },
+      "receiver": {
+        "tx": -11.99,
+        "ty": 12.0,
+        "tz_stl": 232.48,
+        "home_h": 208.48,
+        "roll_deg": 12.0,
+        "pitch_deg": 5.0,
+        "twist_deg": 17.99
+      },
+      "arm_angles_deg": {
+        "LowerLeft": 33.16,
+        "UpperLeft": 39.4,
+        "LeftPitch": 48.27,
+        "RightPitch": 32.53,
+        "UpperRight": 3.9,
+        "LowerRight": -2.75
+      },
+      "rods": [
+        {
+          "servo": "LowerLeft",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "UpperLeft",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "LeftPitch",
+          "type": "pitch",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "RightPitch",
+          "type": "pitch",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "UpperRight",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "LowerRight",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        }
+      ],
+      "parts_count": 25,
+      "static_count": 6,
+      "arm_count": 6,
+      "recv_count": 7,
+      "step_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_combo_diag.step",
+      "step_kb": 221.8,
+      "full_step_path": null,
+      "full_step_kb": 0,
+      "stl_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_combo_diag.stl",
+      "stl_kb": 10282.5,
+      "build_s": 5.0,
+      "total_s": 20.1
+    },
+    {
+      "ok": true,
+      "label": "extreme",
+      "engine": "cadquery+ocp",
+      "pose": {
+        "L0": 8000,
+        "L1": 7500,
+        "L2": 2500,
+        "R0": 8000,
+        "R1": 7500,
+        "R2": 7000
+      },
+      "receiver": {
+        "tx": -14.99,
+        "ty": 15.0,
+        "tz_stl": 244.48,
+        "home_h": 208.48,
+        "roll_deg": 15.0,
+        "pitch_deg": 10.0,
+        "twist_deg": 53.97
+      },
+      "arm_angles_deg": {
+        "LowerLeft": 55.92,
+        "UpperLeft": 68.26,
+        "LeftPitch": 68.48,
+        "RightPitch": 41.02,
+        "UpperRight": 15.9,
+        "LowerRight": 6.57
+      },
+      "rods": [
+        {
+          "servo": "LowerLeft",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "UpperLeft",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "LeftPitch",
+          "type": "pitch",
+          "rod_3d_mm": 183.259,
+          "stress_pct": 4.7192,
+          "reachable": false,
+          "src": "3d_ik_clamped"
+        },
+        {
+          "servo": "RightPitch",
+          "type": "pitch",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "UpperRight",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        },
+        {
+          "servo": "LowerRight",
+          "type": "main",
+          "rod_3d_mm": 175.0,
+          "stress_pct": 0.0,
+          "reachable": true,
+          "src": "3d_ik"
+        }
+      ],
+      "parts_count": 25,
+      "static_count": 6,
+      "arm_count": 6,
+      "recv_count": 7,
+      "step_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_extreme.step",
+      "step_kb": 187.4,
+      "full_step_path": null,
+      "full_step_kb": 0,
+      "stl_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_extreme.stl",
+      "stl_kb": 10293.4,
+      "build_s": 4.96,
+      "total_s": 20.9
+    }
+  ]
+}

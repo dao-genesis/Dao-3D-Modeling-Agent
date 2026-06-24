@@ -1,0 +1,60 @@
+{
+  "engine": "freecad",
+  "freecad_version": "1.0.2",
+  "timestamp": "2026-05-11 00:23:13",
+  "ok_count": 5,
+  "total": 5,
+  "duration_s": 5.22,
+  "results": [
+    {
+      "label": "home",
+      "ok": true,
+      "duration_s": 1.76,
+      "fcstd": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_home.FCStd",
+      "fcstd_size": 1682133,
+      "step": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_home.step",
+      "step_size": 27423,
+      "parts_count": 25
+    },
+    {
+      "label": "forward",
+      "ok": true,
+      "duration_s": 0.56,
+      "fcstd": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_forward.FCStd",
+      "fcstd_size": 1701838,
+      "step": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_forward.step",
+      "step_size": 53357,
+      "parts_count": 25
+    },
+    {
+      "label": "side_right",
+      "ok": true,
+      "duration_s": 0.71,
+      "fcstd": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_side_right.FCStd",
+      "fcstd_size": 1708748,
+      "step": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_side_right.step",
+      "step_size": 62058,
+      "parts_count": 25
+    },
+    {
+      "label": "pitch_up",
+      "ok": true,
+      "duration_s": 1.04,
+      "fcstd": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_pitch_up.FCStd",
+      "fcstd_size": 1715470,
+      "step": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_pitch_up.step",
+      "step_size": 76171,
+      "parts_count": 25
+    },
+    {
+      "label": "roll_left",
+      "ok": true,
+      "duration_s": 1.1,
+      "fcstd": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_roll_left.FCStd",
+      "fcstd_size": 1683395,
+      "step": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\ORS6_roll_left.step",
+      "step_size": 27562,
+      "parts_count": 25
+    }
+  ]
+}

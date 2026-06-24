@@ -1,0 +1,445 @@
+{
+  "schema": "dao_kinematics/verify/v1",
+  "n_total": 58,
+  "n_pass": 58,
+  "n_fail": 0,
+  "score": 100,
+  "elapsed_s": 0.06,
+  "phases": [
+    "I",
+    "II",
+    "III",
+    "IV",
+    "V",
+    "VI",
+    "VII"
+  ],
+  "checks": [
+    {
+      "phase": "I",
+      "name": "Identity SE3 保点不变",
+      "ok": true,
+      "detail": "",
+      "metric": {}
+    },
+    {
+      "phase": "I",
+      "name": "Rodrigues 正交 axis=(0, 0, 1) ang=1.05",
+      "ok": true,
+      "detail": "max|R·Rᵀ - I| = 0.00e+00",
+      "metric": {
+        "orthogonality_error": 0.0
+      }
+    },
+    {
+      "phase": "I",
+      "name": "Rodrigues 正交 axis=(1, 1, 1) ang=0.79",
+      "ok": true,
+      "detail": "max|R·Rᵀ - I| = 2.22e-16",
+      "metric": {
+        "orthogonality_error": 2.220446049250313e-16
+      }
+    },
+    {
+      "phase": "I",
+      "name": "Rodrigues 正交 axis=(0.3, -0.7, 0.5) ang=1.23",
+      "ok": true,
+      "detail": "max|R·Rᵀ - I| = 2.22e-16",
+      "metric": {
+        "orthogonality_error": 2.220446049250313e-16
+      }
+    },
+    {
+      "phase": "I",
+      "name": "det(R)=1 axis=(0, 0, 1)",
+      "ok": true,
+      "detail": "det = 1.000000000",
+      "metric": {}
+    },
+    {
+      "phase": "I",
+      "name": "det(R)=1 axis=(1, 0, 0)",
+      "ok": true,
+      "detail": "det = 1.000000000",
+      "metric": {}
+    },
+    {
+      "phase": "I",
+      "name": "SE3 T·T⁻¹ = I (平移)",
+      "ok": true,
+      "detail": "max |t| = 3.55e-15",
+      "metric": {
+        "inverse_error_mm": 3.552713678800501e-15
+      }
+    },
+    {
+      "phase": "I",
+      "name": "SE3 z旋转 90°",
+      "ok": true,
+      "detail": "(1,0,0) → (6.12e-17,1.000,0.00e+00)",
+      "metric": {}
+    },
+    {
+      "phase": "I",
+      "name": "RPY T & T⁻¹ 往返",
+      "ok": true,
+      "detail": "max err = 0.00e+00",
+      "metric": {
+        "rpy_roundtrip_error": 0.0
+      }
+    },
+    {
+      "phase": "II",
+      "name": "DOF(fixed) = 0",
+      "ok": true,
+      "detail": "got 0",
+      "metric": {}
+    },
+    {
+      "phase": "II",
+      "name": "DOF(revolute) = 1",
+      "ok": true,
+      "detail": "got 1",
+      "metric": {}
+    },
+    {
+      "phase": "II",
+      "name": "DOF(prismatic) = 1",
+      "ok": true,
+      "detail": "got 1",
+      "metric": {}
+    },
+    {
+      "phase": "II",
+      "name": "DOF(helical) = 1",
+      "ok": true,
+      "detail": "got 1",
+      "metric": {}
+    },
+    {
+      "phase": "II",
+      "name": "DOF(cylindrical) = 2",
+      "ok": true,
+      "detail": "got 2",
+      "metric": {}
+    },
+    {
+      "phase": "II",
+      "name": "DOF(spherical) = 3",
+      "ok": true,
+      "detail": "got 3",
+      "metric": {}
+    },
+    {
+      "phase": "II",
+      "name": "DOF(universal) = 2",
+      "ok": true,
+      "detail": "got 2",
+      "metric": {}
+    },
+    {
+      "phase": "II",
+      "name": "DOF(planar) = 3",
+      "ok": true,
+      "detail": "got 3",
+      "metric": {}
+    },
+    {
+      "phase": "II",
+      "name": "revolute 90°: (1,0,0) → (0,1,0)",
+      "ok": true,
+      "detail": "",
+      "metric": {}
+    },
+    {
+      "phase": "II",
+      "name": "prismatic 42mm along X",
+      "ok": true,
+      "detail": "",
+      "metric": {}
+    },
+    {
+      "phase": "II",
+      "name": "helical 一圈 (2π, pitch=5) 平移 10π",
+      "ok": true,
+      "detail": "t_z = 31.4159",
+      "metric": {}
+    },
+    {
+      "phase": "II",
+      "name": "cylindrical 同时 rot+trans",
+      "ok": true,
+      "detail": "",
+      "metric": {}
+    },
+    {
+      "phase": "II",
+      "name": "spherical (0,0,π/2) 等同绕 Z 90°",
+      "ok": true,
+      "detail": "",
+      "metric": {}
+    },
+    {
+      "phase": "II",
+      "name": "universal 双转",
+      "ok": true,
+      "detail": "→ (1.000,-0.000,0.000)",
+      "metric": {}
+    },
+    {
+      "phase": "II",
+      "name": "planar (10,20,π/2)",
+      "ok": true,
+      "detail": "→ (10.000,21.000,0.000)",
+      "metric": {}
+    },
+    {
+      "phase": "II",
+      "name": "JointLimits in-range 0.5",
+      "ok": true,
+      "detail": "",
+      "metric": {}
+    },
+    {
+      "phase": "II",
+      "name": "JointLimits out-of-range 1.5",
+      "ok": true,
+      "detail": "",
+      "metric": {}
+    },
+    {
+      "phase": "II",
+      "name": "JointLimits clamp(2.0) → 1.0",
+      "ok": true,
+      "detail": "",
+      "metric": {}
+    },
+    {
+      "phase": "II",
+      "name": "非法 joint type 抛 ValueError",
+      "ok": true,
+      "detail": "",
+      "metric": {}
+    },
+    {
+      "phase": "III",
+      "name": "2R @ q=(0,0): tip (600,0,0)",
+      "ok": true,
+      "detail": "tip = (600.0, 0.0, 0.0)",
+      "metric": {}
+    },
+    {
+      "phase": "III",
+      "name": "2R @ q=(π/2,0): tip (0,600,0)",
+      "ok": true,
+      "detail": "tip = (3.6739403974420595e-14, 600.0, 0.0)",
+      "metric": {}
+    },
+    {
+      "phase": "III",
+      "name": "2R @ q=(0,π): tip (0,0,0)",
+      "ok": true,
+      "detail": "tip = (0.0, 3.6739403974420595e-14, 0.0)",
+      "metric": {}
+    },
+    {
+      "phase": "III",
+      "name": "2R @ q=(π,π): 折叠回原点 (0,0,0)",
+      "ok": true,
+      "detail": "tip = (0.000e+00,-3.67e-14)",
+      "metric": {}
+    },
+    {
+      "phase": "III",
+      "name": "2R @ q=(π,0): tip (-600,0,0)",
+      "ok": true,
+      "detail": "tip = (-600.000,7.35e-14)",
+      "metric": {}
+    },
+    {
+      "phase": "III",
+      "name": "树形 FK: left @ arm origin",
+      "ok": true,
+      "detail": "left.t=(200.0, 0.0, 0.0) right.t=(200.0, 0.0, 0.0)",
+      "metric": {}
+    },
+    {
+      "phase": "IV",
+      "name": "Jacobian 2R @ q=(0.1, 0.2)",
+      "ok": true,
+      "detail": "max|J_num - J_ana| = 1.01e-08",
+      "metric": {
+        "max_jacobian_error": 1.0062535693577956e-08
+      }
+    },
+    {
+      "phase": "IV",
+      "name": "Jacobian 2R @ q=(0.79, 1.05)",
+      "ok": true,
+      "detail": "max|J_num - J_ana| = 9.98e-09",
+      "metric": {
+        "max_jacobian_error": 9.983580184780294e-09
+      }
+    },
+    {
+      "phase": "IV",
+      "name": "Jacobian 2R @ q=(-0.5, 1.2)",
+      "ok": true,
+      "detail": "max|J_num - J_ana| = 8.88e-09",
+      "metric": {
+        "max_jacobian_error": 8.88087470229948e-09
+      }
+    },
+    {
+      "phase": "V",
+      "name": "IK 可达 (400,200)",
+      "ok": true,
+      "detail": "err=0.0000 mm in 8 iter",
+      "metric": {
+        "err": 7.059746675461622e-06,
+        "iter": 8
+      }
+    },
+    {
+      "phase": "V",
+      "name": "IK 可达 (0,500)",
+      "ok": true,
+      "detail": "err=0.0001mm iter=4",
+      "metric": {}
+    },
+    {
+      "phase": "V",
+      "name": "IK 近边界 (599,0)",
+      "ok": true,
+      "detail": "err=0.0001mm",
+      "metric": {}
+    },
+    {
+      "phase": "V",
+      "name": "IK 不可达 (1000,0) · 稳定有界",
+      "ok": true,
+      "detail": "err=542.7mm (伸展 ~400 / 反向 ~1200 均合法)",
+      "metric": {}
+    },
+    {
+      "phase": "V",
+      "name": "IK 不可达 (1000,0) · 零初值+强阻尼 → 伸展解",
+      "ok": true,
+      "detail": "err=400.00mm",
+      "metric": {}
+    },
+    {
+      "phase": "VI",
+      "name": "ISO G16 对称成组策略通过",
+      "ok": true,
+      "detail": "imb_pair = 0.00 g·mm U_plane = 4775",
+      "metric": {}
+    },
+    {
+      "phase": "VI",
+      "name": "四场景独磨最坏为最大值",
+      "ok": true,
+      "detail": "solo=418500 >> pair=0.00",
+      "metric": {}
+    },
+    {
+      "phase": "VI",
+      "name": "独磨临界阈值合理 (0.1~5%)",
+      "ok": true,
+      "detail": "crit_wear = 0.34%",
+      "metric": {}
+    },
+    {
+      "phase": "VI",
+      "name": "临界转速安全 > 1.33×",
+      "ok": true,
+      "detail": "n_cr = 3948 rpm · safety = 3.29",
+      "metric": {}
+    },
+    {
+      "phase": "VI",
+      "name": "临界转速 > 工作转速",
+      "ok": true,
+      "detail": "3948 > 1200",
+      "metric": {}
+    },
+    {
+      "phase": "VI",
+      "name": "离心力 F ≈ 22 kN (锤头@310mm, 1200rpm)",
+      "ok": true,
+      "detail": "F = 22.03 kN",
+      "metric": {}
+    },
+    {
+      "phase": "VI",
+      "name": "销轴剪切在许用内",
+      "ok": true,
+      "detail": "τ = 17.5 MPa",
+      "metric": {}
+    },
+    {
+      "phase": "VII",
+      "name": "仿真帧数 = 24",
+      "ok": true,
+      "detail": "",
+      "metric": {}
+    },
+    {
+      "phase": "VII",
+      "name": "周期 ≈ 50 ms @ 1200 rpm",
+      "ok": true,
+      "detail": "period = 50.000 ms",
+      "metric": {}
+    },
+    {
+      "phase": "VII",
+      "name": "锤尖半径恒定 ≈ 400 mm (绕 X 旋转)",
+      "ok": true,
+      "detail": "mean=400.00 std=0.0002 (n=24)",
+      "metric": {}
+    },
+    {
+      "phase": "VII",
+      "name": "锤尖 X 坐标恒 0 (在 YZ 平面)",
+      "ok": true,
+      "detail": "max|x| = 0.00e+00",
+      "metric": {}
+    },
+    {
+      "phase": "VII",
+      "name": "径向间隙 锤尖400 vs 机壳430 ≥ 20mm",
+      "ok": true,
+      "detail": "clearance = 30.0 mm",
+      "metric": {}
+    },
+    {
+      "phase": "VII",
+      "name": "筛板穿透 10mm 在设计意图内 (≤20)",
+      "ok": true,
+      "detail": "sev=DESIGN_INTENT",
+      "metric": {}
+    },
+    {
+      "phase": "VII",
+      "name": "严重硬穿透报 HARD",
+      "ok": true,
+      "detail": "sev=HARD",
+      "metric": {}
+    },
+    {
+      "phase": "VII",
+      "name": "JSON spec 序列化-反序列化",
+      "ok": true,
+      "detail": "dof=1 links=3 joints=2",
+      "metric": {}
+    },
+    {
+      "phase": "VII",
+      "name": "AABB 检测到明显重叠",
+      "ok": true,
+      "detail": "n_events = 1 overlap = 50.0 mm",
+      "metric": {}
+    }
+  ],
+  "failures": []
+}

@@ -1,0 +1,104 @@
+{
+  "L_Frame": {
+    "stl": "L_Frame",
+    "vertices": 2833,
+    "faces": 5754,
+    "bbox_min": [
+      -109.9,
+      -55.98,
+      11.9
+    ],
+    "bbox_max": [
+      -47.4,
+      55.98,
+      65.9
+    ],
+    "n_holes": 0,
+    "holes": []
+  },
+  "R_Frame": {
+    "stl": "R_Frame",
+    "vertices": 2996,
+    "faces": 6080,
+    "bbox_min": [
+      47.4,
+      -55.98,
+      11.9
+    ],
+    "bbox_max": [
+      109.9,
+      55.98,
+      65.9
+    ],
+    "n_holes": 0,
+    "holes": []
+  },
+  "Arm": {
+    "stl": "Arm",
+    "vertices": 716,
+    "faces": 1440,
+    "bbox_min": [
+      53.52,
+      -13.98,
+      46.0
+    ],
+    "bbox_max": [
+      81.48,
+      57.0,
+      57.0
+    ],
+    "n_holes": 0,
+    "holes": []
+  },
+  "L_Pitcher": {
+    "stl": "L_Pitcher",
+    "vertices": 1011,
+    "faces": 2030,
+    "bbox_min": [
+      -46.73,
+      9.0,
+      45.0
+    ],
+    "bbox_max": [
+      13.5,
+      104.71,
+      58.5
+    ],
+    "n_holes": 0,
+    "holes": []
+  },
+  "R_Pitcher": {
+    "stl": "R_Pitcher",
+    "vertices": 1011,
+    "faces": 2030,
+    "bbox_min": [
+      -13.5,
+      9.0,
+      45.0
+    ],
+    "bbox_max": [
+      46.73,
+      104.71,
+      58.5
+    ],
+    "n_holes": 0,
+    "holes": []
+  },
+  "Receiver": {
+    "stl": "Receiver",
+    "vertices": 4053,
+    "faces": 8122,
+    "bbox_min": [
+      -70.0,
+      -55.0,
+      -28.0
+    ],
+    "bbox_max": [
+      70.0,
+      55.0,
+      60.13
+    ],
+    "n_holes": 0,
+    "holes": []
+  }
+}

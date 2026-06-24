@@ -1,0 +1,518 @@
+{
+  "timestamp": "2026-04-23 11:04:53",
+  "sw_revision": "31.0.1",
+  "open_docs": [
+    {
+      "type": 1,
+      "title": "main_shaft.SLDPRT",
+      "path": "E:\\Temp\\dao_sw_forge\\main_shaft.SLDPRT",
+      "unsaved_changes": null
+    },
+    {
+      "type": 1,
+      "title": "driven_pulley.SLDPRT",
+      "path": "E:\\Temp\\dao_sw_forge\\driven_pulley.SLDPRT",
+      "unsaved_changes": null
+    },
+    {
+      "type": 1,
+      "title": "rotor_disc.SLDPRT",
+      "path": "E:\\Temp\\dao_sw_forge\\rotor_disc.SLDPRT",
+      "unsaved_changes": null
+    },
+    {
+      "type": 1,
+      "title": "hammer_pin.SLDPRT",
+      "path": "E:\\Temp\\dao_sw_forge\\hammer_pin.SLDPRT",
+      "unsaved_changes": null
+    },
+    {
+      "type": 1,
+      "title": "screen_plate.SLDPRT",
+      "path": "E:\\Temp\\dao_sw_forge\\screen_plate.SLDPRT",
+      "unsaved_changes": null
+    },
+    {
+      "type": 1,
+      "title": "casing_lower.SLDPRT",
+      "path": "E:\\Temp\\dao_sw_forge\\casing_lower.SLDPRT",
+      "unsaved_changes": null
+    },
+    {
+      "type": 1,
+      "title": "casing_upper.SLDPRT",
+      "path": "E:\\Temp\\dao_sw_forge\\casing_upper.SLDPRT",
+      "unsaved_changes": null
+    },
+    {
+      "type": 1,
+      "title": "frame_base.SLDPRT",
+      "path": "E:\\Temp\\dao_sw_forge\\frame_base.SLDPRT",
+      "unsaved_changes": null
+    },
+    {
+      "type": 1,
+      "title": "hammer.SLDPRT",
+      "path": "E:\\Temp\\dao_sw_forge\\hammer.SLDPRT",
+      "unsaved_changes": null
+    },
+    {
+      "type": 1,
+      "title": "drive_pulley.SLDPRT",
+      "path": "D:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\南京-吴鸿轩_锤式破碎机\\交付包_最终\\sldprt\\drive_pulley.SLDPRT",
+      "unsaved_changes": null
+    },
+    {
+      "type": 1,
+      "title": "motor_mount.SLDPRT",
+      "path": "E:\\Temp\\dao_sw_stage_完善\\motor_mount.SLDPRT",
+      "unsaved_changes": null
+    },
+    {
+      "type": 1,
+      "title": "v_belt.SLDPRT",
+      "path": "D:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\南京-吴鸿轩_锤式破碎机\\交付包_最终\\sldprt\\v_belt.SLDPRT",
+      "unsaved_changes": null
+    },
+    {
+      "type": 1,
+      "title": "motor_body.SLDPRT",
+      "path": "D:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\南京-吴鸿轩_锤式破碎机\\交付包_最终\\sldprt\\motor_body.SLDPRT",
+      "unsaved_changes": null
+    },
+    {
+      "type": 2,
+      "title": "锤式破碎机_总装配.SLDASM",
+      "path": "E:\\Temp\\dao_sw_forge\\锤式破碎机_总装配.SLDASM",
+      "unsaved_changes": null
+    }
+  ],
+  "active_assembly": {
+    "title": "锤式破碎机_总装配.SLDASM",
+    "path": "E:\\Temp\\dao_sw_forge\\锤式破碎机_总装配.SLDASM",
+    "bbox_mm": [
+      -792.5,
+      -440.0,
+      -980.0,
+      1222.5000000000002,
+      440.0,
+      610.0
+    ]
+  },
+  "components": [
+    {
+      "name": "casing_upper-1",
+      "path": "E:\\Temp\\dao_sw_forge\\casing_upper.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "hammer-3",
+      "path": "E:\\Temp\\dao_sw_forge\\hammer.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "casing_lower-1",
+      "path": "E:\\Temp\\dao_sw_forge\\casing_lower.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "frame_base-1",
+      "path": "E:\\Temp\\dao_sw_forge\\frame_base.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "hammer-1",
+      "path": "E:\\Temp\\dao_sw_forge\\hammer.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "hammer-2",
+      "path": "E:\\Temp\\dao_sw_forge\\hammer.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "hammer-4",
+      "path": "E:\\Temp\\dao_sw_forge\\hammer.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "hammer-7",
+      "path": "E:\\Temp\\dao_sw_forge\\hammer.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "hammer-5",
+      "path": "E:\\Temp\\dao_sw_forge\\hammer.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "hammer-6",
+      "path": "E:\\Temp\\dao_sw_forge\\hammer.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "hammer-8",
+      "path": "E:\\Temp\\dao_sw_forge\\hammer.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "hammer-9",
+      "path": "E:\\Temp\\dao_sw_forge\\hammer.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "rotor_disc-2",
+      "path": "E:\\Temp\\dao_sw_forge\\rotor_disc.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "hammer_pin-3",
+      "path": "E:\\Temp\\dao_sw_forge\\hammer_pin.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "hammer_pin-2",
+      "path": "E:\\Temp\\dao_sw_forge\\hammer_pin.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "rotor_disc-4",
+      "path": "E:\\Temp\\dao_sw_forge\\rotor_disc.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "hammer_pin-4",
+      "path": "E:\\Temp\\dao_sw_forge\\hammer_pin.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "hammer_pin-1",
+      "path": "E:\\Temp\\dao_sw_forge\\hammer_pin.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "screen_plate-1",
+      "path": "E:\\Temp\\dao_sw_forge\\screen_plate.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "rotor_disc-3",
+      "path": "E:\\Temp\\dao_sw_forge\\rotor_disc.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "driven_pulley-1",
+      "path": "E:\\Temp\\dao_sw_forge\\driven_pulley.SLDPRT",
+      "fixed": false,
+      "bbox_mm": [
+        0.0,
+        -120.0,
+        -120.0,
+        90.0,
+        120.0,
+        120.0
+      ]
+    },
+    {
+      "name": "rotor_disc-1",
+      "path": "E:\\Temp\\dao_sw_forge\\rotor_disc.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "main_shaft-1",
+      "path": "E:\\Temp\\dao_sw_forge\\main_shaft.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "hammer-11",
+      "path": "E:\\Temp\\dao_sw_forge\\hammer.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "hammer-13",
+      "path": "E:\\Temp\\dao_sw_forge\\hammer.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "hammer-10",
+      "path": "E:\\Temp\\dao_sw_forge\\hammer.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "hammer-14",
+      "path": "E:\\Temp\\dao_sw_forge\\hammer.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "hammer-15",
+      "path": "E:\\Temp\\dao_sw_forge\\hammer.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "hammer-12",
+      "path": "E:\\Temp\\dao_sw_forge\\hammer.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "hammer-16",
+      "path": "E:\\Temp\\dao_sw_forge\\hammer.SLDPRT",
+      "fixed": false
+    },
+    {
+      "name": "motor_mount-3",
+      "path": "E:\\Temp\\dao_sw_stage_完善\\motor_mount.SLDPRT",
+      "fixed": false,
+      "bbox_mm": [
+        -792.5,
+        -300.0,
+        -973.0,
+        -72.50000000000001,
+        300.0,
+        -793.0
+      ]
+    },
+    {
+      "name": "motor_body-4",
+      "path": "D:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\南京-吴鸿轩_锤式破碎机\\交付包_最终\\sldprt\\motor_body.SLDPRT",
+      "fixed": false,
+      "bbox_mm": [
+        -347.5,
+        -295.0,
+        -202.5,
+        347.5,
+        295.0,
+        202.5
+      ]
+    },
+    {
+      "name": "v_belt-15",
+      "path": "D:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\南京-吴鸿轩_锤式破碎机\\交付包_最终\\sldprt\\v_belt.SLDPRT",
+      "fixed": false,
+      "bbox_mm": [
+        -196.00000000000003,
+        -8.5,
+        -401.0,
+        196.00000000000003,
+        8.5,
+        401.0
+      ]
+    },
+    {
+      "name": "drive_pulley-2",
+      "path": "D:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\南京-吴鸿轩_锤式破碎机\\交付包_最终\\sldprt\\drive_pulley.SLDPRT",
+      "fixed": false,
+      "bbox_mm": [
+        -105.0,
+        -95.0,
+        -695.0,
+        15.0,
+        95.0,
+        -505.0
+      ]
+    }
+  ],
+  "part_health": {
+    "driven_pulley.SLDPRT": {
+      "path": "E:\\Temp\\dao_sw_forge\\driven_pulley.SLDPRT",
+      "bbox_mm": null,
+      "mass_properties": {
+        "cx": 0.04499999999999999,
+        "cy": -0.00011447618417758458,
+        "cz": 1.515813224010224e-22,
+        "volume_m3": 0.003715008523871472,
+        "area_m2": 0.17276588146445648,
+        "mass_kg": 26.7480613718746,
+        "density_kg_m3": 7200.0
+      },
+      "has_geometry": true
+    },
+    "drive_pulley.SLDPRT": {
+      "path": "D:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\南京-吴鸿轩_锤式破碎机\\交付包_最终\\sldprt\\drive_pulley.SLDPRT",
+      "bbox_mm": null,
+      "mass_properties": {
+        "cx": 0.04500494348695856,
+        "cy": -0.0002727823430518747,
+        "cz": -1.7497128596382716e-06,
+        "volume_m3": 0.0024501025198961114,
+        "area_m2": 0.13600418783367588,
+        "mass_kg": 17.640738143252,
+        "density_kg_m3": 7200.0
+      },
+      "has_geometry": true
+    },
+    "motor_mount.SLDPRT": {
+      "path": "E:\\Temp\\dao_sw_stage_完善\\motor_mount.SLDPRT",
+      "bbox_mm": null,
+      "mass_properties": {
+        "cx": -1.8185824960125382e-17,
+        "cy": 2.4949738267178886e-17,
+        "cz": -0.08998909148585331,
+        "volume_m3": 0.023730751152192472,
+        "area_m2": 2.8141558934211703,
+        "mass_kg": 23.73075115219247,
+        "density_kg_m3": 1000.0
+      },
+      "has_geometry": true
+    },
+    "v_belt.SLDPRT": {
+      "path": "D:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\南京-吴鸿轩_锤式破碎机\\交付包_最终\\sldprt\\v_belt.SLDPRT",
+      "bbox_mm": null,
+      "mass_properties": {
+        "cx": 8.677202960942333e-14,
+        "cy": -4.264520664358875e-18,
+        "cz": -6.744278508959785e-14,
+        "volume_m3": 0.00034759068471248094,
+        "area_m2": 0.10409132804221255,
+        "mass_kg": 0.34759068471248095,
+        "density_kg_m3": 1000.0
+      },
+      "has_geometry": true
+    },
+    "motor_body.SLDPRT": {
+      "path": "D:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\南京-吴鸿轩_锤式破碎机\\交付包_最终\\sldprt\\motor_body.SLDPRT",
+      "bbox_mm": null,
+      "mass_properties": {
+        "cx": 0.010635358737638012,
+        "cy": 0.0008969582408751857,
+        "cz": -0.009006131916098215,
+        "volume_m3": 0.08213174999999999,
+        "area_m2": 1.7324,
+        "mass_kg": 591.3485999999999,
+        "density_kg_m3": 7200.0
+      },
+      "has_geometry": true
+    }
+  },
+  "disk_step_files": {
+    "assembly_ap214_structured.step": {
+      "size": 1187883,
+      "mtime": "04-19 23:29"
+    },
+    "assembly_ap214_v2.step": {
+      "size": 1187660,
+      "mtime": "04-20 01:51"
+    },
+    "casing_lower.step": {
+      "size": 48208,
+      "mtime": "04-21 13:11"
+    },
+    "casing_upper.step": {
+      "size": 78099,
+      "mtime": "04-21 13:11"
+    },
+    "drive_pulley.step": {
+      "size": 222348,
+      "mtime": "04-21 13:11"
+    },
+    "driven_pulley.step": {
+      "size": 20068,
+      "mtime": "04-21 13:10"
+    },
+    "frame_base.step": {
+      "size": 225424,
+      "mtime": "04-22 17:29"
+    },
+    "hammer.step": {
+      "size": 20736,
+      "mtime": "04-21 13:10"
+    },
+    "hammer_pin.step": {
+      "size": 18788,
+      "mtime": "04-21 13:10"
+    },
+    "main_shaft.step": {
+      "size": 36705,
+      "mtime": "04-21 13:10"
+    },
+    "motor_body.step": {
+      "size": 464804,
+      "mtime": "04-23 10:43"
+    },
+    "motor_mount.step": {
+      "size": 111120,
+      "mtime": "04-21 14:13"
+    },
+    "rotor_disc.step": {
+      "size": 24281,
+      "mtime": "04-21 13:10"
+    },
+    "screen_plate.step": {
+      "size": 307801,
+      "mtime": "04-21 13:11"
+    },
+    "v_belt.step": {
+      "size": 175768,
+      "mtime": "04-23 10:56"
+    },
+    "v_belt_fixed.step": {
+      "size": 35351,
+      "mtime": "04-21 21:32"
+    }
+  },
+  "disk_sldprt_files": {
+    "casing_lower.SLDPRT": {
+      "size": 85088,
+      "mtime": "04-21 13:16"
+    },
+    "casing_upper.SLDPRT": {
+      "size": 86727,
+      "mtime": "04-21 13:16"
+    },
+    "drive_pulley.SLDPRT": {
+      "size": 169374,
+      "mtime": "04-21 02:45"
+    },
+    "driven_pulley.SLDPRT": {
+      "size": 93412,
+      "mtime": "04-21 02:45"
+    },
+    "frame_base.SLDPRT": {
+      "size": 137176,
+      "mtime": "04-21 02:45"
+    },
+    "hammer.SLDPRT": {
+      "size": 76871,
+      "mtime": "04-21 02:45"
+    },
+    "hammer_pin.SLDPRT": {
+      "size": 91297,
+      "mtime": "04-21 13:16"
+    },
+    "main_shaft.SLDPRT": {
+      "size": 137881,
+      "mtime": "04-21 02:45"
+    },
+    "motor_body.SLDPRT": {
+      "size": 222809,
+      "mtime": "04-22 23:39"
+    },
+    "motor_mount.SLDPRT": {
+      "size": 91280,
+      "mtime": "04-21 14:24"
+    },
+    "rotor_disc.SLDPRT": {
+      "size": 92075,
+      "mtime": "04-21 02:45"
+    },
+    "screen_plate.SLDPRT": {
+      "size": 196776,
+      "mtime": "04-21 02:45"
+    },
+    "v_belt.SLDPRT": {
+      "size": 80822,
+      "mtime": "04-21 14:25"
+    },
+    "~$drive_pulley.SLDPRT": {
+      "size": 14,
+      "mtime": "04-22 23:33"
+    },
+    "~$motor_body.SLDPRT": {
+      "size": 14,
+      "mtime": "04-23 11:03"
+    },
+    "~$v_belt.SLDPRT": {
+      "size": 14,
+      "mtime": "04-23 11:03"
+    }
+  }
+}

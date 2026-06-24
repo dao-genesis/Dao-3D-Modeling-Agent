@@ -1,0 +1,61 @@
+{
+  "engine": "freecad_gui",
+  "freecad_version": "1.0.2",
+  "timestamp": "2026-05-11 00:25:06",
+  "ok_count": 5,
+  "total": 5,
+  "duration_s": 6.1,
+  "screenshots_dir": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\screenshots",
+  "results": [
+    {
+      "pose": "home",
+      "ok": true,
+      "colored": 25,
+      "skipped": 0,
+      "png_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\screenshots\\ORS6_home.png",
+      "png_size": 90115,
+      "fcstd_size_after": 1698990,
+      "duration_s": 2.23
+    },
+    {
+      "pose": "forward",
+      "ok": true,
+      "colored": 25,
+      "skipped": 0,
+      "png_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\screenshots\\ORS6_forward.png",
+      "png_size": 92062,
+      "fcstd_size_after": 1718556,
+      "duration_s": 0.89
+    },
+    {
+      "pose": "side_right",
+      "ok": true,
+      "colored": 25,
+      "skipped": 0,
+      "png_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\screenshots\\ORS6_side_right.png",
+      "png_size": 87599,
+      "fcstd_size_after": 1725352,
+      "duration_s": 0.95
+    },
+    {
+      "pose": "pitch_up",
+      "ok": true,
+      "colored": 25,
+      "skipped": 0,
+      "png_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\screenshots\\ORS6_pitch_up.png",
+      "png_size": 83887,
+      "fcstd_size_after": 1731485,
+      "duration_s": 0.91
+    },
+    {
+      "pose": "roll_left",
+      "ok": true,
+      "colored": 25,
+      "skipped": 0,
+      "png_path": "E:\\道\\道生一\\一生二\\3D建模Agent\\60-实战_Projects\\ORS6_Stewart\\output\\screenshots\\ORS6_roll_left.png",
+      "png_size": 90222,
+      "fcstd_size_after": 1699840,
+      "duration_s": 0.96
+    }
+  ]
+}

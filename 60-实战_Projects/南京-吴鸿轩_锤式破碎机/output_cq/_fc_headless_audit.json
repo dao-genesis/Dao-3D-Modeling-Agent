@@ -1,0 +1,1461 @@
+{
+  "schema": "fc_headless_audit/v1",
+  "freecad_version": "1.0.2",
+  "step_parts": {
+    "main_shaft": {
+      "exists": true,
+      "volume_mm3": 6871715.428,
+      "area_mm2": 328027.239,
+      "bbox_mm": [
+        1145.0,
+        90.0,
+        90.0
+      ],
+      "center_mm": [
+        572.5,
+        0.0,
+        0.0
+      ],
+      "n_faces": 16,
+      "n_edges": 27,
+      "n_vertexes": 18,
+      "is_closed": true,
+      "is_valid": true,
+      "status": "OK"
+    },
+    "rotor_disc": {
+      "exists": true,
+      "volume_mm3": 4657411.109,
+      "area_mm2": 430712.353,
+      "bbox_mm": [
+        500.0,
+        500.0,
+        25.0
+      ],
+      "center_mm": [
+        0.0,
+        0.0,
+        12.5
+      ],
+      "n_faces": 8,
+      "n_edges": 18,
+      "n_vertexes": 12,
+      "is_closed": true,
+      "is_valid": true,
+      "status": "OK"
+    },
+    "hammer": {
+      "exists": true,
+      "volume_mm3": 381734.518,
+      "area_mm2": 43401.89,
+      "bbox_mm": [
+        80.0,
+        180.0,
+        40.0
+      ],
+      "center_mm": [
+        -0.0,
+        90.0,
+        20.0
+      ],
+      "n_faces": 7,
+      "n_edges": 15,
+      "n_vertexes": 10,
+      "is_closed": true,
+      "is_valid": true,
+      "status": "OK"
+    },
+    "hammer_pin": {
+      "exists": true,
+      "volume_mm3": 150593.291,
+      "area_mm2": 18555.477,
+      "bbox_mm": [
+        142.0,
+        40.0,
+        40.0
+      ],
+      "center_mm": [
+        71.0,
+        0.0,
+        0.0
+      ],
+      "n_faces": 9,
+      "n_edges": 13,
+      "n_vertexes": 8,
+      "is_closed": true,
+      "is_valid": true,
+      "status": "OK"
+    },
+    "driven_pulley": {
+      "exists": true,
+      "volume_mm3": 3715008.524,
+      "area_mm2": 172765.881,
+      "bbox_mm": [
+        90.0,
+        240.0,
+        240.0
+      ],
+      "center_mm": [
+        45.0,
+        0.0,
+        0.0
+      ],
+      "n_faces": 7,
+      "n_edges": 15,
+      "n_vertexes": 10,
+      "is_closed": true,
+      "is_valid": true,
+      "status": "OK"
+    },
+    "screen_plate": {
+      "exists": true,
+      "volume_mm3": 7886267.573,
+      "area_mm2": 1369212.537,
+      "bbox_mm": [
+        603.0,
+        402.0,
+        800.0
+      ],
+      "center_mm": [
+        100.5,
+        201.0,
+        0.0
+      ],
+      "n_faces": 72,
+      "n_edges": 210,
+      "n_vertexes": 140,
+      "is_closed": true,
+      "is_valid": true,
+      "status": "OK"
+    },
+    "drive_pulley": {
+      "exists": true,
+      "volume_mm3": 2450099.195,
+      "area_mm2": 136004.092,
+      "bbox_mm": [
+        120.0,
+        190.001,
+        190.0
+      ],
+      "center_mm": [
+        45.0,
+        0.001,
+        0.0
+      ],
+      "n_faces": 27,
+      "n_edges": 68,
+      "n_vertexes": 45,
+      "is_closed": true,
+      "is_valid": true,
+      "status": "OK"
+    },
+    "casing_lower": {
+      "exists": true,
+      "volume_mm3": 54690380.551,
+      "area_mm2": 3878716.815,
+      "bbox_mm": [
+        960.0,
+        610.0,
+        460.0
+      ],
+      "center_mm": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "n_faces": 17,
+      "n_edges": 39,
+      "n_vertexes": 26,
+      "is_closed": true,
+      "is_valid": true,
+      "status": "OK"
+    },
+    "casing_upper": {
+      "exists": true,
+      "volume_mm3": 65065380.551,
+      "area_mm2": 4236116.815,
+      "bbox_mm": [
+        960.0,
+        610.0,
+        610.0
+      ],
+      "center_mm": [
+        0.0,
+        0.0,
+        75.0
+      ],
+      "n_faces": 27,
+      "n_edges": 63,
+      "n_vertexes": 42,
+      "is_closed": true,
+      "is_valid": true,
+      "status": "OK"
+    },
+    "motor_body": {
+      "exists": true,
+      "volume_mm3": 59837341.239,
+      "area_mm2": 1232158.294,
+      "bbox_mm": [
+        685.0,
+        590.0,
+        394.5
+      ],
+      "center_mm": [
+        62.5,
+        0.0,
+        -2.25
+      ],
+      "n_faces": 83,
+      "n_edges": 173,
+      "n_vertexes": 115,
+      "is_closed": true,
+      "is_valid": true,
+      "status": "OK"
+    },
+    "frame_base": {
+      "exists": true,
+      "volume_mm3": 31182061.96,
+      "area_mm2": 3121596.459,
+      "bbox_mm": [
+        1300.0,
+        820.0,
+        520.0
+      ],
+      "center_mm": [
+        0.0,
+        0.0,
+        250.0
+      ],
+      "n_faces": 43,
+      "n_edges": 120,
+      "n_vertexes": 80,
+      "is_closed": true,
+      "is_valid": true,
+      "status": "OK"
+    }
+  },
+  "fcstd_assemblies": {
+    "assembly_full_v7.FCStd": {
+      "exists": true,
+      "size_bytes": 183842,
+      "location": "交付包_CAD_万法",
+      "n_objects": 54,
+      "objects": [
+        {
+          "name": "p00",
+          "label": "主轴",
+          "type": "Part::Feature",
+          "volume_mm3": 6871715.428,
+          "area_mm2": 328027.239,
+          "bbox_mm": [
+            1145.0,
+            90.0,
+            90.0
+          ],
+          "center_mm": [
+            572.5,
+            0.0,
+            0.0
+          ],
+          "n_faces": 16,
+          "n_edges": 27,
+          "n_vertexes": 18,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p01",
+          "label": "转子皘1",
+          "type": "Part::Feature",
+          "volume_mm3": 4657411.109,
+          "area_mm2": 430712.353,
+          "bbox_mm": [
+            25.0,
+            500.0,
+            500.0
+          ],
+          "center_mm": [
+            207.0,
+            0.0,
+            0.0
+          ],
+          "n_faces": 8,
+          "n_edges": 18,
+          "n_vertexes": 12,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p02",
+          "label": "转子皘2",
+          "type": "Part::Feature",
+          "volume_mm3": 4657411.109,
+          "area_mm2": 430712.353,
+          "bbox_mm": [
+            25.0,
+            500.0,
+            500.0
+          ],
+          "center_mm": [
+            408.0,
+            0.0,
+            0.0
+          ],
+          "n_faces": 8,
+          "n_edges": 18,
+          "n_vertexes": 12,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p03",
+          "label": "转子皘3",
+          "type": "Part::Feature",
+          "volume_mm3": 4657411.109,
+          "area_mm2": 430712.353,
+          "bbox_mm": [
+            25.0,
+            500.0,
+            500.0
+          ],
+          "center_mm": [
+            610.0,
+            0.0,
+            0.0
+          ],
+          "n_faces": 8,
+          "n_edges": 18,
+          "n_vertexes": 12,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p04",
+          "label": "转子皘4",
+          "type": "Part::Feature",
+          "volume_mm3": 4657411.109,
+          "area_mm2": 430712.353,
+          "bbox_mm": [
+            25.0,
+            500.0,
+            500.0
+          ],
+          "center_mm": [
+            810.0,
+            0.0,
+            0.0
+          ],
+          "n_faces": 8,
+          "n_edges": 18,
+          "n_vertexes": 12,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p05",
+          "label": "销轴1",
+          "type": "Part::Feature",
+          "volume_mm3": 150593.291,
+          "area_mm2": 18555.477,
+          "bbox_mm": [
+            142.0,
+            40.0,
+            40.0
+          ],
+          "center_mm": [
+            191.0,
+            220.0,
+            0.0
+          ],
+          "n_faces": 9,
+          "n_edges": 13,
+          "n_vertexes": 8,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p06",
+          "label": "销轴2",
+          "type": "Part::Feature",
+          "volume_mm3": 150593.291,
+          "area_mm2": 18555.477,
+          "bbox_mm": [
+            142.0,
+            40.0,
+            40.0
+          ],
+          "center_mm": [
+            191.0,
+            -220.0,
+            0.0
+          ],
+          "n_faces": 9,
+          "n_edges": 13,
+          "n_vertexes": 8,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p07",
+          "label": "销轴3",
+          "type": "Part::Feature",
+          "volume_mm3": 150593.291,
+          "area_mm2": 18555.477,
+          "bbox_mm": [
+            142.0,
+            40.0,
+            40.0
+          ],
+          "center_mm": [
+            191.0,
+            0.0,
+            220.0
+          ],
+          "n_faces": 9,
+          "n_edges": 13,
+          "n_vertexes": 8,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p08",
+          "label": "销轴4",
+          "type": "Part::Feature",
+          "volume_mm3": 150593.291,
+          "area_mm2": 18555.477,
+          "bbox_mm": [
+            142.0,
+            40.0,
+            40.0
+          ],
+          "center_mm": [
+            191.0,
+            0.0,
+            -220.0
+          ],
+          "n_faces": 9,
+          "n_edges": 13,
+          "n_vertexes": 8,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p09",
+          "label": "锤头@320a",
+          "type": "Part::Feature",
+          "volume_mm3": 381734.518,
+          "area_mm2": 43401.89,
+          "bbox_mm": [
+            80.0,
+            180.0,
+            40.0
+          ],
+          "center_mm": [
+            320.0,
+            220.0,
+            0.0
+          ],
+          "n_faces": 7,
+          "n_edges": 15,
+          "n_vertexes": 10,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p10",
+          "label": "锤头@520a",
+          "type": "Part::Feature",
+          "volume_mm3": 381734.518,
+          "area_mm2": 43401.89,
+          "bbox_mm": [
+            80.0,
+            180.0,
+            40.0
+          ],
+          "center_mm": [
+            520.0,
+            220.0,
+            0.0
+          ],
+          "n_faces": 7,
+          "n_edges": 15,
+          "n_vertexes": 10,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p11",
+          "label": "锤头@720a",
+          "type": "Part::Feature",
+          "volume_mm3": 381734.518,
+          "area_mm2": 43401.89,
+          "bbox_mm": [
+            80.0,
+            180.0,
+            40.0
+          ],
+          "center_mm": [
+            720.0,
+            220.0,
+            0.0
+          ],
+          "n_faces": 7,
+          "n_edges": 15,
+          "n_vertexes": 10,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p12",
+          "label": "锤头@320b",
+          "type": "Part::Feature",
+          "volume_mm3": 381734.518,
+          "area_mm2": 43401.89,
+          "bbox_mm": [
+            80.0,
+            180.0,
+            40.0
+          ],
+          "center_mm": [
+            320.0,
+            -220.0,
+            0.0
+          ],
+          "n_faces": 7,
+          "n_edges": 15,
+          "n_vertexes": 10,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p13",
+          "label": "锤头@520b",
+          "type": "Part::Feature",
+          "volume_mm3": 381734.518,
+          "area_mm2": 43401.89,
+          "bbox_mm": [
+            80.0,
+            180.0,
+            40.0
+          ],
+          "center_mm": [
+            520.0,
+            -220.0,
+            0.0
+          ],
+          "n_faces": 7,
+          "n_edges": 15,
+          "n_vertexes": 10,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p14",
+          "label": "锤头@720b",
+          "type": "Part::Feature",
+          "volume_mm3": 381734.518,
+          "area_mm2": 43401.89,
+          "bbox_mm": [
+            80.0,
+            180.0,
+            40.0
+          ],
+          "center_mm": [
+            720.0,
+            -220.0,
+            0.0
+          ],
+          "n_faces": 7,
+          "n_edges": 15,
+          "n_vertexes": 10,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p15",
+          "label": "锤头@320c",
+          "type": "Part::Feature",
+          "volume_mm3": 381734.518,
+          "area_mm2": 43401.89,
+          "bbox_mm": [
+            80.0,
+            40.0,
+            180.0
+          ],
+          "center_mm": [
+            320.0,
+            -0.0,
+            220.0
+          ],
+          "n_faces": 7,
+          "n_edges": 15,
+          "n_vertexes": 10,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p16",
+          "label": "锤头@520c",
+          "type": "Part::Feature",
+          "volume_mm3": 381734.518,
+          "area_mm2": 43401.89,
+          "bbox_mm": [
+            80.0,
+            40.0,
+            180.0
+          ],
+          "center_mm": [
+            520.0,
+            -0.0,
+            220.0
+          ],
+          "n_faces": 7,
+          "n_edges": 15,
+          "n_vertexes": 10,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p17",
+          "label": "锤头@720c",
+          "type": "Part::Feature",
+          "volume_mm3": 381734.518,
+          "area_mm2": 43401.89,
+          "bbox_mm": [
+            80.0,
+            40.0,
+            180.0
+          ],
+          "center_mm": [
+            720.0,
+            -0.0,
+            220.0
+          ],
+          "n_faces": 7,
+          "n_edges": 15,
+          "n_vertexes": 10,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p18",
+          "label": "锤头@320d",
+          "type": "Part::Feature",
+          "volume_mm3": 381734.518,
+          "area_mm2": 43401.89,
+          "bbox_mm": [
+            80.0,
+            40.0,
+            180.0
+          ],
+          "center_mm": [
+            320.0,
+            -0.0,
+            -220.0
+          ],
+          "n_faces": 7,
+          "n_edges": 15,
+          "n_vertexes": 10,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p19",
+          "label": "锤头@520d",
+          "type": "Part::Feature",
+          "volume_mm3": 381734.518,
+          "area_mm2": 43401.89,
+          "bbox_mm": [
+            80.0,
+            40.0,
+            180.0
+          ],
+          "center_mm": [
+            520.0,
+            -0.0,
+            -220.0
+          ],
+          "n_faces": 7,
+          "n_edges": 15,
+          "n_vertexes": 10,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p20",
+          "label": "锤头@720d",
+          "type": "Part::Feature",
+          "volume_mm3": 381734.518,
+          "area_mm2": 43401.89,
+          "bbox_mm": [
+            80.0,
+            40.0,
+            180.0
+          ],
+          "center_mm": [
+            720.0,
+            -0.0,
+            -220.0
+          ],
+          "n_faces": 7,
+          "n_edges": 15,
+          "n_vertexes": 10,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p21",
+          "label": "筛板",
+          "type": "Part::Feature",
+          "volume_mm3": 7886267.573,
+          "area_mm2": 1369212.537,
+          "bbox_mm": [
+            800.0,
+            603.0,
+            402.0
+          ],
+          "center_mm": [
+            508.0,
+            -0.0,
+            -591.0
+          ],
+          "n_faces": 72,
+          "n_edges": 210,
+          "n_vertexes": 140,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p22",
+          "label": "从动皮带轮",
+          "type": "Part::Feature",
+          "volume_mm3": 3715008.524,
+          "area_mm2": 172765.881,
+          "bbox_mm": [
+            90.0,
+            240.0,
+            240.0
+          ],
+          "center_mm": [
+            1005.0,
+            0.0,
+            0.0
+          ],
+          "n_faces": 7,
+          "n_edges": 15,
+          "n_vertexes": 10,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p23",
+          "label": "主动带轮",
+          "type": "Part::Feature",
+          "volume_mm3": 2450099.195,
+          "area_mm2": 136004.092,
+          "bbox_mm": [
+            120.0,
+            190.001,
+            190.0
+          ],
+          "center_mm": [
+            1005.0,
+            0.001,
+            -600.0
+          ],
+          "n_faces": 27,
+          "n_edges": 68,
+          "n_vertexes": 45,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p24",
+          "label": "电动机",
+          "type": "Part::Feature",
+          "volume_mm3": 59837341.239,
+          "area_mm2": 1232158.294,
+          "bbox_mm": [
+            685.0,
+            590.0,
+            394.5
+          ],
+          "center_mm": [
+            712.5,
+            0.0,
+            -602.25
+          ],
+          "n_faces": 83,
+          "n_edges": 173,
+          "n_vertexes": 115,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p25",
+          "label": "下机壳",
+          "type": "Part::Feature",
+          "volume_mm3": 54690380.551,
+          "area_mm2": 3878716.815,
+          "bbox_mm": [
+            960.0,
+            610.0,
+            460.0
+          ],
+          "center_mm": [
+            580.0,
+            0.0,
+            -230.0
+          ],
+          "n_faces": 17,
+          "n_edges": 39,
+          "n_vertexes": 26,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p26",
+          "label": "上机壳",
+          "type": "Part::Feature",
+          "volume_mm3": 65065380.551,
+          "area_mm2": 4236116.815,
+          "bbox_mm": [
+            960.0,
+            610.0,
+            610.0
+          ],
+          "center_mm": [
+            580.0,
+            0.0,
+            305.0
+          ],
+          "n_faces": 27,
+          "n_edges": 63,
+          "n_vertexes": 42,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p27",
+          "label": "机架底座",
+          "type": "Part::Feature",
+          "volume_mm3": 31182061.96,
+          "area_mm2": 3121596.459,
+          "bbox_mm": [
+            1300.0,
+            820.0,
+            520.0
+          ],
+          "center_mm": [
+            600.0,
+            0.0,
+            -650.0
+          ],
+          "n_faces": 43,
+          "n_edges": 120,
+          "n_vertexes": 80,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "pvb0",
+          "label": "V带1",
+          "type": "Part::Feature",
+          "volume_mm3": 347793.954,
+          "area_mm2": 104276.736,
+          "bbox_mm": [
+            17.0,
+            241.853,
+            821.989
+          ],
+          "center_mm": [
+            931.5,
+            0.012,
+            -290.0
+          ],
+          "n_faces": 16,
+          "n_edges": 32,
+          "n_vertexes": 16,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "pvb1",
+          "label": "V带2",
+          "type": "Part::Feature",
+          "volume_mm3": 347793.954,
+          "area_mm2": 104276.736,
+          "bbox_mm": [
+            17.0,
+            241.853,
+            821.989
+          ],
+          "center_mm": [
+            950.5,
+            0.012,
+            -290.0
+          ],
+          "n_faces": 16,
+          "n_edges": 32,
+          "n_vertexes": 16,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "pvb2",
+          "label": "V带3",
+          "type": "Part::Feature",
+          "volume_mm3": 347793.954,
+          "area_mm2": 104276.736,
+          "bbox_mm": [
+            17.0,
+            241.853,
+            821.989
+          ],
+          "center_mm": [
+            969.5,
+            0.012,
+            -290.0
+          ],
+          "n_faces": 16,
+          "n_edges": 32,
+          "n_vertexes": 16,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p28",
+          "label": "进料口",
+          "type": "Part::Feature",
+          "volume_mm3": 14580000.0,
+          "area_mm2": 377673.105,
+          "bbox_mm": [
+            400.0,
+            260.0,
+            180.0
+          ],
+          "center_mm": [
+            350.0,
+            0.0,
+            700.0
+          ],
+          "n_faces": 6,
+          "n_edges": 12,
+          "n_vertexes": 8,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p29",
+          "label": "出料口",
+          "type": "Part::Feature",
+          "volume_mm3": 12000000.0,
+          "area_mm2": 368000.0,
+          "bbox_mm": [
+            500.0,
+            200.0,
+            120.0
+          ],
+          "center_mm": [
+            550.0,
+            0.0,
+            -520.0
+          ],
+          "n_faces": 6,
+          "n_edges": 12,
+          "n_vertexes": 8,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p30",
+          "label": "安装板",
+          "type": "Part::Feature",
+          "volume_mm3": 14508000.0,
+          "area_mm2": 1051200.0,
+          "bbox_mm": [
+            780.0,
+            620.0,
+            30.0
+          ],
+          "center_mm": [
+            710.0,
+            0.0,
+            -815.0
+          ],
+          "n_faces": 6,
+          "n_edges": 12,
+          "n_vertexes": 8,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p31",
+          "label": "减振垫1",
+          "type": "Part::Feature",
+          "volume_mm3": 1152000.0,
+          "area_mm2": 67200.0,
+          "bbox_mm": [
+            120.0,
+            120.0,
+            80.0
+          ],
+          "center_mm": [
+            -20.0,
+            -380.0,
+            -950.0
+          ],
+          "n_faces": 6,
+          "n_edges": 12,
+          "n_vertexes": 8,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p32",
+          "label": "减振垫2",
+          "type": "Part::Feature",
+          "volume_mm3": 1152000.0,
+          "area_mm2": 67200.0,
+          "bbox_mm": [
+            120.0,
+            120.0,
+            80.0
+          ],
+          "center_mm": [
+            -20.0,
+            380.0,
+            -950.0
+          ],
+          "n_faces": 6,
+          "n_edges": 12,
+          "n_vertexes": 8,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p33",
+          "label": "减振垫3",
+          "type": "Part::Feature",
+          "volume_mm3": 1152000.0,
+          "area_mm2": 67200.0,
+          "bbox_mm": [
+            120.0,
+            120.0,
+            80.0
+          ],
+          "center_mm": [
+            1220.0,
+            -380.0,
+            -950.0
+          ],
+          "n_faces": 6,
+          "n_edges": 12,
+          "n_vertexes": 8,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p34",
+          "label": "减振垫4",
+          "type": "Part::Feature",
+          "volume_mm3": 1152000.0,
+          "area_mm2": 67200.0,
+          "bbox_mm": [
+            120.0,
+            120.0,
+            80.0
+          ],
+          "center_mm": [
+            1220.0,
+            380.0,
+            -950.0
+          ],
+          "n_faces": 6,
+          "n_edges": 12,
+          "n_vertexes": 8,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p35",
+          "label": "调整垫片1L",
+          "type": "Part::Feature",
+          "volume_mm3": 2883.982,
+          "area_mm2": 3524.867,
+          "bbox_mm": [
+            2.0,
+            60.0,
+            60.0
+          ],
+          "center_mm": [
+            117.0,
+            220.0,
+            0.0
+          ],
+          "n_faces": 4,
+          "n_edges": 6,
+          "n_vertexes": 4,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p36",
+          "label": "螺母1L",
+          "type": "Part::Feature",
+          "volume_mm3": 16020.575,
+          "area_mm2": 6908.995,
+          "bbox_mm": [
+            24.0,
+            46.0,
+            39.837
+          ],
+          "center_mm": [
+            104.0,
+            220.0,
+            0.0
+          ],
+          "n_faces": 9,
+          "n_edges": 21,
+          "n_vertexes": 14,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p37",
+          "label": "调整垫片1R",
+          "type": "Part::Feature",
+          "volume_mm3": 2883.982,
+          "area_mm2": 3524.867,
+          "bbox_mm": [
+            2.0,
+            60.0,
+            60.0
+          ],
+          "center_mm": [
+            265.0,
+            220.0,
+            0.0
+          ],
+          "n_faces": 4,
+          "n_edges": 6,
+          "n_vertexes": 4,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p38",
+          "label": "螺母1R",
+          "type": "Part::Feature",
+          "volume_mm3": 16020.575,
+          "area_mm2": 6908.995,
+          "bbox_mm": [
+            24.0,
+            46.0,
+            39.837
+          ],
+          "center_mm": [
+            278.0,
+            220.0,
+            0.0
+          ],
+          "n_faces": 9,
+          "n_edges": 21,
+          "n_vertexes": 14,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p39",
+          "label": "调整垫片2L",
+          "type": "Part::Feature",
+          "volume_mm3": 2883.982,
+          "area_mm2": 3524.867,
+          "bbox_mm": [
+            2.0,
+            60.0,
+            60.0
+          ],
+          "center_mm": [
+            117.0,
+            -220.0,
+            0.0
+          ],
+          "n_faces": 4,
+          "n_edges": 6,
+          "n_vertexes": 4,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p40",
+          "label": "螺母2L",
+          "type": "Part::Feature",
+          "volume_mm3": 16020.575,
+          "area_mm2": 6908.995,
+          "bbox_mm": [
+            24.0,
+            46.0,
+            39.837
+          ],
+          "center_mm": [
+            104.0,
+            -220.0,
+            0.0
+          ],
+          "n_faces": 9,
+          "n_edges": 21,
+          "n_vertexes": 14,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p41",
+          "label": "调整垫片2R",
+          "type": "Part::Feature",
+          "volume_mm3": 2883.982,
+          "area_mm2": 3524.867,
+          "bbox_mm": [
+            2.0,
+            60.0,
+            60.0
+          ],
+          "center_mm": [
+            265.0,
+            -220.0,
+            0.0
+          ],
+          "n_faces": 4,
+          "n_edges": 6,
+          "n_vertexes": 4,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p42",
+          "label": "螺母2R",
+          "type": "Part::Feature",
+          "volume_mm3": 16020.575,
+          "area_mm2": 6908.995,
+          "bbox_mm": [
+            24.0,
+            46.0,
+            39.837
+          ],
+          "center_mm": [
+            278.0,
+            -220.0,
+            0.0
+          ],
+          "n_faces": 9,
+          "n_edges": 21,
+          "n_vertexes": 14,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p43",
+          "label": "调整垫片3L",
+          "type": "Part::Feature",
+          "volume_mm3": 2883.982,
+          "area_mm2": 3524.867,
+          "bbox_mm": [
+            2.0,
+            60.0,
+            60.0
+          ],
+          "center_mm": [
+            117.0,
+            0.0,
+            220.0
+          ],
+          "n_faces": 4,
+          "n_edges": 6,
+          "n_vertexes": 4,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p44",
+          "label": "螺母3L",
+          "type": "Part::Feature",
+          "volume_mm3": 16020.575,
+          "area_mm2": 6908.995,
+          "bbox_mm": [
+            24.0,
+            46.0,
+            39.837
+          ],
+          "center_mm": [
+            104.0,
+            0.0,
+            220.0
+          ],
+          "n_faces": 9,
+          "n_edges": 21,
+          "n_vertexes": 14,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p45",
+          "label": "调整垫片3R",
+          "type": "Part::Feature",
+          "volume_mm3": 2883.982,
+          "area_mm2": 3524.867,
+          "bbox_mm": [
+            2.0,
+            60.0,
+            60.0
+          ],
+          "center_mm": [
+            265.0,
+            0.0,
+            220.0
+          ],
+          "n_faces": 4,
+          "n_edges": 6,
+          "n_vertexes": 4,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p46",
+          "label": "螺母3R",
+          "type": "Part::Feature",
+          "volume_mm3": 16020.575,
+          "area_mm2": 6908.995,
+          "bbox_mm": [
+            24.0,
+            46.0,
+            39.837
+          ],
+          "center_mm": [
+            278.0,
+            0.0,
+            220.0
+          ],
+          "n_faces": 9,
+          "n_edges": 21,
+          "n_vertexes": 14,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p47",
+          "label": "调整垫片4L",
+          "type": "Part::Feature",
+          "volume_mm3": 2883.982,
+          "area_mm2": 3524.867,
+          "bbox_mm": [
+            2.0,
+            60.0,
+            60.0
+          ],
+          "center_mm": [
+            117.0,
+            0.0,
+            -220.0
+          ],
+          "n_faces": 4,
+          "n_edges": 6,
+          "n_vertexes": 4,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p48",
+          "label": "螺母4L",
+          "type": "Part::Feature",
+          "volume_mm3": 16020.575,
+          "area_mm2": 6908.995,
+          "bbox_mm": [
+            24.0,
+            46.0,
+            39.837
+          ],
+          "center_mm": [
+            104.0,
+            0.0,
+            -220.0
+          ],
+          "n_faces": 9,
+          "n_edges": 21,
+          "n_vertexes": 14,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p49",
+          "label": "调整垫片4R",
+          "type": "Part::Feature",
+          "volume_mm3": 2883.982,
+          "area_mm2": 3524.867,
+          "bbox_mm": [
+            2.0,
+            60.0,
+            60.0
+          ],
+          "center_mm": [
+            265.0,
+            0.0,
+            -220.0
+          ],
+          "n_faces": 4,
+          "n_edges": 6,
+          "n_vertexes": 4,
+          "is_closed": true,
+          "is_valid": true
+        },
+        {
+          "name": "p50",
+          "label": "螺母4R",
+          "type": "Part::Feature",
+          "volume_mm3": 16020.575,
+          "area_mm2": 6908.995,
+          "bbox_mm": [
+            24.0,
+            46.0,
+            39.837
+          ],
+          "center_mm": [
+            278.0,
+            0.0,
+            -220.0
+          ],
+          "n_faces": 9,
+          "n_edges": 21,
+          "n_vertexes": 14,
+          "is_closed": true,
+          "is_valid": true
+        }
+      ],
+      "status": "OK"
+    },
+    "assembly_full_v6.FCStd": {
+      "exists": false,
+      "size_bytes": 0,
+      "location": "missing"
+    },
+    "assembly_full_v5.FCStd": {
+      "exists": false,
+      "size_bytes": 0,
+      "location": "missing"
+    },
+    "assembly_final.FCStd": {
+      "exists": false,
+      "size_bytes": 0,
+      "location": "missing"
+    },
+    "assembly_gui.FCStd": {
+      "exists": false,
+      "size_bytes": 0,
+      "location": "missing"
+    },
+    "assembly_fc.FCStd": {
+      "exists": false,
+      "size_bytes": 0,
+      "location": "missing"
+    }
+  }
+}

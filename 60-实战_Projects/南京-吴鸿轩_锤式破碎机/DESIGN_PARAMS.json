@@ -1,0 +1,325 @@
+{
+  "_meta": {
+    "source": "南京工业职业技术大学毕业论文 · 锤式破碎机结构设计与分析",
+    "student": "吴鸿轩",
+    "university": "南京工业职业技术大学",
+    "year": 2025,
+    "extractor": "道法自然 · 万法归宗 · 全参数提取 v1.0",
+    "version": "v3_comprehensive",
+    "docx_ref": "南京-吴鸿轩_v3_万法归宗全面修正.docx",
+    "review_ref": "_DAO_COMPREHENSIVE_REVIEW.md"
+  },
+
+  "machine_overview": {
+    "type": "单转子锤式破碎机",
+    "application": "矿山、建材、水泥、电力、冶金",
+    "layout": "卧式整体布局",
+    "feed_direction": "上给料",
+    "discharge_direction": "下排料",
+    "housing_type": "上下分体式钢板焊接",
+    "rotor_support": "两端滚动轴承支承",
+    "hammer_type": "活动锤头 (销轴连接)",
+    "transmission": "Y系列三相异步电动机 + B型V带传动",
+    "target_output_granularity_mm": "10~20"
+  },
+
+  "overall_dimensions": {
+    "total_L_mm": 1300,
+    "total_W_mm": 820,
+    "total_H_mm": 860,
+    "casing_section_A_W_mm": 820,
+    "top_view_L_mm": 1300,
+    "top_view_W_mm": 550,
+    "note": "来源:总装配图 图6-2"
+  },
+
+  "rotor": {
+    "type": "单转子两端支承",
+    "diameter_mm": 700,
+    "working_length_mm": 800,
+    "speed_rpm": 1200,
+    "hammer_tip_speed_ms": 43.98,
+    "hammer_tip_speed_formula": "v = π×D×n/60 = π×0.7×1200/60 ≈ 44 m/s",
+    "disc_qty": 4,
+    "disc_arrangement": "4排 × 4个锤头",
+    "hammer_total_qty": 16
+  },
+
+  "main_shaft": {
+    "material": "45钢",
+    "heat_treatment": "调质",
+    "total_length_mm": 1145,
+    "segments": [
+      {"id": 1, "name": "右端螺纹定位段", "dia_mm": 60, "len_mm": 30},
+      {"id": 2, "name": "右端轴承安装段", "dia_mm": 80, "len_mm": 70},
+      {"id": 3, "name": "右端过渡台肩",   "dia_mm": 90, "len_mm": 20},
+      {"id": 4, "name": "主体工作段(转子盘安装)", "dia_mm": 90, "len_mm": 925},
+      {"id": 5, "name": "左端轴承安装段", "dia_mm": 80, "len_mm": 70},
+      {"id": 6, "name": "左端螺纹定位段", "dia_mm": 60, "len_mm": 30}
+    ],
+    "total_check_mm": "30+70+20+925+70+30=1145 ✓",
+    "keyway": {
+      "width_mm": 20,
+      "length_mm": 70,
+      "depth_mm": 8,
+      "location": "皮带轮座(左端轴承段附近)"
+    },
+    "strength_check": {
+      "method": "简化弯曲强度校核",
+      "check_section_dia_mm": 80,
+      "section_modulus_mm3": 50265,
+      "formula_W": "W = π×d³/32 = π×80³/32 ≈ 50265 mm³",
+      "allowable_bending_stress_MPa": 70,
+      "material_sigma_b_MPa": 650,
+      "material_sigma_s_MPa": 355,
+      "safety_factor_approx": 8.75,
+      "conclusion": "满足基本强度要求"
+    }
+  },
+
+  "bearing": {
+    "type": "调心滚子轴承",
+    "bore_mm": 80,
+    "qty": 2,
+    "location": "主轴两端",
+    "reason": "承载径向载荷为主，适应冲击振动，允许一定安装偏差"
+  },
+
+  "rotor_disc": {
+    "material": "Q345钢",
+    "qty": 4,
+    "od_mm": 500,
+    "bore_mm": 80,
+    "thickness_mm": 25,
+    "pin_holes": {
+      "qty": 4,
+      "dia_mm": 40,
+      "pcd_mm": 440,
+      "arrangement": "均匀分布90°间隔"
+    },
+    "note": "圆盘半径250mm, 转子工作半径350mm, 锤头有效长度约100mm"
+  },
+
+  "hammer": {
+    "qty": 16,
+    "type": "梯形活动锤头",
+    "material": "ZGMn13高锰钢",
+    "arrangement": "4排 × 4个, 对称均布",
+    "dimensions": {
+      "length_mm": 180,
+      "width_mm": 80,
+      "thickness_mm": 40,
+      "pin_hole_dia_mm": 40,
+      "pin_hole_center_from_bottom_mm": 120
+    },
+    "trapezoid": {
+      "bottom_width_mm": 80,
+      "top_width_mm": 40,
+      "height_mm": 180
+    },
+    "connection": "通过销轴与圆盘活动连接,可摆动缓冲",
+    "advantages": [
+      "抗冲击性能好",
+      "加工硬化能力强",
+      "耐磨性较好",
+      "工程应用广泛"
+    ],
+    "note": "BOM数量n=16(实际装配), 梯形尺寸180×80×40mm (长×宽×厚)"
+  },
+
+  "hammer_pin": {
+    "qty": 4,
+    "material": "45钢",
+    "body_dia_mm": 40,
+    "total_length_mm": 142,
+    "thread_spec": "M30×2",
+    "thread_location": "两端",
+    "thread_length_mm": 30,
+    "body_length_mm": 82,
+    "fixation": "挡圈、开口销或螺母轴向固定"
+  },
+
+  "screen_plate": {
+    "qty": 1,
+    "material": "不锈钢",
+    "inner_radius_mm": 390,
+    "outer_radius_mm": 402,
+    "thickness_mm": 12,
+    "arc_angle_deg": 120,
+    "width_mm": 800,
+    "hole_dia_mm": 15,
+    "hole_pitch_mm": 30,
+    "mounting_holes": {
+      "qty": 6,
+      "dia_mm": 14
+    },
+    "clearance_from_rotor_tip_mm": 40,
+    "clearance_note": "Ri=390, 转子工作半径=350, 间隙=40mm",
+    "installation_type": "螺栓固定可拆卸式",
+    "location": "转子下方",
+    "function": "控制出料粒度(10~20mm), 形成破碎空间"
+  },
+
+  "housing": {
+    "material": "Q235钢板",
+    "type": "上下分体式焊接结构",
+    "connection": "上下机壳螺栓连接",
+    "wall_thickness_mm": 30,
+    "feed_inlet": {
+      "location": "上机壳顶部",
+      "approx_L_mm": 300,
+      "approx_W_mm": 200
+    },
+    "discharge_outlet": {
+      "location": "下机壳底部",
+      "approx_L_mm": 500,
+      "approx_W_mm": 200
+    },
+    "inner_clearance_rotor_to_wall_mm": "≥30",
+    "maintenance": "拆开上机壳可检修锤头/筛板/衬板"
+  },
+
+  "motor": {
+    "model": "Y180L-4",
+    "type": "Y系列三相异步电动机",
+    "power_kW": 22,
+    "rated_speed_rpm": 1470,
+    "poles": 4,
+    "sync_speed_rpm": 1500,
+    "frame_size": "180L",
+    "approx_dims": {
+      "length_mm": 590,
+      "width_mm": 280,
+      "height_mm": 350,
+      "shaft_dia_mm": 55,
+      "shaft_ext_mm": 110
+    }
+  },
+
+  "drive_pulley": {
+    "location": "电动机轴",
+    "pd_mm": 180,
+    "od_mm": 190,
+    "groove_type": "B",
+    "grooves": 4,
+    "hub_bore_mm": 55,
+    "width_approx_mm": 90,
+    "note": "小带轮, 安装在电动机主轴上"
+  },
+
+  "driven_pulley": {
+    "location": "破碎机主轴端",
+    "pd_mm": 224,
+    "od_mm": 240,
+    "groove_type": "B",
+    "grooves": 4,
+    "hub_bore_mm": 70,
+    "spokes": 5,
+    "width_mm": 90,
+    "note": "大带轮, 安装在破碎机主轴左端"
+  },
+
+  "vbelt_transmission": {
+    "belt_type": "B型普通V带",
+    "belt_qty": 4,
+    "center_distance_mm": 600,
+    "transmission_ratio": 1.23,
+    "ratio_formula": "i = n1/n2 = 1470/1200 = 1.225",
+    "belt_speed_ms": 13.85,
+    "belt_speed_formula": "v = π×d1×n1/60000 = π×180×1470/60000 = 13.85 m/s",
+    "center_dist_check": "0.7×(D1+D2)~2×(D1+D2) = 283~808mm, 取600mm ✓"
+  },
+
+  "frame_base": {
+    "material": "Q235钢焊接",
+    "type": "焊接钢架",
+    "approx_L_mm": 1300,
+    "approx_W_mm": 820,
+    "height_mm": 100,
+    "vibration_dampers": {
+      "qty": 4,
+      "material": "橡胶",
+      "location": "机架四角"
+    }
+  },
+
+  "assembly_bom_16items": [
+    {"id":  1, "name": "进料口",   "en": "Feed Inlet",         "qty": 1,     "material": "焊接件",         "note": ""},
+    {"id":  2, "name": "机壳",     "en": "Casing",             "qty": 1,     "material": "Q235焊接件",     "note": ""},
+    {"id":  3, "name": "转子",     "en": "Rotor Assembly",     "qty": 1,     "material": "组件",           "note": "焊接件"},
+    {"id":  4, "name": "锤头",     "en": "Hammer",             "qty": "n",   "material": "ZGMn13",         "note": "可更换"},
+    {"id":  5, "name": "隔板/筛板","en": "Screen Plate",       "qty": 1,     "material": "不锈钢",         "note": "可更换"},
+    {"id":  6, "name": "出料口",   "en": "Discharge Outlet",   "qty": 1,     "material": "焊接件",         "note": ""},
+    {"id":  7, "name": "从动带轮", "en": "Driven Pulley",      "qty": 1,     "material": "HT200",          "note": "B型4槽 OD240 PD224"},
+    {"id":  8, "name": "V带",      "en": "V-Belt",             "qty": "2-3", "material": "B型橡胶",        "note": "B型"},
+    {"id":  9, "name": "主动带轮", "en": "Drive Pulley",       "qty": 1,     "material": "HT200",          "note": "B型4槽 PD180"},
+    {"id": 10, "name": "电动机",   "en": "Motor",              "qty": 1,     "material": "Y系列",          "note": "Y180L-4 22kW"},
+    {"id": 11, "name": "安装板",   "en": "Motor Mounting Plate","qty": 1,    "material": "Q235焊接件",     "note": ""},
+    {"id": 12, "name": "机架",     "en": "Frame",              "qty": 1,     "material": "Q235焊接件",     "note": ""},
+    {"id": 13, "name": "减振垫",   "en": "Vibration Damper",   "qty": 4,     "material": "橡胶",           "note": ""},
+    {"id": 14, "name": "锚轴",     "en": "Pin Shaft",          "qty": "n",   "material": "45钢",           "note": ""},
+    {"id": 15, "name": "调整垫片", "en": "Adjustment Shim",    "qty": "n",   "material": "钢",             "note": ""},
+    {"id": 16, "name": "螺母",     "en": "Nut",                "qty": "n",   "material": "钢",             "note": ""}
+  ],
+
+  "calculations_summary": {
+    "ch3_main_params": {
+      "rotor_diameter_mm": 700,
+      "rotor_length_mm": 800,
+      "speed_rpm": 1200,
+      "hammer_tip_speed_ms": 43.98,
+      "hammer_qty": 16,
+      "screen_hole_mm": 15,
+      "motor_power_kW": 22,
+      "transmission_ratio": 1.23,
+      "transmission_type": "Y180L-4 + B型V带"
+    },
+    "ch4_key_parts": {
+      "shaft_dia_work_mm": 90,
+      "shaft_dia_bearing_mm": 80,
+      "shaft_total_L_mm": 1145,
+      "disc_od_mm": 500,
+      "disc_thickness_mm": 25,
+      "hammer_L_mm": 180,
+      "hammer_W_mm": 80,
+      "hammer_T_mm": 40,
+      "pin_dia_mm": 40,
+      "pin_L_mm": 142,
+      "screen_Ri_mm": 390,
+      "screen_arc_deg": 120,
+      "screen_B_mm": 800
+    },
+    "ch5_transmission": {
+      "motor_model": "Y180L-4",
+      "motor_power_kW": 22,
+      "motor_speed_rpm": 1470,
+      "drive_pulley_pd_mm": 180,
+      "driven_pulley_pd_mm": 224,
+      "belt_type": "B型",
+      "belt_qty": 4,
+      "center_dist_mm": 600,
+      "belt_speed_ms": 13.85
+    }
+  },
+
+  "model_files": {
+    "parts_built": [
+      {"name": "main_shaft",    "file": "output_cq/main_shaft.step",    "status": "✅"},
+      {"name": "rotor_disc",    "file": "output_cq/rotor_disc.step",    "status": "✅"},
+      {"name": "hammer",        "file": "output_cq/hammer.step",        "status": "✅"},
+      {"name": "hammer_pin",    "file": "output_cq/hammer_pin.step",    "status": "✅"},
+      {"name": "driven_pulley", "file": "output_cq/driven_pulley.step", "status": "✅"},
+      {"name": "screen_plate",  "file": "output_cq/screen_plate.step",  "status": "✅"}
+    ],
+    "parts_new": [
+      {"name": "drive_pulley",  "file": "output_cq/drive_pulley.step",  "status": "待构建"},
+      {"name": "casing",        "file": "output_cq/casing.step",        "status": "待构建"},
+      {"name": "motor_body",    "file": "output_cq/motor_body.step",    "status": "待构建"},
+      {"name": "frame_base",    "file": "output_cq/frame_base.step",    "status": "待构建"}
+    ],
+    "assemblies": [
+      {"name": "旋转部件装配",    "file": "output_cq/assembly_final.FCStd", "status": "✅"},
+      {"name": "完整整机装配",    "file": "output_cq/assembly_complete.FCStd", "status": "待构建"}
+    ]
+  }
+}

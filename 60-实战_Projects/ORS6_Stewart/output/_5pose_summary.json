@@ -1,0 +1,127 @@
+{
+  "timestamp": "2026-05-09 22:39:36",
+  "ok_count": 5,
+  "total": 5,
+  "results": [
+    {
+      "label": "home",
+      "pose": [
+        5000,
+        5000,
+        5000,
+        5000,
+        5000,
+        5000
+      ],
+      "step_size": 27423,
+      "stl_size": 10682584,
+      "step_mtime": "2026-05-09 19:13:45",
+      "rod_max_dev_mm": 0.0,
+      "rods_mm": {
+        "LowerLeft": 175.0,
+        "UpperLeft": 175.0,
+        "LeftPitch": 175.0,
+        "RightPitch": 175.0,
+        "UpperRight": 175.0,
+        "LowerRight": 175.0
+      },
+      "ok": true
+    },
+    {
+      "label": "forward",
+      "pose": [
+        5000,
+        9999,
+        5000,
+        5000,
+        5000,
+        5000
+      ],
+      "step_size": 53357,
+      "stl_size": 10699184,
+      "step_mtime": "2026-05-09 19:13:46",
+      "rod_max_dev_mm": 0.0,
+      "rods_mm": {
+        "LowerLeft": 175.0,
+        "UpperLeft": 175.0,
+        "LeftPitch": 175.0,
+        "RightPitch": 175.0,
+        "UpperRight": 175.0,
+        "LowerRight": 175.0
+      },
+      "ok": true
+    },
+    {
+      "label": "side_right",
+      "pose": [
+        5000,
+        5000,
+        9999,
+        5000,
+        5000,
+        5000
+      ],
+      "step_size": 62058,
+      "stl_size": 10655984,
+      "step_mtime": "2026-05-09 19:13:46",
+      "rod_max_dev_mm": 0.0,
+      "rods_mm": {
+        "LowerLeft": 175.0,
+        "UpperLeft": 175.0,
+        "LeftPitch": 175.0,
+        "RightPitch": 175.0,
+        "UpperRight": 175.0,
+        "LowerRight": 175.0
+      },
+      "ok": true
+    },
+    {
+      "label": "pitch_up",
+      "pose": [
+        5000,
+        5000,
+        5000,
+        5000,
+        5000,
+        9999
+      ],
+      "step_size": 76171,
+      "stl_size": 10699884,
+      "step_mtime": "2026-05-09 19:13:47",
+      "rod_max_dev_mm": 0.0,
+      "rods_mm": {
+        "LowerLeft": 175.0,
+        "UpperLeft": 175.0,
+        "LeftPitch": 175.0,
+        "RightPitch": 175.0,
+        "UpperRight": 175.0,
+        "LowerRight": 175.0
+      },
+      "ok": true
+    },
+    {
+      "label": "roll_left",
+      "pose": [
+        5000,
+        5000,
+        5000,
+        5000,
+        0,
+        5000
+      ],
+      "step_size": 27562,
+      "stl_size": 10670384,
+      "step_mtime": "2026-05-09 19:13:47",
+      "rod_max_dev_mm": 0.0,
+      "rods_mm": {
+        "LowerLeft": 175.0,
+        "UpperLeft": 175.0,
+        "LeftPitch": 175.0,
+        "RightPitch": 175.0,
+        "UpperRight": 175.0,
+        "LowerRight": 175.0
+      },
+      "ok": true
+    }
+  ]
+}

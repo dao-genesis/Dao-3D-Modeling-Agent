@@ -1,0 +1,22 @@
+{
+  "drive_pulley": {
+    "status": "OK",
+    "time": 0.21
+  },
+  "casing_lower": {
+    "status": "OK",
+    "time": 0.03
+  },
+  "casing_upper": {
+    "status": "OK",
+    "time": 0.05
+  },
+  "motor_body": {
+    "status": "OK",
+    "time": 0.16
+  },
+  "frame_base": {
+    "status": "OK",
+    "time": 0.2
+  }
+}

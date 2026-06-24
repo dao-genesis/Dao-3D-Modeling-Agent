@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>ModelViewer — 3D/VR 通用查看器</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0d1117; color: #e6edf3; font-family: system-ui, sans-serif; overflow: hidden; width: 100vw; height: 100vh; }
+#canvas { position: absolute; inset: 0; }
+#ui { position: absolute; top: 0; left: 0; right: 0; z-index: 10; pointer-events: none; }
+#toolbar {
+  display: flex; align-items: center; gap: 8px; padding: 10px 16px;
+  background: rgba(13,17,23,0.85); backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255,255,255,0.08); pointer-events: all;
+}
+.tb-btn {
+  background: rgba(33,38,45,0.9); border: 1px solid rgba(255,255,255,0.12);
+  color: #e6edf3; border-radius: 6px; padding: 6px 12px; cursor: pointer;
+  font-size: 12px; transition: all .2s; white-space: nowrap;
+}
+.tb-btn:hover { background: rgba(56,68,77,0.9); }
+.tb-btn.active { background: #1f6feb; border-color: #388bfd; }
+.tb-sep { width: 1px; height: 24px; background: rgba(255,255,255,0.1); margin: 0 4px; }
+#title { font-weight: 600; font-size: 13px; color: #58a6ff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+#info-panel {
+  position: absolute; right: 16px; top: 60px; width: 220px;
+  background: rgba(13,17,23,0.9); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px; padding: 12px; backdrop-filter: blur(12px);
+  font-size: 12px; pointer-events: all; transition: opacity .3s;
+}
+#info-panel h3 { font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+.info-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.info-row:last-child { border: none; }
+.info-val { color: #58a6ff; font-weight: 600; }
+#section-panel {
+  position: absolute; left: 16px; bottom: 80px; width: 180px;
+  background: rgba(13,17,23,0.9); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px; padding: 12px; backdrop-filter: blur(12px); pointer-events: all;
+}
+#section-panel h3 { font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+input[type=range] { width: 100%; accent-color: #58a6ff; }
+#drop-zone {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; z-index: 20;
+  background: rgba(13,17,23,0.95);
+}
+#drop-zone.hidden { display: none; }
+#drop-zone h2 { font-size: 28px; color: #58a6ff; margin-bottom: 16px; }
+#drop-zone p { color: #8b949e; font-size: 14px; margin-bottom: 24px; text-align: center; line-height: 1.6; }
+.drop-btn {
+  background: #238636; color: #fff; border: none; border-radius: 8px;
+  padding: 12px 24px; cursor: pointer; font-size: 14px; margin: 6px;
+  font-weight: 600;
+}
+.drop-btn:hover { background: #2ea043; }
+.drop-btn.secondary { background: #21262d; border: 1px solid #30363d; }
+.drop-btn.secondary:hover { background: #30363d; }
+.vr-btn {
+  background: linear-gradient(135deg, #7c3aed, #4f46e5);
+  color: #fff; border: none; border-radius: 8px;
+  padding: 12px 24px; cursor: pointer; font-size: 14px; font-weight: 600;
+}
+#loading {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; z-index: 30; background: rgba(13,17,23,0.9);
+}
+#loading.hidden { display: none; }
+#loading-text { color: #e6edf3; font-size: 16px; margin-top: 16px; }
+.spinner { width: 40px; height: 40px; border: 3px solid #30363d; border-top-color: #58a6ff; border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+#xr-overlay { position: absolute; inset: 0; z-index: 50; pointer-events: none; display: none; }
+#xr-overlay.active { display: block; pointer-events: all; }
+</style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<!-- Loading -->
+<div id="loading">
+  <div class="spinner"></div>
+  <div id="loading-text">加载Three.js...</div>
+</div>
+
+<!-- Drop zone (shown when no model) -->
+<div id="drop-zone" class="hidden">
+  <h2>🧊 ModelViewer</h2>
+  <p>拖放 STL 文件到此处<br>或通过URL参数加载：<code>?stl=http://...</code><br>支持 WebXR VR (Quest3)</p>
+  <input type="file" id="file-input" accept=".stl,.step" style="display:none" onchange="loadFile(this)">
+  <button class="drop-btn" onclick="document.getElementById('file-input').click()">📂 选择STL文件</button>
+  <button class="drop-btn secondary" onclick="loadDemo()">🧪 加载Demo模型</button>
+  <button class="vr-btn" onclick="enterVR()" id="vr-open-btn" style="display:none">🥽 进入VR</button>
+</div>
+
+<!-- UI Toolbar -->
+<div id="ui">
+  <div id="toolbar">
+    <span id="title">ModelViewer</span>
+    <div class="tb-sep"></div>
+    <button class="tb-btn" onclick="resetCamera()">🏠 复位</button>
+    <button class="tb-btn" id="btn-wire" onclick="toggleWire()">🔲 线框</button>
+    <button class="tb-btn" id="btn-explode" onclick="toggleExplode()">💥 爆炸</button>
+    <button class="tb-btn" id="btn-section" onclick="toggleSection()">✂️ 截面</button>
+    <button class="tb-btn" id="btn-info" onclick="toggleInfo()">ℹ️ 信息</button>
+    <div class="tb-sep"></div>
+    <button class="tb-btn" onclick="loadFromURL()">🔗 URL加载</button>
+    <button class="tb-btn" onclick="document.getElementById('file-input2').click()">📂 打开文件</button>
+    <input type="file" id="file-input2" accept=".stl" style="display:none" onchange="loadFile(this)">
+    <div class="tb-sep"></div>
+    <button class="tb-btn" id="btn-vr" onclick="enterVR()" style="display:none;background:linear-gradient(135deg,#7c3aed,#4f46e5)">🥽 VR</button>
+    <span id="sse-dot" style="width:8px;height:8px;border-radius:50%;background:#555;margin-left:auto" title="SSE disconnected"></span>
+    <button class="tb-btn" onclick="window.location='http://localhost:8872'">↩ Hub</button>
+  </div>
+</div>
+
+<!-- Info Panel -->
+<div id="info-panel">
+  <h3>模型信息</h3>
+  <div id="info-content">
+    <div class="info-row"><span>状态</span><span class="info-val">等待加载</span></div>
+  </div>
+</div>
+
+<!-- Section Panel -->
+<div id="section-panel" style="display:none">
+  <h3>截面切割</h3>
+  <div style="font-size:11px;color:#8b949e;margin-bottom:4px">Z轴高度</div>
+  <input type="range" id="section-slider" min="-150" max="150" value="0" step="1" oninput="updateSection(this.value)">
+  <div id="section-val" style="font-size:11px;color:#58a6ff;text-align:center;margin-top:4px">0 mm</div>
+  <div style="margin-top:8px">
+    <button class="tb-btn" onclick="resetSection()" style="width:100%">重置截面</button>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+// ─────────────────────────────────────────────────────
+// Scene Setup
+// ─────────────────────────────────────────────────────
+const canvas = document.getElementById('canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+renderer.xr.enabled = true;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d1117);
+scene.fog = new THREE.FogExp2(0x0d1117, 0.002);
+
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 5000);
+camera.position.set(0, 80, 180);
+
+// HDRI Environment
+const pmrem = new THREE.PMREMGenerator(renderer);
+const envTexture = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
+scene.environment = envTexture;
+
+// Controls
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.minDistance = 10;
+controls.maxDistance = 2000;
+controls.target.set(0, 0, 0);
+
+// Lights
+const ambLight = new THREE.AmbientLight(0xffffff, 0.4);
+scene.add(ambLight);
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.8);
+dirLight.position.set(100, 200, 100);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.set(2048, 2048);
+scene.add(dirLight);
+const fillLight = new THREE.DirectionalLight(0x8888ff, 0.6);
+fillLight.position.set(-100, 50, -100);
+scene.add(fillLight);
+
+// Grid
+const grid = new THREE.GridHelper(400, 40, 0x30363d, 0x21262d);
+grid.position.y = -1;
+scene.add(grid);
+
+// State
+let mesh = null;
+let meshGroup = new THREE.Group();
+scene.add(meshGroup);
+let wireMode = false;
+let sectionActive = false;
+let clippingPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 150);
+let infoVisible = true;
+
+// ─────────────────────────────────────────────────────
+// STL Loader
+// ─────────────────────────────────────────────────────
+const loader = new STLLoader();
+
+function setLoading(msg) {
+  const el = document.getElementById('loading');
+  const txt = document.getElementById('loading-text');
+  if (msg) { el.classList.remove('hidden'); txt.textContent = msg; }
+  else { el.classList.add('hidden'); }
+}
+
+let _loadGen = 0;
+function loadSTL(url, name) {
+  const gen = ++_loadGen;
+  setLoading(`加载 ${name || url}...`);
+  document.getElementById('drop-zone').classList.add('hidden');
+  document.getElementById('title').textContent = name || url.split('/').pop();
+  
+  loader.load(url,
+    (geometry) => {
+      if (gen !== _loadGen) return; // superseded by newer load
+      // Remove old mesh
+      while (meshGroup.children.length) meshGroup.remove(meshGroup.children[0]);
+      
+      geometry.computeVertexNormals();
+      geometry.computeBoundingBox();
+      const bb = geometry.boundingBox;
+      const size = new THREE.Vector3();
+      bb.getSize(size);
+      const center = new THREE.Vector3();
+      bb.getCenter(center);
+      
+      // Material with clipping
+      const mat = new THREE.MeshPhysicalMaterial({
+        color: 0x58a6ff,
+        metalness: 0.3,
+        roughness: 0.5,
+        clearcoat: 0.3,
+        side: THREE.DoubleSide,
+        clippingPlanes: sectionActive ? [clippingPlane] : [],
+        clipShadows: true,
+      });
+      
+      mesh = new THREE.Mesh(geometry, mat);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      
+      // Center the model
+      mesh.position.sub(center);
+      meshGroup.add(mesh);
+      
+      // Auto-fit camera
+      const maxDim = Math.max(size.x, size.y, size.z);
+      camera.position.set(maxDim * 1.5, maxDim, maxDim * 1.5);
+      controls.target.set(0, 0, 0);
+      controls.update();
+      
+      // Update info
+      updateInfo({
+        name: name || url.split('/').pop(),
+        vertices: geometry.attributes.position.count,
+        faces: geometry.index ? geometry.index.count / 3 : geometry.attributes.position.count / 3,
+        size_x: size.x.toFixed(1) + ' mm',
+        size_y: size.y.toFixed(1) + ' mm',
+        size_z: size.z.toFixed(1) + ' mm',
+        max_dim: maxDim.toFixed(1) + ' mm',
+      });
+      
+      setLoading(null);
+    },
+    (progress) => {
+      const pct = progress.total ? Math.round(progress.loaded / progress.total * 100) : '...';
+      setLoading(`加载中 ${pct}%`);
+    },
+    (error) => {
+      if (gen !== _loadGen) return; // superseded by newer load
+      setLoading(null);
+      document.getElementById('drop-zone').classList.remove('hidden');
+      console.error('STL load error:', error);
+      updateInfo({ error: error.message });
+    }
+  );
+}
+
+function updateInfo(data) {
+  const el = document.getElementById('info-content');
+  el.innerHTML = Object.entries(data).map(([k, v]) =>
+    `<div class="info-row"><span>${k}</span><span class="info-val">${v}</span></div>`
+  ).join('');
+}
+
+// ─────────────────────────────────────────────────────
+// Controls
+// ─────────────────────────────────────────────────────
+window.resetCamera = () => {
+  if (mesh) {
+    const bb = mesh.geometry.boundingBox;
+    if (bb) {
+      const size = new THREE.Vector3();
+      bb.getSize(size);
+      const maxDim = Math.max(size.x, size.y, size.z);
+      camera.position.set(maxDim * 1.5, maxDim, maxDim * 1.5);
+      controls.target.set(0, 0, 0);
+      controls.update();
+    }
+  } else {
+    camera.position.set(0, 80, 180);
+    controls.target.set(0, 0, 0);
+    controls.update();
+  }
+};
+
+window.toggleWire = () => {
+  wireMode = !wireMode;
+  document.getElementById('btn-wire').classList.toggle('active', wireMode);
+  if (mesh) {
+    mesh.material.wireframe = wireMode;
+  }
+};
+
+window.toggleExplode = () => {
+  // Simple explode: scale outward from center
+  if (!mesh) return;
+  const btn = document.getElementById('btn-explode');
+  const isExploded = btn.classList.toggle('active');
+  mesh.scale.setScalar(isExploded ? 1.15 : 1.0);
+};
+
+window.toggleSection = () => {
+  sectionActive = !sectionActive;
+  document.getElementById('btn-section').classList.toggle('active', sectionActive);
+  const sp = document.getElementById('section-panel');
+  sp.style.display = sectionActive ? 'block' : 'none';
+  renderer.clippingPlanes = sectionActive ? [clippingPlane] : [];
+  if (mesh) {
+    mesh.material.clippingPlanes = sectionActive ? [clippingPlane] : [];
+    mesh.material.needsUpdate = true;
+  }
+};
+
+window.updateSection = (val) => {
+  document.getElementById('section-val').textContent = val + ' mm';
+  clippingPlane.constant = parseFloat(val);
+};
+
+window.resetSection = () => {
+  document.getElementById('section-slider').value = '150';
+  clippingPlane.constant = 150;
+  document.getElementById('section-val').textContent = '150 mm';
+};
+
+window.toggleInfo = () => {
+  infoVisible = !infoVisible;
+  document.getElementById('info-panel').style.opacity = infoVisible ? '1' : '0';
+  document.getElementById('btn-info').classList.toggle('active', infoVisible);
+};
+
+// ─────────────────────────────────────────────────────
+// File Loading
+// ─────────────────────────────────────────────────────
+window.loadFile = (input) => {
+  const file = input.files[0];
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  loadSTL(url, file.name);
+};
+
+window.loadFromURL = () => {
+  const url = prompt('输入STL文件URL:');
+  if (url) loadSTL(url, url.split('/').pop());
+};
+
+window.loadDemo = () => {
+  // Try to load from model_hub
+  const url = 'http://localhost:8872/api/stl/demo/coffee_mug.stl';
+  loadSTL(url, 'coffee_mug.stl (Demo)');
+};
+
+// ─────────────────────────────────────────────────────
+// WebXR VR Support
+// ─────────────────────────────────────────────────────
+async function initXR() {
+  if (!navigator.xr) return;
+  try {
+    const supported = await navigator.xr.isSessionSupported('immersive-vr');
+    if (supported) {
+      document.getElementById('btn-vr').style.display = 'block';
+      document.getElementById('vr-open-btn').style.display = 'block';
+      console.log('WebXR VR: supported ✅');
+    }
+  } catch(e) {}
+}
+
+window.enterVR = async () => {
+  if (!navigator.xr) { alert('此设备不支持WebXR'); return; }
+  try {
+    const session = await navigator.xr.requestSession('immersive-vr', {
+      requiredFeatures: ['local-floor'],
+      optionalFeatures: ['bounded-floor', 'hand-tracking']
+    });
+    renderer.xr.setSession(session);
+    renderer.setAnimationLoop(renderXR);
+    session.addEventListener('end', () => {
+      renderer.setAnimationLoop(renderLoop);
+    });
+  } catch(e) {
+    alert('VR启动失败: ' + e.message);
+  }
+};
+
+// ─────────────────────────────────────────────────────
+// Drag & Drop
+// ─────────────────────────────────────────────────────
+document.body.addEventListener('dragover', e => { e.preventDefault(); });
+document.body.addEventListener('drop', e => {
+  e.preventDefault();
+  const file = e.dataTransfer.files[0];
+  if (file && file.name.endsWith('.stl')) {
+    loadFile({ files: [file] });
+  }
+});
+
+// ─────────────────────────────────────────────────────
+// Render Loop
+// ─────────────────────────────────────────────────────
+function renderLoop() {
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+function renderXR(t, frame) {
+  renderer.render(scene, camera);
+}
+
+renderer.setAnimationLoop(renderLoop);
+
+// Resize
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ─────────────────────────────────────────────────────
+// Init: Check URL params
+// ─────────────────────────────────────────────────────
+function init() {
+  setLoading(null);
+  const params = new URLSearchParams(window.location.search);
+  const stlUrl = params.get('stl');
+  const autoVR = params.get('vr') === '1';
+  
+  if (stlUrl) {
+    loadSTL(stlUrl, decodeURIComponent(stlUrl).split('/').pop());
+    if (autoVR) setTimeout(enterVR, 2000);
+  } else {
+    document.getElementById('drop-zone').classList.remove('hidden');
+  }
+  
+  initXR();
+  initSSE();
+}
+
+function initSSE() {
+  const dot = document.getElementById('sse-dot');
+  let _sseDebounce = null;
+  let _pendingUrl = null, _pendingName = null;
+  try {
+    const hubPort = window.location.port || '8872';
+    const sse = new EventSource(`http://localhost:${hubPort}/api/events`);
+    sse.onopen = () => { if (dot) { dot.style.background = '#3fb950'; dot.title = 'SSE connected'; } };
+    sse.onmessage = (e) => {
+      try {
+        const evt = JSON.parse(e.data);
+        let url = null, name = null;
+        if (evt.type === 'render_complete' && evt.data && evt.data.ok && evt.data.stl_url) {
+          url = `http://localhost:${hubPort}/api/stl/${evt.data.stl_url}`;
+          name = evt.data.stl_url.split('/').pop();
+        }
+        if (evt.type === 'generate_complete' && evt.data && evt.data.ok && evt.data.output_url) {
+          url = `http://localhost:${hubPort}/api/stl/${evt.data.output_url}`;
+          name = evt.data.output_url.split('/').pop();
+        }
+        if (url) {
+          _pendingUrl = url; _pendingName = name;
+          clearTimeout(_sseDebounce);
+          _sseDebounce = setTimeout(() => { loadSTL(_pendingUrl, _pendingName); }, 300);
+        }
+      } catch(err) {}
+    };
+    sse.onerror = () => {
+      if (dot) { dot.style.background = '#f85149'; dot.title = 'SSE disconnected'; }
+    };
+  } catch(err) {}
+}
+
+init();
+</script>
+</body>
+</html>

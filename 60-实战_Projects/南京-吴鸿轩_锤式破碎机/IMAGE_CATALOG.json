@@ -1,0 +1,828 @@
+{
+  "_meta": {
+    "source_docx": "D:\\道\\道生一\\一生二\\3D建模Agent\\solidwork建模\\南京-吴鸿轩\\南京-吴鸿轩_v2.docx",
+    "extracted_at": "2026-04-14T02:08:18.192552",
+    "total_images": 9,
+    "total_media": 9,
+    "fig_captions_found": 8,
+    "table_captions_found": 0,
+    "sections_found": 114
+  },
+  "image_catalog": [
+    {
+      "order": 1,
+      "filename": "image1.png",
+      "ext": ".png",
+      "size_kb": 220.7,
+      "path": "D:\\道\\道生一\\一生二\\3D建模Agent\\solidwork建模\\南京-吴鸿轩\\output_images\\image1.png",
+      "fig_num": "图2.1",
+      "caption": "锤式破碎机工作原理示意图",
+      "p_index": 79,
+      "context_before": "2.1.2 物料破碎过程分析",
+      "context_after": "锤式破碎机的物料破碎过程可以概括为“给料—冲击破碎—反击碰撞—筛分排料”四个阶段。",
+      "doc_order": null
+    },
+    {
+      "order": 2,
+      "filename": "image2.png",
+      "ext": ".png",
+      "size_kb": 374.4,
+      "path": "D:\\道\\道生一\\一生二\\3D建模Agent\\solidwork建模\\南京-吴鸿轩\\output_images\\image2.png",
+      "fig_num": "图2.2",
+      "caption": "锤式破碎机总体结构示意图",
+      "p_index": 92,
+      "context_before": "2.2 锤式破碎机的结构组成",
+      "context_after": "锤式破碎机通常由机壳、转子、锤头、筛板、传动装置、轴承及联接件等部分组成。各组成部分相互配合，共同完成物料的冲击破碎与排料过程。",
+      "doc_order": null
+    },
+    {
+      "order": 3,
+      "filename": "image3.png",
+      "ext": ".png",
+      "size_kb": 427.5,
+      "path": "D:\\道\\道生一\\一生二\\3D建模Agent\\solidwork建模\\南京-吴鸿轩\\output_images\\image3.png",
+      "fig_num": "图4.1",
+      "caption": "转子结构三维模型图",
+      "p_index": 226,
+      "context_before": "4.1.2 转子主要尺寸设计",
+      "context_after": "转子主要尺寸的确定，应在满足锤头安装、物料破碎和结构强度要求的前提下，兼顾整机比例协调和制造便利性。根据前一章的参数设计结果，本文已确定转子直径为700 mm，转子长度为800 mm，因此本节重点对转轴、圆盘和锤轴等局部尺寸进行初步设计。",
+      "doc_order": null
+    },
+    {
+      "order": 4,
+      "filename": "image4.png",
+      "ext": ".png",
+      "size_kb": 184.0,
+      "path": "D:\\道\\道生一\\一生二\\3D建模Agent\\solidwork建模\\南京-吴鸿轩\\output_images\\image4.png",
+      "fig_num": "图4.2",
+      "caption": "锤头结构三维模型图",
+      "p_index": 282,
+      "context_before": "4.2.4 锤头主要尺寸确定",
+      "context_after": "锤头尺寸的确定应综合考虑转子尺寸、工作圆直径、锤轴直径、物料破碎要求和装配空间等因素。前文已确定转子工作直径为700 mm，圆盘外径为500 mm，因此锤头径向尺寸需满足安装后形成所需工作圆的要求。",
+      "doc_order": null
+    },
+    {
+      "order": 5,
+      "filename": "image5.png",
+      "ext": ".png",
+      "size_kb": 158.5,
+      "path": "D:\\道\\道生一\\一生二\\3D建模Agent\\solidwork建模\\南京-吴鸿轩\\output_images\\image5.png",
+      "fig_num": "图5.1",
+      "caption": "V带传动系统布置图",
+      "p_index": 347,
+      "context_before": "5.2.3 V带根数与中心距确定",
+      "context_after": "V带根数的确定主要取决于传递功率、电动机转速、带型和带速等因素。由于本设计电动机功率为22 kW，属于中等功率范围，因此优先选用B型普通V带。B型V带适用于中等功率传动，具有较好的承载能力和通用性，适合本课题所设计的中小型锤式破碎机。[17,18]",
+      "doc_order": null
+    },
+    {
+      "order": 6,
+      "filename": "image6.png",
+      "ext": ".png",
+      "size_kb": 293.3,
+      "path": "D:\\道\\道生一\\一生二\\3D建模Agent\\solidwork建模\\南京-吴鸿轩\\output_images\\image6.png",
+      "fig_num": "图6.1",
+      "caption": "总装配图及局部剖视图",
+      "p_index": 417,
+      "context_before": "6.2 总装配图设计",
+      "context_after": "6.2.1 总装图内容",
+      "doc_order": null
+    },
+    {
+      "order": 7,
+      "filename": "image7.png",
+      "ext": ".png",
+      "size_kb": 482.8,
+      "path": "D:\\道\\道生一\\一生二\\3D建模Agent\\solidwork建模\\南京-吴鸿轩\\output_images\\image7.png",
+      "fig_num": "图6.2",
+      "caption": "整机三维装配图",
+      "p_index": 455,
+      "context_before": "6.4 三维建模与虚拟装配",
+      "context_after": "6.4.1 三维建模过程",
+      "doc_order": null
+    },
+    {
+      "order": 8,
+      "filename": "image8.png",
+      "ext": ".png",
+      "size_kb": 334.9,
+      "path": "D:\\道\\道生一\\一生二\\3D建模Agent\\solidwork建模\\南京-吴鸿轩\\output_images\\image8.png",
+      "fig_num": "图6.3",
+      "caption": "锤式破碎机整机三维模型图",
+      "p_index": 460,
+      "context_before": "三维建模过程通常按照“先零件、后部件、再整机”的顺序进行。对主轴、锤头、圆盘、筛板、机壳等关键零件分别建立三维模型；将主轴、圆盘、锤头和隔套装配形成转子总成；再将转子总成、筛板、机壳、电动机和带轮等装配成整机模型。通过这种由局部到整体的建模方式，可以较清晰地反映设备结构层次，同时方便逐步发现和修正设计中的尺寸问题。",
+      "context_after": "6.4.2 虚拟装配分析",
+      "doc_order": null
+    },
+    {
+      "order": 9,
+      "filename": "image9.png",
+      "ext": ".png",
+      "size_kb": 42.7,
+      "path": "D:\\道\\道生一\\一生二\\3D建模Agent\\solidwork建模\\南京-吴鸿轩\\output_images\\image9.png",
+      "fig_num": "图9",
+      "caption": "(无标题)",
+      "p_index": null,
+      "context_before": "",
+      "context_after": "",
+      "doc_order": null
+    }
+  ],
+  "fig_captions": [
+    {
+      "fig_num": "图2.1",
+      "caption": "锤式破碎机工作原理示意图",
+      "p_index": 79,
+      "context_before": "2.1.2 物料破碎过程分析",
+      "context_after": "锤式破碎机的物料破碎过程可以概括为“给料—冲击破碎—反击碰撞—筛分排料”四个阶段。"
+    },
+    {
+      "fig_num": "图2.2",
+      "caption": "锤式破碎机总体结构示意图",
+      "p_index": 92,
+      "context_before": "2.2 锤式破碎机的结构组成",
+      "context_after": "锤式破碎机通常由机壳、转子、锤头、筛板、传动装置、轴承及联接件等部分组成。各组成部分相互配合，共同完成物料的冲击破碎与排料过程。"
+    },
+    {
+      "fig_num": "图4.1",
+      "caption": "转子结构三维模型图",
+      "p_index": 226,
+      "context_before": "4.1.2 转子主要尺寸设计",
+      "context_after": "转子主要尺寸的确定，应在满足锤头安装、物料破碎和结构强度要求的前提下，兼顾整机比例协调和制造便利性。根据前一章的参数设计结果，本文已确定转子直径为700 mm，转子长度为800 mm，因此本节重点对转轴、圆盘和锤轴等局部尺寸进行初步设计。"
+    },
+    {
+      "fig_num": "图4.2",
+      "caption": "锤头结构三维模型图",
+      "p_index": 282,
+      "context_before": "4.2.4 锤头主要尺寸确定",
+      "context_after": "锤头尺寸的确定应综合考虑转子尺寸、工作圆直径、锤轴直径、物料破碎要求和装配空间等因素。前文已确定转子工作直径为700 mm，圆盘外径为500 mm，因此锤头径向尺寸需满足安装后形成所需工作圆的要求。"
+    },
+    {
+      "fig_num": "图5.1",
+      "caption": "V带传动系统布置图",
+      "p_index": 347,
+      "context_before": "5.2.3 V带根数与中心距确定",
+      "context_after": "V带根数的确定主要取决于传递功率、电动机转速、带型和带速等因素。由于本设计电动机功率为22 kW，属于中等功率范围，因此优先选用B型普通V带。B型V带适用于中等功率传动，具有较好的承载能力和通用性，适合本课题所设计的中小型锤式破碎机。[17,18]"
+    },
+    {
+      "fig_num": "图6.1",
+      "caption": "总装配图及局部剖视图",
+      "p_index": 417,
+      "context_before": "6.2 总装配图设计",
+      "context_after": "6.2.1 总装图内容"
+    },
+    {
+      "fig_num": "图6.2",
+      "caption": "整机三维装配图",
+      "p_index": 455,
+      "context_before": "6.4 三维建模与虚拟装配",
+      "context_after": "6.4.1 三维建模过程"
+    },
+    {
+      "fig_num": "图6.3",
+      "caption": "锤式破碎机整机三维模型图",
+      "p_index": 460,
+      "context_before": "三维建模过程通常按照“先零件、后部件、再整机”的顺序进行。对主轴、锤头、圆盘、筛板、机壳等关键零件分别建立三维模型；将主轴、圆盘、锤头和隔套装配形成转子总成；再将转子总成、筛板、机壳、电动机和带轮等装配成整机模型。通过这种由局部到整体的建模方式，可以较清晰地反映设备结构层次，同时方便逐步发现和修正设计中的尺寸问题。",
+      "context_after": "6.4.2 虚拟装配分析"
+    }
+  ],
+  "table_captions": [],
+  "sections": [
+    {
+      "level": 3,
+      "title": "摘  要",
+      "p": 11
+    },
+    {
+      "level": 3,
+      "title": "Abstract",
+      "p": 16
+    },
+    {
+      "level": 1,
+      "title": "1 绪论",
+      "p": 23
+    },
+    {
+      "level": 2,
+      "title": "1.1 研究背景和意义",
+      "p": 24
+    },
+    {
+      "level": 3,
+      "title": "1.1.1 研究背景",
+      "p": 25
+    },
+    {
+      "level": 3,
+      "title": "1.1.2 研究意义",
+      "p": 30
+    },
+    {
+      "level": 2,
+      "title": "1.2 国内外研究现状",
+      "p": 35
+    },
+    {
+      "level": 3,
+      "title": "1.2.1 国内研究现状",
+      "p": 36
+    },
+    {
+      "level": 3,
+      "title": "1.2.2 国外研究现状",
+      "p": 43
+    },
+    {
+      "level": 3,
+      "title": "1.2.3 现有研究存在的问题",
+      "p": 49
+    },
+    {
+      "level": 2,
+      "title": "1.3 本文主要研究内容",
+      "p": 55
+    },
+    {
+      "level": 2,
+      "title": "1.4 论文组织结构",
+      "p": 62
+    },
+    {
+      "level": 1,
+      "title": "2 锤式破碎机的工作原理与总体方案分析",
+      "p": 71
+    },
+    {
+      "level": 2,
+      "title": "2.1 锤式破碎机的工作原理",
+      "p": 72
+    },
+    {
+      "level": 3,
+      "title": "2.1.1 冲击破碎原理",
+      "p": 73
+    },
+    {
+      "level": 3,
+      "title": "2.1.2 物料破碎过程分析",
+      "p": 77
+    },
+    {
+      "level": 3,
+      "title": "2.1.3 影响破碎效果的主要因素",
+      "p": 85
+    },
+    {
+      "level": 2,
+      "title": "2.2 锤式破碎机的结构组成",
+      "p": 90
+    },
+    {
+      "level": 3,
+      "title": "2.2.1 机壳",
+      "p": 94
+    },
+    {
+      "level": 3,
+      "title": "2.2.2 转子",
+      "p": 97
+    },
+    {
+      "level": 3,
+      "title": "2.2.3 锤头",
+      "p": 100
+    },
+    {
+      "level": 3,
+      "title": "2.2.4 筛板",
+      "p": 103
+    },
+    {
+      "level": 3,
+      "title": "2.2.5 传动装置",
+      "p": 106
+    },
+    {
+      "level": 3,
+      "title": "2.2.6 轴承与联接件",
+      "p": 109
+    },
+    {
+      "level": 2,
+      "title": "2.3 常见结构形式对比分析",
+      "p": 112
+    },
+    {
+      "level": 3,
+      "title": "2.3.1 单转子与双转子结构对比",
+      "p": 113
+    },
+    {
+      "level": 3,
+      "title": "2.3.2 固定锤头与活动锤头结构对比",
+      "p": 116
+    },
+    {
+      "level": 3,
+      "title": "2.3.3 不同筛板结构特点对比",
+      "p": 119
+    },
+    {
+      "level": 2,
+      "title": "2.4 本设计总体方案确定",
+      "p": 122
+    },
+    {
+      "level": 3,
+      "title": "2.4.1 布局形式选择",
+      "p": 124
+    },
+    {
+      "level": 3,
+      "title": "2.4.2 机壳方案确定",
+      "p": 127
+    },
+    {
+      "level": 3,
+      "title": "2.4.3 转子支承方式确定",
+      "p": 130
+    },
+    {
+      "level": 3,
+      "title": "2.4.4 传动方案确定",
+      "p": 132
+    },
+    {
+      "level": 2,
+      "title": "2.5 本章小结",
+      "p": 135
+    },
+    {
+      "level": 1,
+      "title": "3 锤式破碎机主要参数设计",
+      "p": 139
+    },
+    {
+      "level": 2,
+      "title": "3.1 设计原始条件与技术要求",
+      "p": 140
+    },
+    {
+      "level": 3,
+      "title": "3.1.1 设计依据",
+      "p": 141
+    },
+    {
+      "level": 3,
+      "title": "3.1.2 基本工况要求",
+      "p": 145
+    },
+    {
+      "level": 3,
+      "title": "3.1.3 设计目标",
+      "p": 152
+    },
+    {
+      "level": 2,
+      "title": "3.2 主要参数初步确定",
+      "p": 158
+    },
+    {
+      "level": 3,
+      "title": "3.2.1 转子直径确定",
+      "p": 159
+    },
+    {
+      "level": 3,
+      "title": "3.2.2 转子长度确定",
+      "p": 162
+    },
+    {
+      "level": 3,
+      "title": "3.2.3 转速范围确定",
+      "p": 165
+    },
+    {
+      "level": 3,
+      "title": "3.2.4 锤头数量确定",
+      "p": 177
+    },
+    {
+      "level": 3,
+      "title": "3.2.5 筛孔尺寸确定",
+      "p": 181
+    },
+    {
+      "level": 2,
+      "title": "3.3 生产能力及功率参数分析",
+      "p": 184
+    },
+    {
+      "level": 3,
+      "title": "3.3.1 生产能力分析",
+      "p": 185
+    },
+    {
+      "level": 3,
+      "title": "3.3.2 电动机功率初选",
+      "p": 188
+    },
+    {
+      "level": 3,
+      "title": "3.3.3 传动比确定",
+      "p": 191
+    },
+    {
+      "level": 2,
+      "title": "3.4 主要技术参数汇总",
+      "p": 202
+    },
+    {
+      "level": 2,
+      "title": "3.5 本章小结",
+      "p": 214
+    },
+    {
+      "level": 1,
+      "title": "4 关键部件结构设计与校核",
+      "p": 218
+    },
+    {
+      "level": 2,
+      "title": "4.1 转子结构设计",
+      "p": 219
+    },
+    {
+      "level": 3,
+      "title": "4.1.1 转子的组成与功能",
+      "p": 220
+    },
+    {
+      "level": 3,
+      "title": "4.1.2 转子主要尺寸设计",
+      "p": 224
+    },
+    {
+      "level": 3,
+      "title": "4.1.3 转轴结构设计",
+      "p": 231
+    },
+    {
+      "level": 3,
+      "title": "4.1.4 转轴强度校核",
+      "p": 239
+    },
+    {
+      "level": 2,
+      "title": "4.2 锤头结构设计",
+      "p": 258
+    },
+    {
+      "level": 3,
+      "title": "4.2.1 锤头受力特点分析",
+      "p": 259
+    },
+    {
+      "level": 3,
+      "title": "4.2.2 锤头结构形式设计",
+      "p": 262
+    },
+    {
+      "level": 3,
+      "title": "4.2.3 锤头材料选择",
+      "p": 274
+    },
+    {
+      "level": 3,
+      "title": "4.2.4 锤头主要尺寸确定",
+      "p": 280
+    },
+    {
+      "level": 2,
+      "title": "4.3 筛板结构设计",
+      "p": 286
+    },
+    {
+      "level": 3,
+      "title": "4.3.1 筛板作用分析",
+      "p": 287
+    },
+    {
+      "level": 3,
+      "title": "4.3.2 筛孔参数设计",
+      "p": 290
+    },
+    {
+      "level": 3,
+      "title": "4.3.3 筛板安装方式设计",
+      "p": 293
+    },
+    {
+      "level": 2,
+      "title": "4.4 机壳结构设计",
+      "p": 296
+    },
+    {
+      "level": 3,
+      "title": "4.4.1 机壳总体结构",
+      "p": 297
+    },
+    {
+      "level": 3,
+      "title": "4.4.2 上下分体式结构设计",
+      "p": 300
+    },
+    {
+      "level": 3,
+      "title": "4.4.3 机壳材料与连接方式",
+      "p": 303
+    },
+    {
+      "level": 2,
+      "title": "4.5 本章小结",
+      "p": 306
+    },
+    {
+      "level": 1,
+      "title": "5 传动系统与辅助部件设计",
+      "p": 309
+    },
+    {
+      "level": 2,
+      "title": "5.1 电动机选型",
+      "p": 310
+    },
+    {
+      "level": 3,
+      "title": "5.1.1 电动机类型选择",
+      "p": 311
+    },
+    {
+      "level": 3,
+      "title": "5.1.2 电动机功率选择",
+      "p": 314
+    },
+    {
+      "level": 3,
+      "title": "5.1.3 电动机型号确定",
+      "p": 318
+    },
+    {
+      "level": 2,
+      "title": "5.2 V带传动设计",
+      "p": 322
+    },
+    {
+      "level": 3,
+      "title": "5.2.1 传动方式分析",
+      "p": 323
+    },
+    {
+      "level": 3,
+      "title": "5.2.2 带轮参数确定",
+      "p": 326
+    },
+    {
+      "level": 3,
+      "title": "5.2.3 V带根数与中心距确定",
+      "p": 345
+    },
+    {
+      "level": 2,
+      "title": "5.3 轴承与联接件选型",
+      "p": 364
+    },
+    {
+      "level": 3,
+      "title": "5.3.1 轴承选型",
+      "p": 365
+    },
+    {
+      "level": 3,
+      "title": "5.3.2 销轴设计",
+      "p": 369
+    },
+    {
+      "level": 3,
+      "title": "5.3.3 螺栓及紧固件选择",
+      "p": 373
+    },
+    {
+      "level": 2,
+      "title": "5.4 安装与维护性分析",
+      "p": 377
+    },
+    {
+      "level": 3,
+      "title": "5.4.1 装拆便利性分析",
+      "p": 378
+    },
+    {
+      "level": 3,
+      "title": "5.4.2 易损件更换分析",
+      "p": 381
+    },
+    {
+      "level": 3,
+      "title": "5.4.3 运行安全性分析",
+      "p": 384
+    },
+    {
+      "level": 2,
+      "title": "5.5 本章小结",
+      "p": 387
+    },
+    {
+      "level": 1,
+      "title": "6 装配设计与工程图绘制",
+      "p": 391
+    },
+    {
+      "level": 2,
+      "title": "6.1 整机装配关系分析",
+      "p": 392
+    },
+    {
+      "level": 3,
+      "title": "6.1.1 零部件装配顺序",
+      "p": 393
+    },
+    {
+      "level": 3,
+      "title": "6.1.2 装配关系说明",
+      "p": 401
+    },
+    {
+      "level": 3,
+      "title": "6.1.3 干涉问题分析",
+      "p": 406
+    },
+    {
+      "level": 2,
+      "title": "6.2 总装配图设计",
+      "p": 414
+    },
+    {
+      "level": 3,
+      "title": "6.2.1 总装图内容",
+      "p": 418
+    },
+    {
+      "level": 3,
+      "title": "6.2.2 主要尺寸标注",
+      "p": 427
+    },
+    {
+      "level": 3,
+      "title": "6.2.3 技术要求说明",
+      "p": 433
+    },
+    {
+      "level": 2,
+      "title": "6.3 关键零件图绘制",
+      "p": 442
+    },
+    {
+      "level": 3,
+      "title": "6.3.1 转子零件图",
+      "p": 443
+    },
+    {
+      "level": 3,
+      "title": "6.3.2 锤头零件图",
+      "p": 446
+    },
+    {
+      "level": 3,
+      "title": "6.3.3 筛板或转轴零件图",
+      "p": 450
+    },
+    {
+      "level": 2,
+      "title": "6.4 三维建模与虚拟装配",
+      "p": 453
+    },
+    {
+      "level": 3,
+      "title": "6.4.1 三维建模过程",
+      "p": 456
+    },
+    {
+      "level": 3,
+      "title": "6.4.2 虚拟装配分析",
+      "p": 461
+    },
+    {
+      "level": 3,
+      "title": "6.4.3 结果验证",
+      "p": 470
+    },
+    {
+      "level": 2,
+      "title": "6.5 本章小结",
+      "p": 473
+    },
+    {
+      "level": 1,
+      "title": "7 结论与展望",
+      "p": 476
+    },
+    {
+      "level": 2,
+      "title": "7.1 全文总结",
+      "p": 477
+    },
+    {
+      "level": 2,
+      "title": "7.2 主要结论",
+      "p": 485
+    },
+    {
+      "level": 2,
+      "title": "7.3 不足之处",
+      "p": 491
+    },
+    {
+      "level": 2,
+      "title": "7.4 展望",
+      "p": 497
+    },
+    {
+      "level": 3,
+      "title": "致  谢",
+      "p": 504
+    },
+    {
+      "level": 3,
+      "title": "参考文献",
+      "p": 510
+    }
+  ],
+  "rid_to_file": {},
+  "doc_image_order": [],
+  "all_media_files": [
+    {
+      "zip_path": "word/media/image1.png",
+      "filename": "image1.png",
+      "ext": ".png",
+      "size_bytes": 225993,
+      "size_kb": 220.7
+    },
+    {
+      "zip_path": "word/media/image2.png",
+      "filename": "image2.png",
+      "ext": ".png",
+      "size_bytes": 383337,
+      "size_kb": 374.4
+    },
+    {
+      "zip_path": "word/media/image3.png",
+      "filename": "image3.png",
+      "ext": ".png",
+      "size_bytes": 437798,
+      "size_kb": 427.5
+    },
+    {
+      "zip_path": "word/media/image4.png",
+      "filename": "image4.png",
+      "ext": ".png",
+      "size_bytes": 188417,
+      "size_kb": 184.0
+    },
+    {
+      "zip_path": "word/media/image5.png",
+      "filename": "image5.png",
+      "ext": ".png",
+      "size_bytes": 162330,
+      "size_kb": 158.5
+    },
+    {
+      "zip_path": "word/media/image6.png",
+      "filename": "image6.png",
+      "ext": ".png",
+      "size_bytes": 300365,
+      "size_kb": 293.3
+    },
+    {
+      "zip_path": "word/media/image7.png",
+      "filename": "image7.png",
+      "ext": ".png",
+      "size_bytes": 494403,
+      "size_kb": 482.8
+    },
+    {
+      "zip_path": "word/media/image8.png",
+      "filename": "image8.png",
+      "ext": ".png",
+      "size_bytes": 342892,
+      "size_kb": 334.9
+    },
+    {
+      "zip_path": "word/media/image9.png",
+      "filename": "image9.png",
+      "ext": ".png",
+      "size_bytes": 43733,
+      "size_kb": 42.7
+    }
+  ]
+}

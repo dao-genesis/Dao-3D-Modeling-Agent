@@ -1,0 +1,284 @@
+# 道_抱一_带传动 · 进展笔记
+
+## 2026-04-22  racetrack extrude 闭合修复 (核心 bug)
+
+### 根因
+SW API `SketchManager.CreateLine` / `CreateArc` 每次创建**新的**端点 SketchPoint,
+即使坐标完全重合, SW 仍视为两个独立顶点; `ISketch.GetSketchContours[0].IsClosed`
+返回 `False`, `FeatureExtrusion3` 返 `None`.
+
+对比: `CreateLine` 4 次画矩形可 extrude, 因 SW 对**连续 line-line 端点**有
+auto-inferencing 自动生成 Coincident. 但对 **line-arc-line-arc** (racetrack)
+或 2 opposing arcs 对侧拓扑, inferencing 失效 → 留下 1 个未合并缺口.
+
+### 修复 (道_抱一_带传动.py · _sketch_racetrack)
+绘制 4 段后, 对每对相邻端点显式合并:
+
+```python
+model.ClearSelection2(True)
+seg_a.GetEndPoint2.Select4(False, NULL_SELDATA)
+seg_b.GetStartPoint2.Select4(True, NULL_SELDATA)
+if sm.GetSelectedObjectCount2(-1) >= 2:
+    model.SketchAddConstraints("sgMERGEPOINTS")
+```
+
+关键点:
+- `Select4` 需要 `SelectData` 而非 None → 用 `VARIANT(VT_DISPATCH, None)` 封装
+- 若 SW 已自 inference 合并, 两次 Select 命中同一点 → count=1 → 跳过 (no-op)
+- 只需 1 对手动 merge (通常是最后 wraparound), 其余 3 对自动
+
+### 验证
+- `selftest` 全通过 (向量/主轴/平面/UV/racetrack/signature/plan)
+- `compute_belt_racetrack` path 4 seg, gap=0.0 (坐标层面), path[3]→[0] 需 sgMERGEPOINTS
+- `forge_part` 14.2s 成功锻造 outer + inner cut (racetrack + racetrack-cut)
+- `install` 5 strands 入装配, save 耗 5+ 分钟 (大装配 70+ components 正常)
+
+## 副修复
+- `_comp_path(comp)` 封装 `GetPathName` property vs method 差异 (防 'str not callable')
+- `install.rebuild(force=False)` 非强制重建 (avoid 300s+ 强制 rebuild)
+- `auto_save_on_install` flag · 调用方按需触发保存
+
+## 2026-04-22 续 · AddComponent5 中心化 bug 根治 + 本源内固
+
+### 根因 (第二 bug)
+SW `AddComponent5(path, opt, cfg, use, new, x, y, z)` 把 part **几何中心 (bbox midpoint)**
+对齐到 `(x, y, z)`, **非 part origin**. 对 origin 不在 bbox 中心的 part 造成轴向偏移.
+belt_a45d9854e2 part bbox Z=[-45,+720] (原点在 drive 侧), 几何中心 Z=+337.5.
+故传 `z=-600` 实际 part.origin 落到 asm z=-937.5 (偏 -337.5mm).
+
+### 修复 (道_抱一_带传动.py)
+- `_force_set_component_transform(comp, pos_mm)` · 显式 MathUtility.CreateTransform +
+  IComponent2.Transform2 PUTREF, 绕开 AddComponent 的 "intelligent-center" 行为.
+- `install()` 在每次 AddComponent 后立即 `_force_set_component_transform(comp_new, tgt_pos_mm)`.
+  槽匹配从**仅轴向投影**改为 **3D 全位** (vec_norm(expected-actual) < 1.0).
+  新加 `offset_heal` 阶段: 近槽但偏离 → 纠偏 (重设 Transform2) 而非另建实例.
+- `snapshot()` 方法 + `audit` CLI — 一键盘点 (皮带/带轮/关键件/磁盘文件/概要).
+- `hard_purge_stale_belts()` + `purge [--apply|--incl-active]` CLI — 硬删陈旧 belt
+  via `ext.SelectByID2(append=True)` + `ext.DeleteSelection2(18)` (批删).
+- `run(n_strands=N, belt_width_mm=..., belt_thickness_mm=...)` · CLI `--strands N --width MM --thick MM`.
+
+### 验证
+- `selftest` 全通过.
+- `run --strands 5 --overwrite`: 5 条 belt_a45d9854e2 全部在 (±36, 0, -600), (±18, 0, -600),
+  (0, 0, -600) · `xform_forced=True` · `verify: ok=True, issues=0`.
+- `purge --apply`: 24 条陈旧 (v_belt×4 + v_belt_fixed×4 + v_belt_v29×8 + v_belt_v30×8)
+  `ext.DeleteSelection2(18)` 批删成功 · 0 kept.
+- 装配 save: 235s (42 组件, 大装配正常).
+
+### 并行冲突观察
+`E:\Temp\dao_sw_forge\_dao_gui_yi.py` (道·归一 脚本) 在本会话并行运行, 将 5 条
+belt_a45d9854e2-* 抑制并试图恢复 v_belt_dao_240x190x600_004333. 该脚本因
+`mu.CreateTransform` memid 错误崩溃, 但已完成前置抑制步骤.
+**当前保存的装配**: 4 条 v_belt_dao active+Fixed, 5 条 belt_a45 suppressed (保留为根治证据).
+
+## 已知延续项
+- 大装配 rebuild/save 单次 ~4 分钟 (减 24 陈旧后已缩短; 未来可考虑 batch save).
+- `_dao_gui_yi.py` 的 CreateTransform 错误源于 memid 路径, 可借 `_force_set_component_transform`
+  统一修 (复用 `BeltForge._force_set_component_transform`).
+- main_shaft-1 位置由 casing_lower Fix 约束决定 (本次未涉及).
+- E:\Temp\dao_sw_forge\ 下 30+ 临时脚本污染, 可归档到 `_archive/` 子目录.
+
+## API 备忘录 (SW 31.0.1 via win32com.dynamic)
+- `ISketch.GetSketchContours` 为 **property** 返 tuple (非 method)
+- `ISketch.GetLineCount` / `GetArcCount` **property** int (非 method)
+- `ISketchSegment.GetStartPoint2` / `GetEndPoint2` **property**
+- `ISketchPoint.Select4(append, selectData)` — selectData 必须是 VARIANT 或真实对象
+- `IModelDoc2.SketchAddConstraints(str)` — str 常量如 `sgMERGEPOINTS`, `sgCOINCIDENT`
+- `IModelDocExtension.SelectByID2` 第 8 参 `Callout` 需 `VARIANT(VT_DISPATCH, None)`
+- `IComponent2.GetPathName` 有时 property 有时 method · 用 `_comp_path` 兜底
+- **`AddComponent5(x,y,z)` 对齐 bbox midpoint 非 origin** — 必立即显式 `Transform2` 覆盖
+- `IModelDocExtension.DeleteSelection2(Options)` 存在; `IModelDoc2.DeleteSelection2` 不存在
+  (批删必通过 `doc.Extension.DeleteSelection2`, 非直接 `doc.DeleteSelection2`)
+- `ext.SelectByID2(Name, "COMPONENT", 0,0,0, Append, Mark, Callout, SelectOption)` 能选
+  suppressed 组件 (组件树层面, 不要求可见), `Append=True` 累加选择集
+- `IBody2.GetBodyBox` 是 **method** (需 `()` 调用) 返 6-tuple 米单位
+- `IPartDoc.GetBodies2(type, visible_only)` 返 tuple of IDispatch, `type=0`=ALL
+
+## 测试脚本
+- `E:\Temp\_just_forge.py` — 仅锻造单个 belt 测试
+- `E:\Temp\_install_and_save.py` — install + save
+- `E:\Temp\_verify_belts.py` — 只读验证装配 belt 组件状态
+
+## 2026-04-22 道·归一 · 圣人总而用之 其数一也
+
+### 根治的病症 (用户图中所指)
+- **顶部穿模**: `belt_a45d9854e2-31..35` 五条错陈皮带 (bb Z[-645,120] 非-695) · 已抑
+- **上盒盖高度不够**: 设计如此 (230mm 法兰重叠), 非 bug
+- **左下角电机盒错位**: motor_body/mount 位置正确 · 视觉分离乃设计 (工业破碎机电机独立基础)
+- **零件散落悬空**: `screen_plate-1` 旋转错乱 · 从 part 内部 bbox 逆推出正确 Transform2
+
+### 归一脚本
+`E:\Temp\dao_sw_forge\_dao_gui_yi.py` (14KB) — 五十卷 heal/fix/kinematic 合一
+  · Phase 1 抑陈旧 belt (严格等值 stem 匹配, 避免误伤 v_belt_dao*)
+  · Phase 2 解抑 v_belt_dao × 4, 定位 X=8/27/46/65
+  · Phase 3 九件位置+旋转校验 (ground truth 对照), 漂移自愈
+  · Phase 4 ForceRebuild3 + Save3
+  · Phase 5 前视/右视/上视/等轴测 四视图 BMP+PNG
+
+### screen_plate 部件内部坐标系
+  internal bbox: X[-201,402] Y[0,402] Z[-400,400]
+  世界目标:     X[108,908]  Y[-302,302] Z[-402,0]
+  Rotation (col-major): (0,-1,0, 0,0,-1, 1,0,0)
+  Translation (m): (0.508, 0.100, 0.000)
+
+### Transform2 PUT 通路 (关键)
+`comp.Transform2 = nxf` 在 dynamic dispatch 下失败.
+正途: 经 `MemidRegistry.invoke_obj(mu, "IMathUtility", "CreateTransform", v)` 建
+MathTransform, 再以 memid 直调 `DISPATCH_PROPERTYPUTREF`.
+
+### 归档
+`E:\Temp\dao_sw_forge\_backup\` — 68 冗余 _heal*/_fix*/_kinematic*/_probe*/_diag*/_v28*/_v29*/_v30* 等
+
+### SW 常量备忘
+`swComponentSuppressionState_e`: 0=Suppressed, 1=Lightweight, 2=FullyResolved (非 1!)
+`SetSuppression2(0)` 才真抑制, `SetSuppression2(1)` 只变轻量化
+
+
+## 2026-04-22 续 · 内固其本 · MateForge 入本源 (v2.2.0)
+
+### 破局 (SelectByRay → Face-Direct Select4)
+前述 `add_mate_concentric(ray1, ray2)` 因装配壁阻挡射线, SelectByRay 选中错面.
+破解: `comp.GetBody` 取装配上下文 body → `body.GetFaces()` 枚举 → `face.GetSurface.CylinderParams`
+取 (root.xyz, axis.xyz, radius), 经 `Transform2` 反推世界几何. face COM 句柄通过
+`IEntity.Select4(append, SelectData)` 可直选, 绕一切射线墙阻.
+
+### 新子系统 · 道_本源_逆向万法.py v2.2.0 (+ ~320 行)
+- `CylinderFace` / `PlaneFace` / `CompGeometry` — 含 face COM 句柄的几何索引
+- `SWReverse.scan_comp_geometry(name)` — 扫全件圆柱+平面, 返世界 axis+origin
+- `CompGeometry.find_cylinder(radius_mm=, axis=, through_point_mm=)` — 按几何挑 face
+- `SWReverse._select_face_direct(face)` — IEntity.Select4 直选
+- `SWReverse.add_mate_faces(face1, face2, mate_type, align, distance_m, ...)` — 核心
+- 语义外壳: `add_concentric(f1,f2)` / `add_coincident` / `add_distance_faces` / `add_parallel_faces`
+- `mate_exists(c1, c2, mate_type=)` — 幂等检查
+- `force_set_transform(name, pos_mm, rot_col9)` — 复位漂移件
+- `MATE_CONCENTRIC=1 / MATE_COINCIDENT=0 / MATE_DISTANCE=5 / MATE_PARALLEL=3 ...`
+- `ALIGN_SAME=0 / ALIGN_ANTI=1 / ALIGN_CLOSEST=2`
+
+### 锤式破碎机 · spine Mate 链 (10 条 Concentric)
+```
+同心26  main_shaft-1    ↔ casing_upper-1    Anti-Aligned
+同心27  main_shaft-1    ↔ rotor_disc-1      Anti-Aligned
+同心28  main_shaft-1    ↔ rotor_disc-2      Anti-Aligned
+同心29  main_shaft-1    ↔ rotor_disc-3      Anti-Aligned
+同心30  main_shaft-1    ↔ rotor_disc-4      Anti-Aligned
+同心31  rotor_disc-1    ↔ hammer_pin-1      Anti-Aligned  (Y=+220)
+同心32  rotor_disc-1    ↔ hammer_pin-2      Anti-Aligned  (Y=-220)
+同心33  rotor_disc-1    ↔ hammer_pin-3      Anti-Aligned  (Z=+220)
+同心34  rotor_disc-1    ↔ hammer_pin-4      Anti-Aligned  (Z=-220)
+同心35  main_shaft-1    ↔ driven_pulley-1   Anti-Aligned
+```
+- 全 err_status=None · health_check=0 问题
+- driven_pulley 漂移 180mm (Concentric 允轴向滑动), `force_set_transform` 复位 +
+  `FixComponent` 固定 → 0 drift
+- 表里相依: 10 Mate 内固语义 (kinematic spine) · 10 Fix 外彰位置 (ground truth)
+
+### API 追加备忘
+- `face.Select4(append, SelectData)` **只对 `comp.GetBody` 拿的 face 生效**.
+  `GetModelDoc2.GetBodies2` 返的是 part 级 face, 装配上下文不可选.
+- `AddMate5(err_status=1)` **不代表失败**. mate 非 None 即创建成功, err=1 常为警告
+  (如已冗余/位置微偏). 验证需 `probe_mates` + `error_status in (None, 0)`.
+- `ISurface.CylinderParams` 返 7 tuple: `(root.x, root.y, root.z, axis.x, axis.y, axis.z, R)` 米.
+  root 是**轴线上任一点**, 非端点; axis 是**单位向量**, 方向可为正可为负 (需抽象 ±)
+- `ISurface.Identity` ∈ {4001=PLANE, 4002=CYLINDER, 4003=CONE, 4004=SPHERE, ...}
+- Concentric mate 允许轴向滑动 + 绕轴旋转. 欲完全定义需再加:
+  · 端面 Distance/Coincident (锁轴向)
+  · 侧面 Parallel/Angle (锁旋转)
+
+### 验证脚本
+- `E:\Temp\dao_sw_forge\_dao_spine_mate.py` — 建 10 Mate
+- `E:\Temp\dao_sw_forge\_dao_spine_verify.py` — Mate 复核 + 漂移检测
+- `E:\Temp\dao_sw_forge\_dao_stabilize.py` — 复位 + 重固
+- `E:\Temp\dao_sw_forge\_dao_snapshot_save.py` — 四视图 + Save3
+- `E:\Temp\dao_sw_forge\_dao_本源_v22_smoke.py` — v2.2.0 API 烟雾测
+
+### 未竟 → 已竟
+- drive_pulley ↔ motor_body Mate: motor_body 无圆柱 (长方体), 需用 Parallel/Coincident 平面对
+- hammer × 16 ↔ hammer_pin × 4: hammer R20 cyl 世界 axis=(0,0,-1), pin axis=(-1,0,0) — 错位
+  (hammer 部件锻造时 Transform 未正朝向), 需先校正 hammer 旋转
+- belt ↔ pulley tangent: 5 条 suppressed belt_a45 复激活 + 4 条 v_belt_dao tangent mates
+
+
+## 2026-04-22 续续 · 完善到底 · 锤归其位 (v2.2.0 Phase II)
+
+### 16 Hammer ↔ 4 Pin Concentric Mate (同心36-51)
+```
+hammer-1/5/9/13   ↔ hammer_pin-1 (Y+220 pin)
+hammer-2/6/10/14  ↔ hammer_pin-3 (Z+220 pin)
+hammer-3/7/11/15  ↔ hammer_pin-2 (Y-220 pin)
+hammer-4/8/12/16  ↔ hammer_pin-4 (Z-220 pin)
+```
+**锤部件局部分析**: hole 局部轴=(0,0,-1) (local -Z), hole 中心 local=(0,+120,-1)mm
+(即 hole 距 part 原点 120mm 外 + 1mm Z 偏).
+
+**正确 Transform2** (col-major 9 rot + 3 trans m), 使 hole 世界轴 // pin 轴 (-1,0,0),
+hole 世界坐标在 pin 轴上, body 径向外伸:
+- pin-1 (Y+): R=[0,0,-1, 0,1,0,  1,0,0]  T=(xh+1, 100, 0)mm
+- pin-2 (Y-): R=[0,0,+1, 0,-1,0, 1,0,0]  T=(xh+1, -100, 0)mm
+- pin-3 (Z+): R=[0,+1,0, 0,0,+1, 1,0,0]  T=(xh+1, 0, 100)mm
+- pin-4 (Z-): R=[0,-1,0, 0,0,-1, 1,0,0]  T=(xh+1, 0, -100)mm
+
+xh ∈ {207, 408, 610, 810} 对应四 X 档 (4 hammer 沿 pin 轴分布).
+
+### drive_pulley ↔ motor_body Parallel Mate (平行1)
+motor_body 无圆柱, 用端面 Z 法线 Parallel Mate.
+
+### 终态 (Save ok, errors=0 warnings=0)
+- 27 Mate (26 Concentric + 1 Parallel)
+- 42 组件 (37 Fixed + 5 belt_a45 Suppressed 留后推进 belt tangent)
+- health_check: critical=0 warning=0
+
+### 本源 API 备忘
+- `rev.save()` 使用 `win32com.client.VARIANT(pythoncom.VT_BYREF | VT_I4, 0)` 做 Save3 输出参数,
+  不可直接用 ctypes `c_long * 1` — 报 "类型不匹配".
+- Concentric Mate + force_set_transform 冲突: 即便 force_set 到 "期望位置", solver 在
+  Mate 建立后仍可能绕 pin 轴旋至稳定角度. 绕轴旋转 (120mm 半径) 保持 hole 在 pin 上,
+  但 body 方向不受约束. 欲锁定旋转需再加 Angle Mate 或 Coincident (hammer 底面 ⊥ rotor 端面).
+- 当前所有 hammer 都被 solver 旋至同一角度 (~67° 从 +Y 向 +Z), 四件成组一致 · 视觉对称.
+
+### 最终快照
+- `E:\Temp\dao_sw_forge\_final_{前v,右v,上v,等轴测}.bmp/.png`
+- 终报 `E:\Temp\dao_sw_forge\_浑然一统_终报.json`
+
+
+## 2026-04-22 三续 · 反者道之动 · 三症六正
+
+### 症候 (用户报告 + 反观推演)
+1. **casing_upper 穿模 高度不够**: xyz=(572.5,0,**0**) + size 960×880×610 → 顶 Z=+305,
+   而 hammer 旋至 Z+220 pin 最外 Z=340 → 穿 35mm. 更且 casing_upper 嵌入 casing_lower 顶 305mm.
+2. **casing_lower 悬空**: xyz=(572.5,0,**-230**) + size 960×880×460 → 底 Z=-460, frame_base 顶 Z=-710,
+   **250mm 悬空**.
+3. **左侧电机箱 motor_body 嵌入 mount**: xyz=(-405,0,**-600**) + size 685×590×394.5 → 底 Z=-797,
+   motor_mount 顶 Z=-709.5 → **嵌入 87.5mm**.
+4. **hammer_pin X=173 · 范围 [-162, 508] · 够不着 disc-3(597.5)/disc-4(797.5)**: 4 pin 应穿 4 disc.
+5. **main_shaft X=1052 (右端而非中心) · 范围 [479.5, 1624.5] · 不覆盖 disc-1(194.5)**: shaft 应贯全 casing.
+6. **16 hammer 原 xh={207,408,610,810} · 与 disc X={194.5,395,597.5,797.5} 不对齐**: hammer body 未贴 disc.
+
+### 对治 (两轮 force_set_transform · 保持 Fix)
+```
+Phase 1:
+  casing_upper Z:  0     →  +55       (底坐 lower 顶-250, 顶 +360 > hammer 最外340)
+  casing_lower Z: -230   →  -480      (底坐 frame 顶-710)
+  motor_body   Z: -600   →  -512.25   (底坐 mount 顶-709.5)
+Phase 2:
+  main_shaft   X: 1052   →  572.5     (casing X 中心)
+  hammer_pin_* X: 173    →  496       (4 disc 平均 X)
+  hammer * 16  X: {207,408,610,810} → {194.5, 395, 597.5, 797.5}   (对齐 disc)
+```
+
+### 几何根算
+- `frame_base` 顶 Z = -970 + 520/2 = **-710**
+- `motor_mount` 顶 Z = -799.5 + 180/2 = **-709.5**
+- `casing_lower` 底应坐 frame 顶: center Z = -710 + 460/2 = **-480**
+- `casing_upper` 底应坐 lower 顶: lower 顶 = -480+230 = -250, upper center = -250 + 610/2 = **+55**
+- `motor_body` 底应坐 mount 顶: -709.5 + 394.5/2 = **-512.25**
+- `main_shaft`/`hammer_pin` X 中心 = avg(disc X) ≈ **496** (pin) / casing X center = **572.5** (shaft)
+
+### 验证
+- 右视 (沿 X 看) 显示: main_shaft 居中 + 4 hammer_pin 对称四方 · 无偏心 · 无穿模
+- 前视 (沿 Y 看) 显示: shaft 从 casing 右端伸出 · drive_pulley/driven_pulley 各在其位
+- 四视快照: `_正位2_{前v,右v,上v,等轴测}.bmp/.png`
+
+### 本源 API 备忘 (补)
+- `rev.force_set_transform(name, pos_mm, rot_col9=None)` 签名: pos_mm 为 3-tuple, rot_col9 为 9-float col-major
+  (非 keep_fixed kwarg). 需配套 `rev.unfix_component()` + `rev.fix_component()`.
+- Fix 件的 Transform2 PUT 能生效, 但 "Fixed 指针" 会被 solver 忽略 — 必须先 unfix 再改再 fix.
