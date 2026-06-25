@@ -30,8 +30,8 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # STL_ROOT 解析 — 道法自然: 先看环境, 再看近邻, 再看本地
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _locate_stl_root() -> str:
-    """按优先级定位 STL 根目录."""
+def _locate_stl_root(require: bool = True) -> Optional[str]:
+    """按优先级定位 STL 根目录. require=False 时找不到返回 None 而非抛错."""
     # 1. 环境变量
     env = os.environ.get("ORS6_STL_ROOT")
     if env and os.path.isdir(env):
@@ -51,13 +51,16 @@ def _locate_stl_root() -> str:
     if local.is_dir():
         return str(local)
 
+    if not require:
+        return None
     raise RuntimeError(
         "ORS6 STL root not found. Set ORS6_STL_ROOT env var or place STLs "
         f"under {ors6_default} or {local}."
     )
 
 
-STL_ROOT: str = _locate_stl_root()
+# 延迟解析: 仅在真正加载 STL 时才要求其存在, 故纯几何/运动学可在任何环境 import.
+STL_ROOT: Optional[str] = _locate_stl_root(require=False)
 BOUNDS_FILE: str = os.path.join(SCRIPT_DIR, "_stl_bounds.json")
 
 
@@ -184,7 +187,8 @@ def stl_path(name: str) -> str:
         workspace_root = Path(SCRIPT_DIR).parents[2]  # 一生二
         p = workspace_root / "ORS6-VAM饮料摇匀器" / "custom_parts" / fn
         return str(p)
-    return os.path.join(STL_ROOT, sub, fn)
+    root = STL_ROOT if STL_ROOT else _locate_stl_root(require=True)
+    return os.path.join(root, sub, fn)
 
 
 def load_stl(name: str):
