@@ -625,3 +625,62 @@ seed (P1 — that free angle is the mechanism's one true DOF, solved-for not
 filled-in). Four unrelated machines now assemble from data alone with the *same*
 code, and onboarding a joint type the library lacked cost one dataclass shared by
 all machines — never a per-machine special case. 道生一,一生二,二生三,三生萬物。
+
+## §15 — The keystone, one layer deeper: the Receiver as ONE solved rigid body (`anchors/sr6/closure_platform.py`)
+
+`assemble_full.py` (§9) closes all 6 legs, but it pins each rod's receiver-end to
+a **fixed firmware world pivot** (`PointAt`). That is the honest *leg-by-leg*
+statement: "given where the firmware says each pivot lives, a real rod of the
+perceived length reaches it." It still *asserts* the platform geometry six times
+over. The deeper parallel-mechanism claim is the one a real machine must satisfy:
+
+> the four ball-joint pivots are LOCAL points on a **single rigid Receiver body**;
+> nothing pins that body anywhere. Each leg is collapsed to its only
+> kinematically-meaningful scalar — the bearing-to-bearing length `link` — as a
+> `Distance` from a fixed arm-tip to the pivot it drives. The mechanism-agnostic
+> solver must **discover** the 6-DOF pose at which all six leg lengths are
+> *simultaneously* satisfiable. (Two main legs per side share one pivot, so the
+> body carries 4 pivots driven by 6 length constraints — over-determined, the
+> generic regime `uam.assembly.solve` already handles.)
+
+Seeded **off home on purpose** — translated `(+12,−9,+17) mm` and tilted ~11° —
+the same generic kernel recovers the firmware home pose:
+
+```
+solved receiver  t = (+1.2e-12, −3.6e-11, +1.1e-14) mm
+residual rotation from home          = 1.6e-04 deg
+worst pivot world-drift from home    = 9.5e-12 mm
+general-solver constraint RMS        = 1.1e-14 mm
+```
+
+The six independent firmware leg geometries are therefore **mutually consistent
+with one rigid platform**, and that platform pose **emerges** from the mate graph
+rather than being asserted (P1, P3, P5). Nothing here is SR6-specific: it is the
+identical Stewart pattern (§8–§9) — a rigid platform on length-only struts — now
+shown to be exactly what the SR6 receiver is.
+
+## §16 — Forward kinematics of the full parallel platform, by the SAME kernel (`forward_heave_sweep`, `render_platform.py`)
+
+The last honest question: does the platform **move** as a parallel mechanism, not
+just sit at home? For a commanded pure heave `dz`, each leg's pivot rises to
+`pivot_home + dz·ẑ`; decoupled per-leg inverse kinematics (one `brentq` root on
+the servo arm angle, the leg's single real DOF) gives the six arm-tips. Handed
+**only** those arm-tips, the mechanism-agnostic solver recovers the platform pose:
+
+```
+ dz_cmd | dz_solved | parasitic xy | max link err |   RMS
+ −20.0  | −20.0000  |   2.2e-12    |   2.8e-14    | 1.5e-14
+ −10.0  | −10.0000  |   1.1e-13    |   0.0e+00    | 0.0e+00
+  −3.0  |  −3.0000  |   4.0e-15    |   0.0e+00    | 0.0e+00
+  +3.0  |  +3.0000  |   3.2e-11    |   0.0e+00    | 0.0e+00
+ +10.0  | +10.0000  |   5.3e-13    |   2.8e-14    | 1.5e-14
+ +20.0  | +20.0000  |   3.6e-11    |   2.8e-14    | 2.6e-14
+```
+
+The solved heave tracks the command to machine precision; parasitic horizontal
+slip and tilt stay at solver noise (≤4e-11 mm / deg) — pure heave is a clean
+workspace direction, recovered with **zero** constraint residual by the layer
+that knows nothing about the SR6. `render_platform.py` draws the real STL
+assembly at `dz = −20/0/+20 mm`: one rigid Receiver translating bodily while the
+twelve printed leg parts splay to follow (`results/platform_heave.png`). The
+mechanism is closed, and it is closed *in motion*. 為學者日益，聞道者日損；損之又損，以至於無為，無為而無不為。
