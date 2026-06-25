@@ -46,6 +46,12 @@ jobs:
           python "60-实战_Projects/ORS6_Stewart/closed_loop/assembly/verify_assembly.py"
           python -m pytest "60-实战_Projects/ORS6_Stewart/closed_loop/tests/test_assembly.py" -v
 
+      - name: "Gate 5 - SR6 TRUTH backend verification (firmware port + rigid FK + PDF motion spec)"
+        run: |
+          python "60-实战_Projects/ORS6_Stewart/sr6_truth/validate.py"
+          python -m pytest "60-实战_Projects/ORS6_Stewart/sr6_truth/tests/test_truth.py" -v
+          cp "60-实战_Projects/ORS6_Stewart/sr6_truth/report.json" docs/models/verify_report.json
+
       - name: Upload SR6 closure artifacts
         if: always()
         uses: actions/upload-artifact@v4

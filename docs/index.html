@@ -60,6 +60,7 @@
 </header>
 <nav>
   <button class="active" data-tab="t_live">交互机构 (实时)</button>
+  <button data-tab="t_verify">验证报告 (自动)</button>
   <button data-tab="t_compare">对照官方实拍</button>
   <button data-tab="t_truth">真值溯源</button>
 </nav>
@@ -78,6 +79,25 @@
       <div class="chk"><label><input type="checkbox" id="chkEnc" checked> 显示红色外壳 (框架/底座/盖)</label></div>
       <p class="mono">舵机由真实框架 STL 卡槽固定；接收器 home 位姿由"每个舵机到其球铰=固件距离"反解得到（与固件内置 15° 独立吻合）。拖动滑块时，臂随舵机转、连杆始终保持 175mm。</p>
     </aside>
+  </div>
+</section>
+
+<section id="t_verify" class="tab">
+  <div class="pad">
+    <div class="card">
+      <h3>后端自动验证 · 闭环（无需人工肉眼检查）</h3>
+      <p class="mono">每次 push，CI (Gate 5) 自动运行 <code>sr6_truth/validate.py</code> + pytest：把模型放到真实物理 + 官方 PDF 运动规格下逐项判定。下方实时读取最新 <code>verify_report.json</code>。锚点全部是<b>外部真值</b>（固件常数、实测 STL、PDF 第5页规格），非自指。</p>
+      <div id="verifySummary"></div>
+    </div>
+    <div class="card">
+      <h3>验证项</h3>
+      <div id="verifyChecks">加载中…</div>
+    </div>
+    <div class="card">
+      <h3>可达工作空间 vs 官方规格 (PDF 第5页)</h3>
+      <table class="rod" id="verifyWs"></table>
+      <p class="mono">“可达”= 该位姿下 6 连杆能精确闭合 175mm（机器精度）。可达范围需<b>包含</b>官方规格才算达标。</p>
+    </div>
   </div>
 </section>
 
@@ -124,6 +144,33 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   b.classList.add('active'); document.getElementById(b.dataset.tab).classList.add('active');
   window.dispatchEvent(new Event('resize'));
 });
+
+// ---- live verification report ----
+const CHECK_ZH={firmware_fidelity:"固件保真：Python 移植 == ESP32 C 运动学",
+  home_closure:"Home 闭合：静止时 6 杆精确 175mm",
+  operating_envelope_closure:"工作空间闭合：±30mm/±30° 全程 6 杆=175mm",
+  meets_pdf_motion_spec:"达到官方运动规格：可达范围包含 PDF 第5页",
+  axis_decoupling:"轴解耦：纯俯仰不动主臂；纯冲程左右对称",
+  mirror_symmetry:"镜像对称：左右严格对称",
+  continuity_no_singularity:"连续无奇异：舵机角全程平滑",
+  arm_within_servo_limit:"舵机限位：所有臂在 ±80° 物理范围内"};
+fetch('./models/verify_report.json?_='+Date.now()).then(r=>r.json()).then(rep=>{
+  const sum=document.getElementById('verifySummary');
+  const np=rep.checks.filter(c=>c.pass).length, nt=rep.checks.length;
+  sum.innerHTML=`<span class="badge ${rep.all_pass?'ok':'bad'}">${rep.all_pass?'全部通过':'有失败'} ${np}/${nt}</span>`+
+    `<div class="mono">连杆=${rep.geometry.rod_mm}mm · 主臂=${rep.geometry.arm_main_mm}mm · 俯仰臂=${rep.geometry.arm_pitch_mm}mm · home 前倾 ${rep.geometry.home_tilt_deg}° · 高度 ${rep.geometry.home_height_mm}mm</div>`;
+  document.getElementById('verifyChecks').innerHTML='<table class="rod"><tbody>'+
+    rep.checks.map(c=>`<tr><td class="${c.pass?'g':'r'}">${c.pass?'✓ PASS':'✗ FAIL'}</td>`+
+      `<td>${CHECK_ZH[c.name]||c.name}</td></tr>`).join('')+'</tbody></table>';
+  const ws=rep.workspace, rows=['stroke','surge','sway','roll','pitch','yaw'].filter(k=>ws[k]);
+  const ZH={stroke:'冲程',surge:'前后',sway:'左右',roll:'滚转',pitch:'俯仰',yaw:'偏航'};
+  document.getElementById('verifyWs').innerHTML=
+    '<thead><tr><th>轴</th><th>可达范围</th><th>官方规格</th><th>达标</th></tr></thead><tbody>'+
+    rows.map(k=>{const w=ws[k];const ok=w.spec==null||(w.max>=w.spec&&w.min<=-w.spec);
+      return `<tr><td>${ZH[k]}</td><td>[${w.min}, ${w.max}] ${w.unit}</td>`+
+      `<td>${w.spec!=null?'±'+w.spec+' '+w.unit:'—'}</td>`+
+      `<td class="${ok?'g':'r'}">${w.spec==null?'—':(ok?'✓':'✗')}</td></tr>`;}).join('')+'</tbody>';
+}).catch(e=>{document.getElementById('verifyChecks').innerHTML='<span class="mono">报告将在 CI 运行后生成 (verify_report.json)。</span>';});
 </script>
 <script type="module" src="./app.js"></script>
 </body>
