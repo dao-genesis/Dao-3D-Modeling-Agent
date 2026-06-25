@@ -163,13 +163,17 @@ RECV_PARTS: Set[str] = {"Receiver", "Twist_Base", "Twist_Body", "Twist_Lid",
 
 # 6 servo slots (STL coords, Z-up, mm) — 物理布局 · 固件 out1-out6 顺序
 # (name, type, x_mm, y_mm, sign_to_receiver)
+# 真本源: 实测机架舵机腔轴心 (见 closed_loop/true_kinematics.py SERVO_O)。
+# 旧硬编码 (±99.6, ±37) 是幻觉, 与实测/固件均不符; 已纠正:
+#   main  X=±85.0 (实测腔轴), Y=±30.0 (腔中心)
+#   pitch X=±84.0 (实测俯仰舵机腔, 非旧 HALLUCINATION_MAP 猜的 ±45), Y=0
 SERVO_SLOTS: List[Tuple[str, str, float, float, int]] = [
-    ("LowerLeft",  "main",  -99.6, +37.0, -1),
-    ("UpperLeft",  "main",  -99.6, -37.0, -1),
-    ("LeftPitch",  "pitch", -99.6,   0.0, -1),
-    ("RightPitch", "pitch", +99.6,   0.0, +1),
-    ("UpperRight", "main",  +99.6, -37.0, +1),
-    ("LowerRight", "main",  +99.6, +37.0, +1),
+    ("LowerLeft",  "main",  -85.0, +30.0, -1),
+    ("UpperLeft",  "main",  -85.0, -30.0, -1),
+    ("LeftPitch",  "pitch", -84.0,   0.0, -1),
+    ("RightPitch", "pitch", +84.0,   0.0, +1),
+    ("UpperRight", "main",  +85.0, -30.0, +1),
+    ("LowerRight", "main",  +85.0, +30.0, +1),
 ]
 
 

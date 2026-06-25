@@ -3,8 +3,9 @@
 """SR6 closure report + figures.
 
 产出 (写到 ./out/):
-  closure_report.json   每个位姿的 IK角 / 闭环残差 / 杆长误差 + 聚合统计
-  closure_figure.png    3 联图: (1) 杆长恒=175 (2) 闭环残差量级 (3) 工作空间俯视
+  closure_report.json   每个位姿: (A)刚体IK角/闭环残差/杆长 + (B)固件平面近似差 + 聚合
+  closure_figure.png    4 联图: (1)杆长恒=175 (2)闭环残差~机器精度
+                                (3)固件 vs 刚体不可消除差 (4)工作空间俯视
 运行: python closure_report.py
 """
 from __future__ import annotations
@@ -28,12 +29,17 @@ def build_report():
         r = tk.closure_error(pose)
         row = {"pose": [round(float(x), 4) for x in pose], "reachable": r["reachable"]}
         if r["reachable"]:
+            g = tk.firmware_gap(pose)
             row.update({
                 "angles_deg": {s: round(math.degrees(v), 4) for s, v in r["angles"].items()},
                 "rods_mm": {s: round(L, 9) for s, L in tk.rod_lengths(r["angles"], pose).items()},
                 "closure_dt_mm": r["dt_mm"],
                 "closure_dr_deg": r["dr_deg"],
                 "max_rod_err_mm": r["max_rod_err"],
+                "fw_gap_main_mm": g["gap_main_mm"],
+                "fw_gap_pitch_mm": g["gap_pitch_mm"],
+                "oop_main_mm": g["oop_main_mm"],
+                "oop_pitch_mm": g["oop_pitch_mm"],
             })
         rows.append(row)
     reach = [x for x in rows if x["reachable"]]
@@ -43,8 +49,18 @@ def build_report():
         "worst_rod_err_mm": max((x["max_rod_err_mm"] for x in reach), default=None),
         "worst_closure_dt_mm": max((x["closure_dt_mm"] for x in reach), default=None),
         "worst_closure_dr_deg": max((x["closure_dr_deg"] for x in reach), default=None),
+        "fw_gap_home_main_mm": next((x["fw_gap_main_mm"] for x in reach), None),
+        "fw_gap_worst_main_mm": max((x["fw_gap_main_mm"] for x in reach), default=None),
+        "fw_gap_worst_pitch_mm": max((x["fw_gap_pitch_mm"] for x in reach), default=None),
         "rod_nominal_mm": tk.ROD,
         "home_height_mm": tk.HOME_H,
+        "interpretation": (
+            "(A) rigid IK->FK self-closure ~ machine eps (mechanism is geometrically "
+            "self-consistent on measured truth). (B) firmware is 2D planar IK ignoring "
+            "the measured ~25mm out-of-plane servo<->pivot offset; the irreducible per-leg "
+            "rod-constraint violation = sqrt(175^2+h^2)-175. This is the honest firmware-"
+            "vs-rigid gap (NOT a calibration failure, NOT a self-referential tautology)."
+        ),
     }
     return {"aggregate": agg, "poses": rows}
 
@@ -55,7 +71,7 @@ def make_figure(report, path):
     import matplotlib.pyplot as plt
 
     reach = [r for r in report["poses"] if r["reachable"]]
-    fig, ax = plt.subplots(1, 3, figsize=(15, 4.6))
+    fig, ax = plt.subplots(1, 4, figsize=(19, 4.6))
 
     # (1) 每条腿每位姿杆长 —— 应全部贴在 175
     for i, s in enumerate(tk.SERVOS):
@@ -76,16 +92,30 @@ def make_figure(report, path):
     ax[1].set_xlabel("pose idx"); ax[1].set_ylabel("residual (log)")
     ax[1].legend(fontsize=7)
 
-    # (3) 工作空间俯视 (X-Y) reachable vs not
+    # (3) 固件 2D 平面近似 vs 3D 刚体 不可消除差 —— 随平面外偏移 h 增长
+    oop = [r["oop_main_mm"] for r in reach]
+    gm = [r["fw_gap_main_mm"] for r in reach]
+    order = sorted(range(len(oop)), key=lambda i: oop[i])
+    ax[2].plot([oop[i] for i in order], [gm[i] for i in order], "o-", ms=3, label="main legs")
+    ax[2].plot([r["oop_pitch_mm"] for r in reach], [r["fw_gap_pitch_mm"] for r in reach],
+               "s", ms=3, label="pitch legs")
+    hh = np.linspace(0, max(oop) + 5, 60)
+    ax[2].plot(hh, np.sqrt(tk.ROD ** 2 + hh ** 2) - tk.ROD, "k--", lw=1,
+               label=r"$\sqrt{175^2+h^2}-175$")
+    ax[2].set_title("Firmware planar-IK vs rigid gap (irreducible)")
+    ax[2].set_xlabel("out-of-plane offset h (mm)"); ax[2].set_ylabel("rod violation (mm)")
+    ax[2].legend(fontsize=7)
+
+    # (4) 工作空间俯视 (X-Y) reachable vs not
     allp = report["poses"]
     for r in allp:
         x, y = r["pose"][0], r["pose"][1]
-        ax[2].scatter(x, y, c=("tab:green" if r["reachable"] else "tab:red"),
+        ax[3].scatter(x, y, c=("tab:green" if r["reachable"] else "tab:red"),
                       s=40, marker=("o" if r["reachable"] else "x"))
-    ax[2].set_title("Sampled workspace (green=closed, red=unreachable)")
-    ax[2].set_xlabel("tx (mm)"); ax[2].set_ylabel("ty (mm)")
-    ax[2].axhline(0, color="gray", lw=.5); ax[2].axvline(0, color="gray", lw=.5)
-    ax[2].set_aspect("equal", "box")
+    ax[3].set_title("Sampled workspace (green=closed, red=unreachable)")
+    ax[3].set_xlabel("tx (mm)"); ax[3].set_ylabel("ty (mm)")
+    ax[3].axhline(0, color="gray", lw=.5); ax[3].axvline(0, color="gray", lw=.5)
+    ax[3].set_aspect("equal", "box")
 
     fig.suptitle("SR6 TRUE 3D parallel-mechanism closure (measured-truth geometry)")
     fig.tight_layout()
@@ -102,9 +132,14 @@ def main():
     a = rep["aggregate"]
     print("== SR6 closure report ==")
     print(f"  reachable {a['poses_reachable']}/{a['poses_total']}")
-    print(f"  worst rod-length error : {a['worst_rod_err_mm']:.3e} mm")
-    print(f"  worst closure (transl) : {a['worst_closure_dt_mm']:.3e} mm")
-    print(f"  worst closure (rotate) : {a['worst_closure_dr_deg']:.3e} deg")
+    print("  (A) rigid 3D self-closure:")
+    print(f"      worst rod-length error : {a['worst_rod_err_mm']:.3e} mm")
+    print(f"      worst closure (transl) : {a['worst_closure_dt_mm']:.3e} mm")
+    print(f"      worst closure (rotate) : {a['worst_closure_dr_deg']:.3e} deg")
+    print("  (B) firmware planar-IK vs rigid gap (irreducible):")
+    print(f"      home main-leg gap      : {a['fw_gap_home_main_mm']:.3f} mm")
+    print(f"      worst main-leg gap     : {a['fw_gap_worst_main_mm']:.3f} mm")
+    print(f"      worst pitch-leg gap    : {a['fw_gap_worst_pitch_mm']:.3f} mm")
     print(f"  -> wrote {OUT}/closure_report.json + closure_figure.png")
 
 
