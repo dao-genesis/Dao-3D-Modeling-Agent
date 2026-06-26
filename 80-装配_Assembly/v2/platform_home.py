@@ -82,8 +82,12 @@ def build_platform(verbose=True):
     parts = [(Mf[n].vertices, Mf[n].faces, COLORS[n]) for n in FIXED]
     for n in PLATFORM:
         parts.append((Mp[n].vertices + shift, Mp[n].faces, COLORS[n]))
-    pivots = ears + shift
     rc = rec.vertices.mean(axis=0) + shift
+    # candidate rod attachment points = the REAL receiver surface (raised).
+    # No invented pivots: each rod connects to an actual receiver vertex, picked
+    # so the rod's true 175mm length fits and rods distribute over the cradle.
+    rec_v = rec.vertices + shift
+    ROD_LEN = abs(ROD_B[1] - ROD_A[1])
 
     for c, a in bearings:
         best = None
@@ -95,11 +99,15 @@ def build_platform(verbose=True):
                 best = (sc, v, T, pin)
         parts.append((best[1], arm.faces, COLORS["Arm"]))
         crankpin = best[3]
-        # the rod is a real 175mm two-bore link from the crankpin up to the
-        # elevated platform. The crank/bearing stack gives the rod a swing DOF;
-        # orient the rod so its bore axis points from the crankpin toward the
-        # nearest platform pivot (rods rise to the platform, no splay).
-        tgt = min(pivots, key=lambda p: np.linalg.norm(p - crankpin))
+        # the rod is a real 175mm two-bore link with a ball joint at the crankpin
+        # (free swing). Among the real receiver-surface points on the SAME side
+        # as this servo, choose the one whose distance best matches the rod's
+        # 175mm length, then orient the rod's bore axis straight at it. Rods rise
+        # and spread to distinct real contact points instead of splaying flat.
+        same = rec_v[np.sign(rec_v[:, 0]) == np.sign(crankpin[0])]
+        cand = same if len(same) else rec_v
+        d = np.linalg.norm(cand - crankpin, axis=1)
+        tgt = cand[np.argmin(np.abs(d - ROD_LEN))]
         direction = (tgt - crankpin)
         direction = direction / np.linalg.norm(direction)
         R = rot_between(ROD_AX, direction)
@@ -107,8 +115,9 @@ def build_platform(verbose=True):
         parts.append((rv, rod.faces, COLORS["Rod"]))
         endB = R @ ROD_B + (crankpin - R @ ROD_A)
         if verbose:
-            print(f"   crankpin {np.round(crankpin,1)} -> pivot {np.round(tgt,1)} "
-                  f"gap {np.linalg.norm(tgt-crankpin):.1f}mm rodB {np.round(endB,1)}")
+            print(f"   crankpin {np.round(crankpin,1)} -> recv pt {np.round(tgt,1)} "
+                  f"gap {np.linalg.norm(tgt-crankpin):.1f}mm endB-tgt "
+                  f"{np.linalg.norm(endB-tgt):.1f}mm")
     return parts, dz
 
 
