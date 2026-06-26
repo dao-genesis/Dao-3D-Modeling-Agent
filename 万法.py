@@ -20,7 +20,7 @@ r"""
 
         `from 万法 import 道`
 
-    其下掛十四妙門, 皆懶加載, 隨用隨取, 不用不擾:
+    其下掛十五妙門, 皆懶加載, 隨用隨取, 不用不擾:
 
         核 (kernel)   · OCP/OCCT BREP · 無中間層建模本源
         反 (reverse)  · 外(天下 20 平台) / 內(FCStd/STEP/BREP)
@@ -36,6 +36,7 @@ r"""
         鍛 (forge)    · FreeCAD 動態持久化
         執 (engine)   · 多引擎透明執行
         宗 (zong)     · 第十四妙門 · 源碼總攝 · 16 宗 221 倉 · 取之盡錙銖
+        感 (perceive) · 第十五妙門 · 三維心象 · 渲/寫/述/復/校 · 純 numpy 自洽
 
     另有 `道.意(…)` 一門, 受自然語言之意念, 自動反向優先, 天下無有方從無到有.
 
@@ -708,6 +709,96 @@ class _EngineFacet:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# ⑮ 感·面 (perception facet) · 三维心象 · 不依赖任何外部建模/云平台
+#     見小曰明 · 以神遇而不以目視 · 道生一(光栅)一生二(轮廓+深度)二生三(位姿)三生万物
+#     render 渲 → sketch 写 → describe 述 → recover 复 → compare 校
+# ═══════════════════════════════════════════════════════════════════════════
+class _PerceptionFacet:
+    """第十五妙门 · 三维感知 · 纯 numpy 自洽闭环 (dao_perception).
+
+    五能, 皆零外部依赖 (仅 numpy; 读网格可选 trimesh):
+        渲(render)   · 软光栅 z-buffer → 深度/掩膜/法线/明暗
+        写(sketch)   · Marr 2.5D 初草图 (轮廓/深度棱/折痕)
+        述(describe) · 结构理解 (PCA 主轴/对称/连通件/欧拉/五问)
+        复(recover)  · 分析-综合反演位姿 (藏一姿→多视轮廓→从头复原)
+        校(compare)  · 两模型 ICP 对齐 + Hausdorff 差异 (抓幻觉/错坐标)
+    """
+
+    def __init__(self):
+        self._mod = None
+
+    def _load(self):
+        if self._mod is None:
+            import dao_perception
+            self._mod = dao_perception
+        return self._mod
+
+    def 述(self, path: str, **kw) -> Res:
+        """述: 读网格→结构理解, 答五问 (拓扑/失败/约束/手感/负空间)."""
+        try:
+            m = self._load()
+            V, F = m.load_mesh(path)
+            return Res.succ(data=m.describe(V, F, **kw))
+        except Exception as e:
+            return Res.fail(f"感·述: {e}")
+
+    def 渲(self, path: str, view: str = "iso", res: int = 320,
+           out: Optional[str] = None) -> Res:
+        """渲: 软光栅渲染一视角, 返回掩膜像素数; out 给定则存明暗 PNG."""
+        try:
+            m = self._load()
+            V, F = m.load_mesh(path)
+            cam = m._auto_cam(V, view, res)
+            rr = m.render(V, F, cam)
+            if out:
+                m.save_gray(rr.shaded, out)
+            return Res.succ(data={"view": view, "res": res,
+                                  "mask_px": int(rr.mask.sum()), "out": out})
+        except Exception as e:
+            return Res.fail(f"感·渲: {e}")
+
+    def 写(self, path: str, view: str = "iso", res: int = 320,
+           out: Optional[str] = None) -> Res:
+        """写: 提取 2.5D 初草图 (轮廓/深度棱/折痕); out 给定则存 RGB 叠加图."""
+        try:
+            m = self._load()
+            V, F = m.load_mesh(path)
+            cam = m._auto_cam(V, view, res)
+            rr = m.render(V, F, cam)
+            sk = m.sketch(rr)
+            if out:
+                m.save_rgb(m.sketch_rgb(rr), out)
+            return Res.succ(data={
+                "view": view, "res": res, "out": out,
+                "silhouette_px": int(sk["silhouette"].sum()),
+                "depth_edge_px": int(sk["depth_edge"].sum()),
+                "crease_px": int(sk["crease"].sum()),
+            })
+        except Exception as e:
+            return Res.fail(f"感·写: {e}")
+
+    def 复(self, path: str, res: int = 128, n_pts: int = 7000,
+           seed: int = 2026) -> Res:
+        """复: 自洽闭环位姿反演 — 藏一姿→多视轮廓→从头复原, 报角度/位移误差."""
+        try:
+            m = self._load()
+            V, F = m.load_mesh(path)
+            return Res.succ(data=m.recover_selftest(V, F, res=res, n_pts=n_pts, seed=seed))
+        except Exception as e:
+            return Res.fail(f"感·复: {e}")
+
+    def 校(self, a: str, b: str, align: bool = True, n: int = 4000) -> Res:
+        """校: 两模型对齐+差异 (mean/Hausdorff/匹配率), 抓错坐标与幻觉."""
+        try:
+            m = self._load()
+            Va, Fa = m.load_mesh(a)
+            Vb, Fb = m.load_mesh(b)
+            return Res.succ(data=m.compare(Va, Fa, Vb, Fb, n=n, align=align))
+        except Exception as e:
+            return Res.fail(f"感·校: {e}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # ⑭ 宗·面 (zong facet) · 第十四妙门 · 源码总摄
 #     取之尽锱铢, 用之如泥沙 · 圣人总而用之, 其数一也.
 # ═══════════════════════════════════════════════════════════════════════════
@@ -907,6 +998,13 @@ class Dao:
         return self._caps.setdefault("执", _EngineFacet())
 
     engine = 执
+
+    @property
+    def 感(self) -> _PerceptionFacet:
+        return self._caps.setdefault("感", _PerceptionFacet())
+
+    perception = 感
+    perceive = 感
 
     @property
     def 宗(self) -> _ZongFacet:
