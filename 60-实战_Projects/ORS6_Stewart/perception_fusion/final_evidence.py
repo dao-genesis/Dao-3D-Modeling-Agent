@@ -11,6 +11,11 @@ sys.path.insert(0, os.path.normpath(os.path.join(os.path.dirname(__file__), ".."
 import trimesh
 import dao_jiao as DJ
 import fastfit as FF
+import build_pose as BP
+
+# 最佳工作位姿(deploy_solve.py 密搜结果): 低推力 L0=1500, 平台回缩至 z=166.5mm,
+# 6 杆全部精确 175.0mm 自洽; 轮廓 IoU=0.6885 > home(0.66), 与 Tripo(0.695) 同档.
+BEST_POSE = (1500, 5000, 5000, 5000, 5000, 5000)
 import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
 from matplotlib import font_manager as _fm
 CJK = None
@@ -42,14 +47,14 @@ def overlay(model_mask):
 CACHE = os.path.join(OUT, "three_way_final.json")
 
 
-def fit_and_render(P, V, F, vcol=None, els=(0, 10, 20, 30, 45), label="", cached=None):
+def fit_and_render(P, V, F, vcol=None, els=(0, 12, 24, 36, 48, 58), label="", cached=None):
     pf = DJ.PoseFitter(V, F, vcol)
     if cached is not None:
         az, el, mir, roll, iou = cached["az"], cached["el"], cached["mir"], cached["roll"], cached["iou"]
     else:
         ff = FF.FastFitter(P)
         t0 = time.time()
-        iou, az, el, mir, roll = ff.search(pm, az_step=20, els=els, coarse_res=170, fine=True, log=None)
+        iou, az, el, mir, roll = ff.search(pm, az_step=15, els=els, coarse_res=180, fine=True, log=None)
         print(f"{label}: IoU={iou:.4f} @az{az}el{el}m{mir}r{roll} ({time.time()-t0:.0f}s)")
     img, mm = pf.fitted_render(az, el, mir, roll, W=520)
     return dict(iou=float(iou), az=int(az), el=int(el), mir=int(mir), roll=int(roll), img=img, mask=mm)
@@ -64,9 +69,10 @@ def main():
     Pt, _ = trimesh.sample.sample_surface(trimesh.Trimesh(Vt, Ft, process=False), 45000)
     rt = fit_and_render(np.asarray(Pt, float), Vt, Ft, vct, label="② Tripo", cached=cache.get("tripo"))
 
-    # ③ 自建可用模型 (official ORS6_home.stl)
-    mh = trimesh.load(os.path.join(OUT, "ORS6_home.stl"), force="mesh")
+    # ③ 自建可用模型 (真零件装配 build_pose, 最佳工作位姿)
+    mh, info_h = BP.build(BEST_POSE)
     Vh, Fh = np.asarray(mh.vertices, float), np.asarray(mh.faces, int)
+    rod_dev_h = max(abs(x - 175.0) for x in info_h["rod_lens"])
     Ph, _ = trimesh.sample.sample_surface(trimesh.Trimesh(Vh, Fh, process=False), 45000)
     rh = fit_and_render(np.asarray(Ph, float), Vh, Fh, None, label="③ 自建", cached=cache.get("selfbuilt"))
 
@@ -77,7 +83,7 @@ def main():
     gs = fig.add_gridspec(2, 3, height_ratios=[3, 2])
     a = fig.add_subplot(gs[0, 0]); a.imshow(rgb); a.axis("off"); a.set_title("① 实物照片 (real hardware)", fontsize=13, fontproperties=CJK)
     a = fig.add_subplot(gs[0, 1]); a.imshow(rt["img"]); a.axis("off"); a.set_title(f"② Tripo 图转三维  IoU={rt['iou']:.3f}", fontsize=13, fontproperties=CJK)
-    a = fig.add_subplot(gs[0, 2]); a.imshow(rh["img"]); a.axis("off"); a.set_title(f"③ 自建可用模型(ORS6_home)  IoU={rh['iou']:.3f}", fontsize=13, fontproperties=CJK)
+    a = fig.add_subplot(gs[0, 2]); a.imshow(rh["img"]); a.axis("off"); a.set_title(f"③ 自建可用模型(最佳工作位姿)  IoU={rh['iou']:.3f}", fontsize=13, fontproperties=CJK)
     a = fig.add_subplot(gs[1, 1]); a.imshow(ov_t); a.axis("off"); a.set_title(f"②叠加 红=实物/绿=Tripo  IoU={iou_t:.3f}", fontsize=11, fontproperties=CJK)
     a = fig.add_subplot(gs[1, 2]); a.imshow(ov_h); a.axis("off"); a.set_title(f"③叠加 红=实物/绿=自建  IoU={iou_h:.3f}", fontsize=11, fontproperties=CJK)
     txt = fig.add_subplot(gs[1, 0]); txt.axis("off")
@@ -90,8 +96,9 @@ def main():
         "             -> Tripo视觉 59.3mm (Δ0.7mm)",
         " 接收环外径  CAD Ø114 -> Tripo Ø118.7", "",
         "③ 物理自洽(真零件装配):",
-        " 6 杆全部 = 175.0mm  零不可达",
+        f" 6 杆全部 = 175.0mm (偏差 {rod_dev_h:.4f})",
         " 底座/臂/杆/环 接口接触 不悬空",
+        f" 最佳工作位姿 T-Code={BEST_POSE}",
     ]
     txt.text(0.0, 0.98, "\n".join(lines), va="top", ha="left", fontsize=11, fontproperties=CJK)
     plt.tight_layout()
