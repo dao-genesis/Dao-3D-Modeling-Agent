@@ -60,6 +60,7 @@ from .analysis import (
 from .poses import MOTION_POSES, pose_by_name
 from .colored import (
     build_colored, render_views, export_glb, PALETTE, VIEWS,
+    build_fused, render_fused_views, export_fused_glb,
 )
 from .render import Part, render, hex_rgb
 from .tripo_model import (
@@ -91,6 +92,7 @@ __all__ = [
     "MOTION_POSES", "pose_by_name",
     # colored render (STL 骨架正向装配, 仅供参考)
     "build_colored", "render_views", "export_glb", "PALETTE", "VIEWS",
+    "build_fused", "render_fused_views", "export_fused_glb",
     "Part", "render", "hex_rgb",
     # Tripo image-to-3D 真相模型 (反向/canonical)
     "load_tripo", "render_tripo_views", "tripo_info",

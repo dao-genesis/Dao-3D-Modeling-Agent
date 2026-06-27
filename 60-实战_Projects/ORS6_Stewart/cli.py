@@ -26,6 +26,8 @@ Commands:
     rods [L0 L1 L2 R0 R1 R2]      — 杆几何 (默认 home)
     render [L0...R2] [label] [dir]— 逐件着色软件渲染 (多视角PNG, 无外部引擎)
     glb [L0...R2] [path]          — 导出逐件着色 GLB (可旋转查看)
+    fused [label] [dir]           — Tripo真相拟合装配 (反解, 多视角PNG)
+    fused-glb [path]              — 导出 Tripo真相拟合装配 GLB
     tripo [dir] [W]               — 渲染 Tripo image-to-3D 真相模型 (多视角PNG)
     tripo-info                    — Tripo 模型 顶点/面/包围盒/尺寸(mm)
     build [L0...R2] [label]       — CadQuery 构建一姿态
@@ -232,6 +234,17 @@ def main():
         for p in paths:
             print(f"  {p}")
         print(f"\n{len(paths)} views rendered → {out_dir}")
+    elif cmd == "fused":
+        label = args[1] if len(args) > 1 else "fused"
+        out_dir = args[2] if len(args) > 2 else "output/renders"
+        paths = S.render_fused_views(out_dir=out_dir, label=label)
+        for p in paths:
+            print(f"  {p}")
+        print(f"\n{len(paths)} fused views rendered → {out_dir}")
+    elif cmd == "fused-glb":
+        out_path = args[1] if len(args) > 1 else "output/ORS6_fused_colored.glb"
+        p = S.export_fused_glb(out_path=out_path)
+        print(f"Fused GLB exported: {p} ({os.path.getsize(p)//1024}KB)")
     elif cmd == "tripo":
         out_dir = args[1] if len(args) > 1 else "output/tripo"
         W = int(args[2]) if len(args) > 2 else 720
