@@ -25,6 +25,16 @@ from .kinematics import StewartIK, TCODE_HOME, ARM_PIVOT_STL
 from .parts import (PARTS, SR6, HOME_H, SERVO_SLOTS, RECV_PARTS,
                     DEFAULT_HIDDEN, stl_path)
 
+# 接收器: 照片中的设备只有简单圆环, 无 T-wist 齿轮头 → 装配只取 "Receiver"
+RECV_RING = "Receiver"
+# 真实推杆 STL (191mm 实物连杆) — 取代旧版细圆柱("浆糊"主因之一)
+LINK_MAIN, LINK_PITCH = "MainLink", "PitcherLink"
+
+# TRIPO_POSE: 反者道之动 — 由 Tripo image-to-3D 真相反解出的接收器静止位姿.
+# Tripo 圆环区中心 ≈ (-5, 9, 168)mm (相对 HOME 居中位 (0,0,208.48) 重力下沉 ~40mm),
+# 经固件 IK 逆映射 → T-Code, compute_receiver_pose 验证落点 (-5.0, 8.99, 168.01).
+TRIPO_POSE: Tuple = (1627, 6499, 4166, 5000, 5000, 5000)
+
 FRAME_X = 99.6
 _INSTANCED = {"Arm", "L_Pitcher", "R_Pitcher"}
 
@@ -64,6 +74,33 @@ def _Ry(deg):
 def _Rx(deg):
     t = math.radians(deg); c, s = math.cos(t), math.sin(t)
     return np.array([[1, 0, 0], [0, c, -s], [0, s, c]])
+
+
+def _place_link(name, tip, mount):
+    """Orient a real link STL so its two eye-ends meet (tip, mount).
+
+    The link's long axis is native +Y; its flat (thin) normal is native +Z.
+    Every SR6 rod lies in a constant-Y plane, so the placed flat normal = world
+    +Y. Returns (V, F) of the oriented link, or (None, None) if missing.
+    """
+    V, F = _load(name)
+    if V is None:
+        return None, None
+    c = (V.min(0) + V.max(0)) / 2
+    ea = np.array([c[0], V[:, 1].max(), c[2]])   # eye end A (native +Y)
+    eb = np.array([c[0], V[:, 1].min(), c[2]])   # eye end B (native -Y)
+    al = eb - ea; Llen = np.linalg.norm(al) or 1.0; al = al / Llen
+    nl = np.array([0, 0, 1.0])                   # native flat normal
+    tl = np.cross(al, nl)
+    at = np.array(mount) - np.array(tip); Tlen = np.linalg.norm(at) or 1.0; at = at / Tlen
+    nt = np.array([0, 1.0, 0])
+    if abs(np.dot(at, nt)) > 0.99:
+        nt = np.array([0, 0, 1.0])
+    nt = nt - at * np.dot(at, nt); nt = nt / (np.linalg.norm(nt) or 1.0)
+    tt = np.cross(at, nt)
+    R = np.column_stack([at, nt, tt]) @ np.column_stack([al, nl, tl]).T
+    s = Tlen / Llen
+    return (s * (V - ea)) @ R.T + np.array(tip), F
 
 
 def build_colored(pose: Tuple = TCODE_HOME) -> List[Part]:
@@ -124,21 +161,26 @@ def build_colored(pose: Tuple = TCODE_HOME) -> List[Part]:
             V = (V - piv) @ _Ry(delta).T + piv
         parts.append(Part(V, F, PALETTE["horn"], pname))
 
-    # ── C. receiver + T-wist head (red), elevated to HOME_H + pose ──
-    for nm in (n for n in RECV_PARTS if n not in DEFAULT_HIDDEN):
-        V, F = _load(nm)
-        if V is None:
-            continue
+    # ── C. receiver RING only (red) — 圆环中心落到接收器位姿 (tx,ty) + 安装环 Z ──
+    mounts = np.array([geom["recv_mounts"][s] for s, _, _, _, _ in SERVO_SLOTS])
+    mount_cz = float(mounts.mean(0)[2])
+    V, F = _load(RECV_RING)
+    if V is not None:
+        rc = (V.min(0) + V.max(0)) / 2
         if abs(roll) > 0.01 or abs(pitch) > 0.01:
-            V = V @ _Rx(pitch).T @ _Ry(roll).T
-        V = V + np.array([tx, ty, HOME_H + recv_dz])
-        parts.append(Part(V, F, PALETTE["recv"], nm))
+            V = (V - rc) @ _Rx(pitch).T @ _Ry(roll).T + rc
+            rc = (V.min(0) + V.max(0)) / 2
+        V = V - rc + np.array([tx, ty, mount_cz])
+        parts.append(Part(V, F, PALETTE["recv"], RECV_RING))
 
-    # ── D. 6 push-rods (red) + chrome ball joints, from verified IK ──
-    for sname, _stype, _sx, _sy, _sign in SERVO_SLOTS:
+    # ── D. 6 push-rods = REAL link STLs (tip→mount) + chrome ball joints ──
+    for sname, stype, _sx, _sy, _sign in SERVO_SLOTS:
         tip = geom["arm_tips"][sname]
         mount = geom["recv_mounts"][sname]
-        V, F = cylinder(tip, mount, r=3.0)
+        link = LINK_MAIN if stype == "main" else LINK_PITCH
+        V, F = _place_link(link, tip, mount)
+        if V is None:                       # fallback: thin rod
+            V, F = cylinder(tip, mount, r=3.0)
         parts.append(Part(V, F, PALETTE["rod"], f"Rod_{sname}"))
         for pt in (tip, mount):
             Vs, Fs = uvsphere(pt, r=5.0)
