@@ -105,13 +105,13 @@ def build(p, res):
         Va, Fa, Ra, ta = B.arm_transform(s, th)
         parts.append((K.Tb((Va @ Ra.T) + ta), Fa, K.C_ARM))
         Vl, Fl, ea, eb = B.place_link(s, tip, M)
-        parts.append((K.Tb(Vl), Fl, K.C_ROD))
-        for a, b in ((tip, ea), (M, eb)):            # real ball-screw studs
-            Vc, Fc = B.cylinder(a, b, 3.0, 12)
+        parts.append((K.Tb(Vl), Fl, K.C_ARM))        # printed dog-bone link = cream
+        for a, b in ((tip, ea), (M, eb)):            # silver ball-screw studs (metal)
+            Vc, Fc = B.cylinder(a, b, 2.6, 12)
             parts.append((K.Tb(Vc), Fc, K.C_ROD))
-        for c in (tip, M):                           # ball joints at the true centres
+        for c in (tip, M):                           # silver ball joints at true centres
             Vs, Fs = K.icosphere(c, 4.5, 1)
-            parts.append((K.Tb(Vs), Fs, K.C_BALL))
+            parts.append((K.Tb(Vs), Fs, K.C_ROD))
     return parts
 
 
