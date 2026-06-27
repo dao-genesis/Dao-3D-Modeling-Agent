@@ -128,38 +128,53 @@ def build_colored(pose: Tuple = TCODE_HOME) -> List[Part]:
         col = PALETTE["frame"] if nm in ("L_Frame", "R_Frame") else PALETTE["body"]
         parts.append(Part(V, F, col, nm))
 
-    # ── B. 4 main servo arms (white horns), instanced + IK-rotated ──
+    # ── B. 4 main servo arms (white horns), FEATURE-ALIGNED to shaft & rod tip ──
+    # The Arm STL's native long axis (bore→far end) = +Y, its flat-plate normal
+    # = +Z, and its spline bore = ARM_PIVOT_STL. Installed: bore sits on the servo
+    # shaft (sx,sy,servoPivotH); the servo rotation axis is world +Y (firmware IK
+    # swings the horn in the constant-Y / X-Z plane); the arm points from the shaft
+    # straight at the rod tip. No scaling → the rod-hole at arm_len lands on tip,
+    # so the 175mm rod meets the horn by construction (零悬空/零错位).
     Varm, Farm = _load("Arm")
     if Varm is not None:
+        nat_long = np.array([0.0, 1.0, 0.0])
+        nat_norm = np.array([0.0, 0.0, 1.0])
+        bore = np.array(ARM_PIVOT_STL)
+        Mn = np.column_stack([nat_long, nat_norm, np.cross(nat_long, nat_norm)])
         for sname, stype, sx, sy, _sign in SERVO_SLOTS:
             if stype != "main":
                 continue
-            is_left = sx < 0
-            V = Varm.copy()
-            if is_left:
-                V = V * np.array([-1, 1, 1.0])
-                F = Farm[:, ::-1]
-                piv = np.array([-ARM_PIVOT_STL[0], ARM_PIVOT_STL[1], ARM_PIVOT_STL[2]])
-            else:
-                F = Farm
-                piv = np.array(ARM_PIVOT_STL)
             shaft = np.array([sx, sy, SR6["servoPivotH"]])
-            delta = math.degrees(geom["arm_angles"][sname] - home["arm_angles"][sname])
-            Vt = (V - piv) @ _Ry(delta).T + shaft
-            parts.append(Part(Vt, F, PALETTE["horn"], f"Arm_{sname}"))
+            inst_long = np.array(geom["arm_tips"][sname]) - shaft
+            inst_long = inst_long / (np.linalg.norm(inst_long) or 1.0)
+            inst_norm = np.array([0.0, 1.0, 0.0])          # servo axis = world Y
+            Mi = np.column_stack([inst_long, inst_norm, np.cross(inst_long, inst_norm)])
+            R = Mi @ Mn.T
+            Vt = (Varm - bore) @ R.T + shaft
+            parts.append(Part(Vt, Farm, PALETTE["horn"], f"Arm_{sname}"))
 
-    # ── B2. pitch horns (white) ──
+    # ── B2. 2 pitch horns (white), FEATURE-ALIGNED the same way ──
     for pname in ("L_Pitcher", "R_Pitcher"):
         V, F = _load(pname)
         if V is None:
             continue
         sname = "LeftPitch" if pname.startswith("L_") else "RightPitch"
-        delta = math.degrees(geom["arm_angles"][sname] - home["arm_angles"][sname])
-        if abs(delta) > 0.01:
-            sx = -FRAME_X if pname.startswith("L_") else FRAME_X
-            piv = np.array([sx, 0, SR6["servoPivotH"]])
-            V = (V - piv) @ _Ry(delta).T + piv
-        parts.append(Part(V, F, PALETTE["horn"], pname))
+        sx = -FRAME_X if pname.startswith("L_") else FRAME_X
+        shaft = np.array([sx, 0.0, SR6["servoPivotH"]])
+        inst_long = np.array(geom["arm_tips"][sname]) - shaft
+        inst_long = inst_long / (np.linalg.norm(inst_long) or 1.0)
+        inst_norm = np.array([0.0, 1.0, 0.0])
+        ext = V.max(0) - V.min(0)
+        ax, axn = int(np.argmax(ext)), int(np.argmin(ext))
+        nat_long = np.zeros(3); nat_long[ax] = 1.0
+        nat_norm = np.zeros(3); nat_norm[axn] = 1.0
+        c = (V.min(0) + V.max(0)) / 2.0
+        bore = c.copy(); bore[ax] = V[:, ax].min()
+        Mn = np.column_stack([nat_long, nat_norm, np.cross(nat_long, nat_norm)])
+        Mi = np.column_stack([inst_long, inst_norm, np.cross(inst_long, inst_norm)])
+        R = Mi @ Mn.T
+        Vt = (V - bore) @ R.T + shaft
+        parts.append(Part(Vt, F, PALETTE["horn"], pname))
 
     # ── C. receiver RING only (red) — 圆环中心落到接收器位姿 (tx,ty) + 安装环 Z ──
     mounts = np.array([geom["recv_mounts"][s] for s, _, _, _, _ in SERVO_SLOTS])
