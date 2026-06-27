@@ -432,6 +432,18 @@ def register_freecad_tools(reg: ToolRegistry, kernel: Optional[FreeCADKernel] = 
                 P("name", "string", "对象名", False, None),
             ], category="primitive", mutates=True)
 
+    reg.add("solid.sweep",
+            "沿路径扫掠圆截面成管/杆 (真实管路布线: 直段+拐角圆弧). path=转折控制点列 [[x,y,z],...] (≥2); "
+            "bend_radius>0 时各内拐角以该半径切弧圆滑成精确直线+相切弧路径 (弯管/U 形即此). "
+            "profile_radius=圆截面半径. 中空管=扫外径减扫内径.",
+            H["_profile"]("sweep", "swp"), [
+                P("path", "array", "转折控制点列 [[x,y,z],...] (≥2)"),
+                P("profile_radius", "number", "圆截面半径"),
+                P("bend_radius", "number", "拐角圆弧半径 (0=尖角折线)", False, 0),
+                P("frenet", "boolean", "Frenet 标架 (默认 false=校正标架, 更稳)", False, False),
+                P("name", "string", "对象名", False, None),
+            ], category="primitive", mutates=True)
+
     reg.add("solid.boolean",
             "BREP 布尔: op∈{union,difference,intersection}; a-b 两对象; "
             "可选 result 命名、consume 是否消耗输入. 结果自动 removeSplitter 清理.",

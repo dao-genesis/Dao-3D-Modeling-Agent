@@ -57,6 +57,51 @@ def _section_wire(sec):
     return Part.makePolygon(vs)
 
 
+def _path_wire(points, bend_radius=0.0):
+    """把转折控制点列构造为扫掠路径 Wire (直线段 + 拐角相切圆弧). 返回 (wire, 起点切向).
+    bend_radius<=0 或仅 2 点: 退化为折线 (尖角); >0: 各内拐角以该半径切弧圆滑成 G1 路径.
+    切弧法: 拐角 B 处, 沿两腿各退让 setback=R/tan(φ/2) 得切点 T1/T2 (φ=内夹角),
+    弧心在角平分线上距 B 为 R/sin(φ/2). 此乃真实管路布线, 避免 BSpline 插值过冲自交."""
+    pts = [vec(p) for p in points]
+    if len(pts) < 2:
+        raise ValueError("sweep 路径至少 2 点")
+    t0 = pts[1].sub(pts[0])
+    R = float(bend_radius or 0.0)
+    if R <= 0 or len(pts) == 2:
+        return Part.Wire([Part.makeLine(pts[i], pts[i + 1]) for i in range(len(pts) - 1)]), t0
+    edges = []
+    cur = pts[0]
+    for i in range(1, len(pts) - 1):
+        A, B, C = pts[i - 1], pts[i], pts[i + 1]
+        uA = A.sub(B); uC = C.sub(B)
+        la, lc = uA.Length, uC.Length
+        if la < 1e-9 or lc < 1e-9:
+            continue
+        uA = App.Vector(uA.x / la, uA.y / la, uA.z / la)
+        uC = App.Vector(uC.x / lc, uC.y / lc, uC.z / lc)
+        cosphi = max(-1.0, min(1.0, uA.dot(uC)))
+        phi = math.acos(cosphi)
+        if phi < 1e-6 or phi > math.pi - 1e-6:
+            continue  # 共线: 不需切弧
+        setback = min(R / math.tan(phi / 2.0), la * 0.999, lc * 0.999)
+        T1 = B.add(uA.multiply(setback))
+        T2 = B.add(uC.multiply(setback))
+        bis = uA.add(uC)
+        bl = bis.Length or 1.0
+        bis = App.Vector(bis.x / bl, bis.y / bl, bis.z / bl)
+        center = B.add(bis.multiply(R / math.sin(phi / 2.0)))
+        toB = B.sub(center)
+        tl = toB.Length or 1.0
+        arc_mid = center.add(App.Vector(toB.x / tl, toB.y / tl, toB.z / tl).multiply(R))
+        if cur.distanceToPoint(T1) > 1e-7:           # 相邻切弧相接时直段长 0, 跳过退化线
+            edges.append(Part.makeLine(cur, T1))
+        edges.append(Part.Arc(T1, arc_mid, T2).toShape())
+        cur = T2
+    if cur.distanceToPoint(pts[-1]) > 1e-7:
+        edges.append(Part.makeLine(cur, pts[-1]))
+    return Part.Wire(edges), t0
+
+
 def solidify(shape):
     """把布尔/特征结果归一为实体: 单实体取之, 多实体合为 Compound, 否则原样."""
     try:
@@ -240,6 +285,19 @@ def build(op, a, shapes=None):
         if not r.isClosed() or len(r.Solids) < 1:
             raise RuntimeError("loft 结果非封闭实体 (检查截面朝向/点序是否一致)")
         return r
+
+    if op == "sweep":
+        # 沿路径扫掠圆截面成管/杆 (真实管路布线: 直段 + 拐角圆弧过渡).
+        # path: 转折控制点列 (≥2); bend_radius>0 时各内拐角以该半径切弧圆滑 → 精确 直线+相切弧
+        # 路径 (而非 BSpline 插值: 插值在直↔弧过渡处会过冲自交, 致扫掠体退化). profile_radius: 圆截面半径.
+        path_wire, t0 = _path_wire(a["path"], float(a.get("bend_radius", 0.0)))
+        r = float(a["profile_radius"])
+        circ = Part.Wire(Part.makeCircle(r, vec(a["path"][0]), t0))
+        shp = path_wire.makePipeShell([circ], True, bool(a.get("frenet", False)))
+        r2 = solidify(shp)
+        if not r2.isClosed() or len(r2.Solids) < 1:
+            raise RuntimeError("sweep 结果非封闭实体 (路径过弯/截面过大致自交?)")
+        return r2
 
     if op == "boolean":
         A = shapes["a"]
