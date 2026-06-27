@@ -288,6 +288,14 @@ def _make_handlers(K: FreeCADKernel):
         _store(ws, a["name"], res, {"chamfer": a["distance"]})
         return _summary(ws, a["name"])
 
+    def h_shell(ws, a):
+        res = K.call("shell", {"thickness": a["thickness"],
+                               "open_near": a.get("open_near"), "open_dir": a.get("open_dir"),
+                               "deflection": a.get("deflection", 0.4),
+                               "shapes": {"x": _brep(ws, a["name"])}})
+        _store(ws, a["name"], res, {"shell": a["thickness"]})
+        return _summary(ws, a["name"])
+
     def h_duplicate(ws, a):
         o = ws.get(a["name"])
         name = a.get("new_name") or ws.fresh_name(a["name"] + "_copy")
@@ -477,6 +485,16 @@ def register_freecad_tools(reg: ToolRegistry, kernel: Optional[FreeCADKernel] = 
                 P("edges", "string", "棱选择 auto/straight/all", False, "auto"),
                 P("near", "array", "定向选棱: 取点 [x,y,z] (点取在目标棱上)", False, None),
                 P("within", "number", "定向半径: 棱到点距离 ≤ within 才选", False, None),
+            ], category="feature", mutates=True)
+
+    reg.add("solid.shell",
+            "抽壳 (薄壁挖空): 把实体掏空留壁厚 thickness. 开口面二选一: "
+            "open_dir=[x,y,z] 取外法线最朝该向的平面(如顶面[0,0,1]) / open_near=[x,y,z] 取最近的面; "
+            "皆不给则全封闭中空壳. OCC makeThickness 向内偏置, 自校验掏空且封闭.",
+            H["h_shell"], [
+                P("name", "string", "对象名"), P("thickness", "number", "壁厚"),
+                P("open_dir", "array", "开口面外法线方向 [x,y,z]", False, None),
+                P("open_near", "array", "开口面定位点 [x,y,z]", False, None),
             ], category="feature", mutates=True)
 
     reg.add("solid.duplicate", "复制对象.",

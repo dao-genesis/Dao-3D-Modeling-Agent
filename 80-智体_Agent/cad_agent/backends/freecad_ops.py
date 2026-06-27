@@ -229,7 +229,52 @@ def build(op, a, shapes=None):
                              select=str(a.get("edges", "auto")),
                              near=a.get("near"), within=a.get("within"))
 
+    if op == "shell":
+        # 抽壳 (薄壁挖空): 把实体掏空, 留壁厚 thickness; 指定一个面作开口 (掏开的口).
+        #   open_near=[x,y,z]: 取离该点最近的面作开口 (精确锁面)
+        #   open_dir=[ax,ay,az]: 取外法线与该方向一致、且最靠该向边界的平面作开口 (如顶面取 [0,0,1])
+        #   皆不给: 全封闭中空壳 (无开口, 内有空腔).
+        # OCC makeThickness: offset 取负 = 向内掏空, 壁厚 = |offset|.
+        return _shell(shapes["x"], float(a["thickness"]),
+                      open_near=a.get("open_near"), open_dir=a.get("open_dir"))
+
     raise ValueError("未知几何动作: " + str(op))
+
+
+def _shell(shape, thickness, open_near=None, open_dir=None, tol=1e-3):
+    faces = list(shape.Faces)
+    rm = []
+    if open_near is not None:
+        vtx = Part.Vertex(vec(open_near))
+        rm = [min(faces, key=lambda f: f.distToShape(vtx)[0])]
+    elif open_dir is not None:
+        d = vec(open_dir)
+        L = d.Length or 1.0
+        d = App.Vector(d.x / L, d.y / L, d.z / L)
+        scored = []
+        for f in faces:
+            if not isinstance(f.Surface, Part.Plane):
+                continue
+            try:
+                u, v = f.Surface.parameter(f.CenterOfMass)
+                n = f.normalAt(u, v)
+            except Exception:
+                continue
+            if n.dot(d) > 0.95:
+                scored.append((f.CenterOfMass.dot(d), f))
+        if not scored:
+            raise RuntimeError("shell: 沿 open_dir 未找到朝向一致的平面 (无法定位开口面)")
+        rm = [max(scored, key=lambda kv: kv[0])[1]]
+    try:
+        r = shape.makeThickness(rm, -abs(float(thickness)), tol)
+    except Exception as e:
+        raise RuntimeError("shell makeThickness 失败 (壁厚过大/几何过尖?): %s" % e)
+    r = solidify(r)
+    if not r.isClosed() or len(r.Solids) < 1:
+        raise RuntimeError("shell 结果非封闭实体")
+    if r.Volume >= shape.Volume:
+        raise RuntimeError("shell 未掏空 (体积未减小, 检查 thickness/开口面)")
+    return r
 
 
 # ── 棱边特征 (倒圆/倒角): 健壮化 ──────────────────────────────────────────────
