@@ -422,6 +422,16 @@ def register_freecad_tools(reg: ToolRegistry, kernel: Optional[FreeCADKernel] = 
                 P("name", "string", "对象名", False, None),
             ], category="primitive", mutates=True)
 
+    reg.add("solid.loft",
+            "放样成实体: 给一串截面 (各带 z 高度) 顺次蒙皮. 真实'过渡接头'(方转圆等). "
+            "sections 每段二选一形状键: {circle:r,z,segments?,center?} / {rect:[w,h],z,center?} / "
+            "{points:[[x,y],...],z}. ruled: true=直纹 / false=光滑(默认).",
+            H["_profile"]("loft", "loft"), [
+                P("sections", "array", "截面列表 (≥2), 每段 {circle|rect|points, z, ...}"),
+                P("ruled", "boolean", "直纹过渡 (默认光滑)", False, False),
+                P("name", "string", "对象名", False, None),
+            ], category="primitive", mutates=True)
+
     reg.add("solid.boolean",
             "BREP 布尔: op∈{union,difference,intersection}; a-b 两对象; "
             "可选 result 命名、consume 是否消耗输入. 结果自动 removeSplitter 清理.",

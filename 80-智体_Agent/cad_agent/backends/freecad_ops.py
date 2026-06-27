@@ -15,6 +15,8 @@ freecad_ops.py — FreeCAD 纯几何本源 (运行于 FreeCAD 自带 python 内)
     measure / export                              度量 / 落盘
     op(op_name, args)                             内核门面 (BREP 串 ⇄ 形状, 供子进程用)
 """
+import math
+
 import FreeCAD as App  # noqa: E402  (仅 FreeCAD python 内可用)
 import Part  # noqa: E402
 
@@ -34,6 +36,27 @@ def vec(a):
     return App.Vector(float(a[0]), float(a[1]), float(a[2]))
 
 
+def _section_wire(sec):
+    """把一个 loft 截面描述转成位于 z=sec['z'] 平面上的【闭合 Wire】.
+    支持 circle(r,segments) / rect(w,h) / points([[x,y],...]); center 平移 (默认原点)."""
+    z = float(sec.get("z", 0.0))
+    cx, cy = (sec.get("center", [0.0, 0.0]) + [0.0, 0.0])[:2]
+    if "circle" in sec:
+        r = float(sec["circle"])
+        n = int(sec.get("segments", 48))
+        pts2 = [(r * math.cos(2 * math.pi * i / n), r * math.sin(2 * math.pi * i / n)) for i in range(n)]
+    elif "rect" in sec:
+        w, h = float(sec["rect"][0]) / 2.0, float(sec["rect"][1]) / 2.0
+        pts2 = [(-w, -h), (w, -h), (w, h), (-w, h)]
+    elif "points" in sec:
+        pts2 = [(float(p[0]), float(p[1])) for p in sec["points"]]
+    else:
+        raise ValueError("loft 截面须含 circle/rect/points 之一")
+    vs = [vec([cx + x, cy + y, z]) for (x, y) in pts2]
+    vs.append(vs[0])
+    return Part.makePolygon(vs)
+
+
 def solidify(shape):
     """把布尔/特征结果归一为实体: 单实体取之, 多实体合为 Compound, 否则原样."""
     try:
@@ -47,8 +70,18 @@ def solidify(shape):
     return shape
 
 
+def _tight_bbox(shape):
+    """轴对齐【紧】包围盒. shape.BoundBox 对 BSpline 面 (放样/布尔后) 取自控制极点,
+    会松弛外扩 (实测放样挖孔后 z 多出 ±2mm); optimalBoundingBox(useTriangulation=True)
+    据三角网算得紧致真实范围. 不可用时回退 BoundBox."""
+    try:
+        return shape.optimalBoundingBox(True)
+    except Exception:
+        return shape.BoundBox
+
+
 def metrics(shape):
-    bb = shape.BoundBox
+    bb = _tight_bbox(shape)
     closed = bool(shape.isClosed())
     try:
         com = shape.CenterOfMass
@@ -191,6 +224,22 @@ def build(op, a, shapes=None):
             c.translate(vec([dx * i, dy * i, dz * i]))
             r = c if r is None else r.fuse(c)
         return solidify(r.removeSplitter())
+
+    if op == "loft":
+        # 放样: 给一串截面 (各自所在 z 高度), 顺次蒙皮成实体. 真实"过渡接头"(方转圆等).
+        #   sections: [{...}, ...] 每段二选一形状键 + z:
+        #     {"circle": r, "z": z, "segments": n(默认 48), "center": [x,y](默认[0,0])}
+        #     {"rect": [w, h], "z": z, "center": [x,y]}
+        #     {"points": [[x,y],...], "z": z}   (任意闭合多边形)
+        #   ruled: True=直纹(段间直线过渡)/False=光滑(默认).
+        secs = a["sections"]
+        if len(secs) < 2:
+            raise ValueError("loft 至少 2 个截面")
+        wires = [_section_wire(sec) for sec in secs]
+        r = solidify(Part.makeLoft(wires, True, bool(a.get("ruled", False))))
+        if not r.isClosed() or len(r.Solids) < 1:
+            raise RuntimeError("loft 结果非封闭实体 (检查截面朝向/点序是否一致)")
+        return r
 
     if op == "boolean":
         A = shapes["a"]
