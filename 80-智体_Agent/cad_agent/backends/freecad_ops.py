@@ -340,6 +340,13 @@ def build(op, a, shapes=None):
         s.rotate(vec(a.get("center", [0, 0, 0])), vec(a.get("axis", [0, 0, 1])), float(a["angle_deg"]))
         return s
 
+    if op == "mirror":
+        # 镜像 (反射): 关于过 base 点、法线为 normal 的平面镜射. 对称件造一半再镜像即此.
+        # 注: 镜像翻转朝向, OCC 已自动修正法线; 若后续与原件并集, 由 boolean 的 removeSplitter 融合.
+        s = shapes["x"].copy()
+        m = s.mirror(vec(a.get("base", [0, 0, 0])), vec(a.get("normal", [1, 0, 0])))
+        return solidify(m)
+
     if op == "fillet":
         return _edge_feature(shapes["x"], "fillet", float(a["radius"]),
                              select=str(a.get("edges", "auto")),

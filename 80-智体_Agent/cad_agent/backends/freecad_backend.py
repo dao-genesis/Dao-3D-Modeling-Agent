@@ -272,6 +272,16 @@ def _make_handlers(K: FreeCADKernel):
         _store(ws, a["name"], res)
         return _summary(ws, a["name"])
 
+    def h_mirror(ws, a):
+        res = K.call("mirror", {
+            "base": a.get("base", [0, 0, 0]), "normal": a.get("normal", [1, 0, 0]),
+            "deflection": a.get("deflection", 0.4), "shapes": {"x": _brep(ws, a["name"])}})
+        name = a.get("result") or ws.fresh_name(a["name"] + "_mir")
+        _store(ws, name, res, {"mirror": a.get("normal", [1, 0, 0])})
+        if a.get("consume") and ws.has(a["name"]) and a["name"] != name:
+            ws.delete(a["name"])
+        return _summary(ws, name)
+
     def h_fillet(ws, a):
         res = K.call("fillet", {"radius": a["radius"], "deflection": a.get("deflection", 0.4),
                                 "edges": a.get("edges", "auto"),
@@ -499,6 +509,17 @@ def register_freecad_tools(reg: ToolRegistry, kernel: Optional[FreeCADKernel] = 
                 P("name", "string", "对象名"), P("angle_deg", "number", "角度 (度)"),
                 P("axis", "array", "轴向 [x,y,z]", False, [0, 0, 1]),
                 P("center", "array", "旋转中心", False, [0, 0, 0]),
+            ], category="transform", mutates=True)
+
+    reg.add("solid.mirror",
+            "镜像 (反射) 成新对象: 关于过 base 点、法线 normal 的平面镜射. 对称件造一半再镜像即此. "
+            "result 命名 (默认 名_mir), consume 删源.",
+            H["h_mirror"], [
+                P("name", "string", "源对象"),
+                P("normal", "array", "镜面法线 [x,y,z]", False, [1, 0, 0]),
+                P("base", "array", "镜面上一点", False, [0, 0, 0]),
+                P("result", "string", "结果名", False, None),
+                P("consume", "boolean", "删源", False, False),
             ], category="transform", mutates=True)
 
     reg.add("solid.fillet",
