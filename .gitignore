@@ -40,3 +40,6 @@ $null
 .idea/
 *.swp
 *.swo
+
+# ORS6 SR6 STL 源文件为授权资料(签收后提供解压密码), 不入库
+60-实战_Projects/ORS6_Stewart/STLs/
