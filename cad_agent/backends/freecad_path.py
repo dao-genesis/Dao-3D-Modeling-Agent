@@ -13,6 +13,7 @@ extreme / normal / index), never by hard-coded face names.
 
 Runs inside freecadcmd. ``register(state)`` returns ``{op_name: callable}``.
 """
+import math
 import os
 import tempfile
 
@@ -46,30 +47,44 @@ def register(state):
         return obj
 
     def _select_faces(shape, sel):
-        """Pick face names by predicate (axis extreme / index / normal)."""
+        """Pick face names by predicate (axis extreme / index / normal).
+
+        ``normal`` and ``axis`` may be combined: filter to faces matching the
+        ``normal`` first, then keep the ``side`` (min/max) extreme along ``axis``.
+        This isolates e.g. a pocket *floor* (an upward +Z face that is NOT the
+        topmost +Z face) which neither predicate can pick alone.
+        """
         faces = shape.Faces
         if "index" in sel:
             idx = sel["index"]
             idx = [idx] if isinstance(idx, (int, float)) else idx
             return ["Face%d" % int(i) for i in idx]
-        if "axis" in sel:
-            ax = {"x": 0, "y": 1, "z": 2}[sel["axis"].lower()]
-            side = sel.get("side", "max").lower()
-            vals = [f.CenterOfMass[ax] for f in faces]
-            target = min(vals) if side == "min" else max(vals)
-            tol = sel.get("tol", 1e-4)
-            return ["Face%d" % (i + 1) for i, v in enumerate(vals)
-                    if abs(v - target) <= tol]
+
+        cand = list(range(len(faces)))
         if "normal" in sel:
             d = V(*sel["normal"])
             d = d.normalize() if d.Length > 1e-9 else d
-            out = []
-            for i, f in enumerate(faces):
+            keep = []
+            for i in cand:
+                f = faces[i]
                 u0, u1, v0, v1 = f.ParameterRange
                 n = f.normalAt((u0 + u1) / 2.0, (v0 + v1) / 2.0)
                 if n.Length > 1e-9 and n.normalize().dot(d) >= sel.get("min_dot", 0.95):
-                    out.append("Face%d" % (i + 1))
-            return out
+                    keep.append(i)
+            cand = keep
+
+        if "axis" in sel:
+            ax = {"x": 0, "y": 1, "z": 2}[sel["axis"].lower()]
+            side = sel.get("side", "max").lower()
+            vals = {i: faces[i].CenterOfMass[ax] for i in cand}
+            if not vals:
+                return []
+            target = min(vals.values()) if side == "min" else max(vals.values())
+            tol = sel.get("tol", 1e-4)
+            return ["Face%d" % (i + 1) for i, v in vals.items() if abs(v - target) <= tol]
+
+        if "normal" in sel:
+            return ["Face%d" % (i + 1) for i in cand]
         raise ValueError("unknown face selector: %r" % sel)
 
     def _top_face(shape):
@@ -158,21 +173,58 @@ def register(state):
     def pocket(a):
         """Pocket (clear material from) selected faces.
 
-        args: select (faces bounding the pocket floor)
+        Clears the selected face area from the stock top down to the face plane
+        in ``step_down`` (mm) layers. Without explicit depths a flat selected
+        face would give StartDepth==FinalDepth and emit an empty path, so the
+        depths are bound from geometry: StartDepth = stock top, FinalDepth = the
+        lowest selected face. Override with ``start_depth`` / ``final_depth`` /
+        ``step_down``.
+
+        args: select (faces defining the pocket area/floor),
+              start_depth, final_depth, step_down (all optional, mm)
         """
         j = _job()
         obj = doc.getObject(state.cam["target"])
         names = _select_faces(obj.Shape, a["select"])
         if not names:
             raise ValueError("selector matched no faces: %r" % a["select"])
+        floor_z = min(obj.Shape.getElement(n).CenterOfMass.z for n in names)
         op = PPocket.Create("Pocket")
         op.Base = [(obj, names)]
         op.ToolController = doc.getObject(state.cam["tc"])
         j.Proxy.addOperation(op)
         doc.recompute()
+        try:
+            top = j.Stock.Shape.BoundBox.ZMax
+        except Exception:
+            top = obj.Shape.BoundBox.ZMax
+        start = float(a.get("start_depth", top))
+        final = float(a.get("final_depth", floor_z))
+        for prop, val in (("StartDepth", start), ("FinalDepth", final)):
+            if prop in op.PropertiesList:
+                try:
+                    op.setExpression(prop, None)
+                except Exception:
+                    pass
+                setattr(op, prop, val)
+        step = a.get("step_down")
+        if step and "StepDown" in op.PropertiesList:
+            try:
+                op.setExpression("StepDown", None)
+            except Exception:
+                pass
+            op.StepDown = float(step)
+        doc.recompute()
         n = len(op.Path.Commands) if op.Path else 0
         state.cam["ops"].append(op.Name)
+        try:
+            sd = float(op.StepDown.getValueAs("mm"))
+        except Exception:
+            sd = None
+        passes = max(1, math.ceil((start - final) / sd)) if sd else None
         return {"op": "pocket", "faces": names, "commands": n,
+                "start_depth": _round(start), "final_depth": _round(final),
+                "step_down": _round(sd) if sd else None, "passes": passes,
                 "path_bbox": _path_bbox(op)}
 
     def gcode(a):
