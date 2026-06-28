@@ -8,6 +8,7 @@ The PartDesign feature-tree (editable, parametric) lives in ``freecad_parametric
 """
 
 import hashlib
+import itertools
 import math
 
 import FreeCAD as App
@@ -38,6 +39,34 @@ def _vec(seq, default=(0, 0, 0)):
     if seq is None:
         seq = default
     return V(float(seq[0]), float(seq[1]), float(seq[2]))
+
+
+def _proper_rotations():
+    """The 24 axis-aligned proper rotations (signed permutation matrices, det +1).
+
+    These are exactly the rigid rotations that map an axis-aligned inertia frame
+    onto itself, so testing all of them aligns two bodies brought into their own
+    principal frames regardless of any moment degeneracy.
+    """
+    mats = []
+    for perm in itertools.permutations(range(3)):
+        for signs in itertools.product((1, -1), repeat=3):
+            cols = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]
+            for i, p in enumerate(perm):
+                cols[i][p] = signs[i]
+            m = [[cols[r][c] for c in range(3)] for r in range(3)]
+            det = (m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+                   - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+                   + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]))
+            if det == 1:
+                mats.append(App.Matrix(
+                    m[0][0], m[0][1], m[0][2], 0,
+                    m[1][0], m[1][1], m[1][2], 0,
+                    m[2][0], m[2][1], m[2][2], 0, 0, 0, 0, 1))
+    return mats
+
+
+_PROPER_ROTATIONS = _proper_rotations()
 
 
 def _metrics(shape):
@@ -872,6 +901,66 @@ def register(state):
         return {"name": a["name"], "query_key": q["shape_key"],
                 "candidates": len(ranked), "best": ranked[0]["name"],
                 "ranking": ranked}
+
+    def _in_principal_frame(body):
+        """Return a copy of ``body`` moved to its centroid and rotated so its
+        principal axes coincide with the world axes (rigid, analytic-preserving)."""
+        com = body.CenterOfMass
+        pr = body.PrincipalProperties
+        a1 = _unit_v(pr["FirstAxisOfInertia"])
+        a2 = pr["SecondAxisOfInertia"]
+        a2 = _unit_v(a2 - a1 * a2.dot(a1))
+        a3 = a1.cross(a2)
+        m = App.Matrix(a1.x, a1.y, a1.z, 0, a2.x, a2.y, a2.z, 0,
+                       a3.x, a3.y, a3.z, 0, 0, 0, 0, 1)
+        t = body.copy()
+        t.translate(V(-com.x, -com.y, -com.z))
+        t.transformShape(m, True, False)
+        return t
+
+    def op_chirality(a):
+        """Decide whether a solid is the same as its mirror image — handedness.
+
+        A fingerprint is mirror-blind: a left- and right-hand part share every
+        scale/pose invariant, yet on the shop floor they are *different parts* —
+        you cannot fit a left glove on a right hand. This settles it by proof. A
+        solid is achiral iff it can be superimposed on its own mirror by a rigid
+        motion. We reflect the body, bring both the original and the reflection
+        into their principal frames, then try to align them with each of the 24
+        axis-aligned proper rotations (which also covers any inertia-moment
+        degeneracy); if the symmetric-difference volume vanishes for some
+        rotation the part is achiral, otherwise it is chiral and its mirror is a
+        genuinely distinct enantiomer. ``mirror_distance`` is that best residual.
+        """
+        sh = _get(a["name"]).Shape
+        sols = sh.Solids
+        if len(sols) != 1:
+            raise ValueError(
+                "solid.chirality expects a single solid (got %d); handedness is "
+                "a property of one part" % len(sols))
+        tol = float(a.get("tol", 1e-3))
+        body = sols[0]
+        vol = body.Volume
+        base = _in_principal_frame(body)
+        mir = body.copy()
+        mir.transformShape(App.Matrix(1, 0, 0, 0, 0, 1, 0, 0,
+                                      0, 0, -1, 0, 0, 0, 0, 1), True, True)
+        mir = _in_principal_frame(mir)
+        best = None
+        for rm in _PROPER_ROTATIONS:
+            t = mir.copy()
+            t.transformShape(rm, True, False)
+            d = max(base.cut(t).Volume, t.cut(base).Volume) / vol
+            best = d if best is None else min(best, d)
+            if best < tol:
+                break
+        return {
+            "name": a["name"],
+            "achiral": best < tol,
+            "chiral": best >= tol,
+            "mirror_distance": _round(best, 6),
+            "tol": tol,
+        }
 
     def op_interference(a):
         sa = _get(a["a"]).Shape
@@ -2128,7 +2217,8 @@ def register(state):
         "pattern_linear": op_pattern_linear, "pattern_polar": op_pattern_polar,
         "measure": op_measure, "inspect": op_inspect, "inertia": op_inertia,
         "curvature": op_curvature, "obb": op_obb, "symmetry": op_symmetry,
-        "fingerprint": op_fingerprint, "match": op_match, "interference": op_interference,
+        "fingerprint": op_fingerprint, "match": op_match, "chirality": op_chirality,
+        "interference": op_interference,
         "draft": op_draft, "thickness": op_thickness, "undercut": op_undercut,
         "overhang": op_overhang, "section": op_section, "dfm_report": op_dfm_report,
         "compound": op_compound, "decompose": op_decompose, "joints": op_joints,
