@@ -676,11 +676,21 @@ def register(state):
         rough stock does this part come from, and how is it oriented".
         """
         sh = _get(a["name"]).Shape
-        if not sh.Solids:
+        sols = sh.Solids
+        if not sols:
             raise ValueError(
                 "solid.obb needs a solid (got a shell/compound with no volume); "
                 "the natural frame comes from the mass distribution")
-        pr = sh.PrincipalProperties
+        if len(sols) != 1:
+            raise ValueError(
+                "solid.obb expects a single solid (got %d); the natural frame is "
+                "one body's principal axes - run solid.decompose first and orient "
+                "each part" % len(sols))
+        # work on the solid itself, not its enclosing compound: a boolean result
+        # or an imported STEP arrives as a single-solid Part.Compound, and
+        # Compound has no PrincipalProperties.
+        body = sols[0]
+        pr = body.PrincipalProperties
         a1 = _unit_v(pr["FirstAxisOfInertia"])
         a2 = pr["SecondAxisOfInertia"]
         a2 = _unit_v(a2 - a1 * a2.dot(a1))          # Gram-Schmidt: kill the
@@ -688,13 +698,13 @@ def register(state):
         mat = App.Matrix(a1.x, a1.y, a1.z, 0,        # bodies, force orthonormal
                          a2.x, a2.y, a2.z, 0,
                          a3.x, a3.y, a3.z, 0, 0, 0, 0, 1)
-        local = sh.copy()
+        local = body.copy()
         local.transformShape(mat, True, False)       # rigid: analytic stays tight
         bb = local.BoundBox
         dims = [bb.XLength, bb.YLength, bb.ZLength]
         cworld = mat.inverse().multiply(bb.Center)
         obb_vol = dims[0] * dims[1] * dims[2]
-        ab = sh.BoundBox
+        ab = body.BoundBox
         return {
             "name": a["name"],
             "dimensions": [_round(d) for d in dims],
@@ -703,7 +713,7 @@ def register(state):
                      for ax in (a1, a2, a3)],
             "obb_center": [_round(cworld.x), _round(cworld.y), _round(cworld.z)],
             "obb_volume": _round(obb_vol),
-            "fill_ratio": _round(sh.Volume / obb_vol, 6) if obb_vol > 1e-12 else None,
+            "fill_ratio": _round(body.Volume / obb_vol, 6) if obb_vol > 1e-12 else None,
             "aabb_size": [_round(ab.XLength), _round(ab.YLength), _round(ab.ZLength)],
         }
 

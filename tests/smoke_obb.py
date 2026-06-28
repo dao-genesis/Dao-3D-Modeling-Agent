@@ -71,6 +71,32 @@ def main():
     print("sphere: OBB %s == (2R)^3 cube, fill=%.4f == pi/6"
           % (rs["sorted_dimensions"], rs["fill_ratio"]))
 
+    # ---- single-solid Part.Compound (a boolean result, like an imported   #
+    #      STEP) must work, not crash on the missing PrincipalProperties --- #
+    s.act("solid.box", {"name": "ba", "length": 30, "width": 18, "height": 7})
+    s.act("solid.box", {"name": "bb", "length": 30, "width": 18, "height": 7})
+    s.act("solid.translate", {"name": "bb", "vector": [10, 0, 0]})
+    s.act("solid.union", {"a": "ba", "b": "bb", "out": "merged"})  # -> 1-solid compound
+    s.act("solid.rotate", {"name": "merged", "center": [0, 0, 0],
+                           "axis": [1, 2, 3], "angle": 41.0})
+    rm = s.act("solid.obb", {"name": "merged"})
+    assert rm.ok, "obb crashed on single-solid compound: %s" % rm.error
+    # the merged block is 40 x 18 x 7
+    assert all(_close(g, e) for g, e in zip(rm.data["sorted_dimensions"],
+                                            sorted([40.0, 18.0, 7.0]))), rm.data
+    assert _close(rm.data["fill_ratio"], 1.0), rm.data["fill_ratio"]
+    print("single-solid compound (boolean/STEP-like): OBB %s, fill=1.0"
+          % rm.data["sorted_dimensions"])
+
+    # ---- a genuine multi-solid compound is refused loudly --------------- #
+    s.act("solid.box", {"name": "m1", "length": 8, "width": 8, "height": 8})
+    s.act("solid.box", {"name": "m2", "length": 8, "width": 8, "height": 8})
+    s.act("solid.translate", {"name": "m2", "vector": [40, 0, 0]})
+    s.act("solid.compound", {"names": ["m1", "m2"], "out": "two"})
+    bad_multi = s.act("solid.obb", {"name": "two"})
+    assert not bad_multi.ok and "single solid" in (bad_multi.error or "").lower(), bad_multi.error
+    print("multi-solid compound refused: %s" % bad_multi.error)
+
     # ---- a non-solid shell is refused loudly ---------------------------- #
     s.act("solid.box", {"name": "sbx", "length": 20, "width": 20, "height": 20})
     s.act("solid.shell", {"name": "sbx", "thickness": -2, "open_faces": [0, 1],
