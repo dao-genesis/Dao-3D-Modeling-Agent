@@ -2390,8 +2390,11 @@ def register(state):
             kind = "primitive:tube"
 
         if shape is None:
-            # engineered part: stock block minus holes plus bosses, all placed in
-            # the principal frame where the block is axis-aligned.
+            # engineered part: a stock billet minus each drilled hole, placed in
+            # the principal frame where the billet is axis-aligned. The billet is
+            # a block by default, but a *turned* part (two equal cross-section
+            # dimensions) gets a cylindrical billet instead -- a bbox block would
+            # massively overestimate a shaft/bushing's stock.
             tmp = "__rev_build_tmp__"
             _put(tmp, body0)
             try:
@@ -2401,20 +2404,48 @@ def register(state):
                 if ex and doc.getObject(ex):
                     doc.removeObject(ex)
             bb = body0.BoundBox
-            shape = Part.makeBox(bb.XLength, bb.YLength, bb.ZLength,
-                                 V(bb.XMin, bb.YMin, bb.ZMin))
+            cen = bb.Center
+            dims = [("x", bb.XLength), ("y", bb.YLength), ("z", bb.ZLength)]
+            _AX = {"x": V(1, 0, 0), "y": V(0, 1, 0), "z": V(0, 0, 1)}
+            # a body of revolution has two equal transverse extents; the odd one
+            # out is the turning axis.
+            billet_axis = None
+            billet_r = None
+            for i in range(3):
+                a0, a1, a2 = dims[i], dims[(i + 1) % 3], dims[(i + 2) % 3]
+                if abs(a1[1] - a2[1]) <= 0.02 * max(a1[1], a2[1], 1e-9):
+                    billet_axis = a0[0]
+                    billet_r = 0.5 * (a1[1] + a2[1]) / 2.0
+                    billet_h = a0[1]
+                    break
+            if billet_axis is not None:
+                ax = _AX[billet_axis]
+                lo = getattr(bb, billet_axis.upper() + "Min")
+                base = V(cen.x, cen.y, cen.z) - ax * (cen.dot(ax)) + ax * lo
+                shape = Part.makeCylinder(billet_r, billet_h, base, ax)
+                kind = "billet:cylinder-minus-holes"
+            else:
+                shape = Part.makeBox(bb.XLength, bb.YLength, bb.ZLength,
+                                     V(bb.XMin, bb.YMin, bb.ZMin))
+                ax = None
+                kind = "billet:box-minus-holes"
             for f in feats["features"]:
                 if f["counterbored"]:
                     skipped.append({"feature": f["kind"], "radii": f["radii"],
                                     "reason": "stepped feature not reconstructed exactly"})
                     continue
-                # a protruding boss extends the part past its block, so the AABB
-                # stock already encloses it (and the empty space beside it) -- a
-                # bbox stock cannot recover the step down to the plate, so report
-                # the boss honestly instead of fusing a double-counted lump.
                 if f["kind"] == "boss":
+                    fax = V(*f["axis"])
+                    # the cylindrical billet's own outer wall reads as a boss --
+                    # but it is the stock, not an added feature, so skip it (same
+                    # axis, same radius). Any *other* protruding boss genuinely
+                    # cannot be recovered from a convex billet.
+                    if (ax is not None
+                            and abs(abs(fax.dot(ax)) - 1.0) < 1e-3
+                            and abs(f["radius"] - billet_r) <= 1e-2 * max(billet_r, 1e-9)):
+                        continue
                     skipped.append({"feature": "boss", "radius": f["radius"],
-                                    "reason": "protruding boss not recoverable from a bbox stock"})
+                                    "reason": "protruding boss not recoverable from a convex billet"})
                     continue
                 p0 = V(*f["ends"][0])
                 p1 = V(*f["ends"][1])
@@ -2427,7 +2458,6 @@ def register(state):
                 m = 0.05 * diag if f["through"] else 0.0
                 cyl = Part.makeCylinder(r, length + 2 * m, p0 - dirv * m, dirv)
                 shape = shape.cut(cyl)
-            kind = "stock-minus-holes"
 
         rebuilt = shape.Solids[0] if shape.Solids else shape
         vol_err = abs(rebuilt.Volume - body0.Volume) / max(body0.Volume, 1e-9)

@@ -48,12 +48,31 @@ def main():
     # ---- a drilled bracket rebuilds from stock - holes --------------------- #
     _bracket(s, "br")
     rb = s.act("solid.reverse_build", {"name": "br", "out": "br2"}).data
-    assert rb["recipe_kind"] == "stock-minus-holes", rb
+    assert rb["recipe_kind"] == "billet:box-minus-holes", rb
     assert rb["volume_match"], rb
     assert rb["same_shape_key"], rb
     assert rb["volume_error"] < 1e-3 and not rb["skipped"], rb
-    print("bracket rebuilt: err=%g key_match=%s skipped=%d"
-          % (rb["volume_error"], rb["same_shape_key"], len(rb["skipped"])))
+    print("bracket rebuilt: %s err=%g key_match=%s skipped=%d"
+          % (rb["recipe_kind"], rb["volume_error"], rb["same_shape_key"], len(rb["skipped"])))
+
+    # ---- a turned bushing rebuilds from a CYLINDER billet - bores ---------- #
+    # solid cylinder r15 h40, axial through-bore r6, and a transverse cross-hole
+    # r3 -- a bbox block billet would be ~4/pi too big; the cylinder billet is
+    # the right stock and reproduces the part exactly.
+    s.act("solid.cylinder", {"name": "bush", "radius": 15, "height": 40})
+    s.act("solid.cylinder", {"name": "bore", "radius": 6, "height": 60, "pos": [0, 0, -10]})
+    s.act("solid.cut", {"a": "bush", "b": "bore", "out": "bush"})
+    s.act("solid.cylinder", {"name": "xh", "radius": 3, "height": 60, "pos": [-30, 0, 20],
+                             "dir": [1, 0, 0]})
+    s.act("solid.cut", {"a": "bush", "b": "xh", "out": "bush"})
+    rt = s.act("solid.reverse_build", {"name": "bush", "out": "bush2"}).data
+    assert rt["recipe_kind"] == "billet:cylinder-minus-holes", rt
+    # volume is the rigorous geometric proof; the shape key is sub-permille-noisy
+    # for the cylinder-cylinder cross-hole saddle, so only the volume is asserted.
+    assert rt["volume_match"], rt
+    assert rt["volume_error"] < 1e-3 and not rt["skipped"], rt
+    print("bushing rebuilt: %s err=%g key_match=%s skipped=%d"
+          % (rt["recipe_kind"], rt["volume_error"], rt["same_shape_key"], len(rt["skipped"])))
 
     # ---- the loop is pose-blind: rebuild a rotated copy -------------------- #
     _bracket(s, "brr")
