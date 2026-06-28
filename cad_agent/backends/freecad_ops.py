@@ -263,7 +263,9 @@ def register(state):
         acc = comp
         for i in range(1, count):
             c = comp.copy()
-            c.translate(step.multiply(i))
+            # build a fresh offset; Vector.multiply mutates in place, which would
+            # otherwise accumulate the step factorially across iterations.
+            c.translate(_vec((step.x * i, step.y * i, step.z * i)))
             acc = acc.fuse(c)
         acc = acc.removeSplitter()
         _put(a.get("out", a["name"]), acc)
