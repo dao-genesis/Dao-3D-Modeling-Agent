@@ -2089,10 +2089,21 @@ def register(state):
                 hi = ft["pt"] + ax * (ft["vmax"] + eps)
                 through = (not body.isInside(lo, eps, True)
                            and not body.isInside(hi, eps, True))
+            # the feature's true axial extent: project every vertex of every face
+            # in the feature onto the axis and take the span. The two endpoints
+            # (on the axis) are what a reconstruction needs to place the cylinder.
+            ts = [(body.Faces[fi].Vertexes[k].Point - ft["pt"]).dot(ax)
+                  for fi in ft["faces"]
+                  for k in range(len(body.Faces[fi].Vertexes))]
+            tmin, tmax = (min(ts), max(ts)) if ts else (0.0, 0.0)
+            p0 = ft["pt"] + ax * tmin
+            p1 = ft["pt"] + ax * tmax
             rec = {
                 "kind": ft["kind"],
                 "axis": [_round(ax.x, 6), _round(ax.y, 6), _round(ax.z, 6)],
                 "point": [_round(ft["pt"].x), _round(ft["pt"].y), _round(ft["pt"].z)],
+                "ends": [[_round(p0.x), _round(p0.y), _round(p0.z)],
+                         [_round(p1.x), _round(p1.y), _round(p1.z)]],
                 "radius": radii[0], "radii": radii,
                 "counterbored": len(set(radii)) > 1,
                 "depth": _round(depth),
@@ -2320,6 +2331,118 @@ def register(state):
                       "bosses": len(bosses)},
             "blends": {"rounds": rounds, "fillets": fillets, "radii": radii},
             "recipe": recipe,
+        }
+
+    def op_reverse_build(a):
+        """Close the forward-reverse loop: rebuild a clean model from the
+        recovered design intent and *prove* it reproduces the original.
+
+        正反相呼应 ends here. The reverse half (recognize/obb/holes) reads a part
+        back to its intent; this re-runs that intent forward as real geometry --
+        a recognised primitive is re-emitted with ``Part.make*`` exactly, an
+        engineered part is rebuilt as its stock block minus each drilled hole
+        plus each turned boss (placed at the recovered axes/ends/radii) -- then
+        checks the rebuild against the original by the two invariants that cannot
+        be fudged: relative volume error and the scale-/pose-invariant shape key.
+        Work is done in the part's own principal frame so the stock block is
+        axis-aligned. Stepped (counterbored) features are not yet reconstructed
+        exactly and are reported in ``skipped`` with ``volume_match`` telling the
+        honest truth rather than a silent near-miss. args: name, out, tol.
+        """
+        name = a["name"]
+        out = a.get("out") or (name + "_rebuilt")
+        tol = float(a.get("tol", 1e-3))
+        sols = _get(name).Shape.Solids
+        if len(sols) != 1:
+            raise ValueError(
+                "solid.reverse_build expects a single solid (got %d); run "
+                "solid.decompose and rebuild one part at a time" % len(sols))
+        body0 = _in_principal_frame(sols[0])
+        diag = body0.BoundBox.DiagonalLength or 1.0
+        skipped = []
+
+        prim = op_recognize({"name": name})
+        ptype = prim.get("type")
+        pp = prim.get("params") or {}
+        shape = None
+        kind = None
+        if prim.get("volume_match") and ptype == "box":
+            shape = Part.makeBox(pp["length"], pp["width"], pp["height"])
+            kind = "primitive:box"
+        elif prim.get("volume_match") and ptype == "cylinder":
+            shape = Part.makeCylinder(pp["radius"], pp["height"])
+            kind = "primitive:cylinder"
+        elif prim.get("volume_match") and ptype == "sphere":
+            shape = Part.makeSphere(pp["radius"])
+            kind = "primitive:sphere"
+        elif prim.get("volume_match") and ptype == "cone":
+            shape = Part.makeCone(pp["radius"], 0.0, pp["height"])
+            kind = "primitive:cone"
+        elif prim.get("volume_match") and ptype == "frustum":
+            shape = Part.makeCone(pp["base_radius"], pp["top_radius"], pp["height"])
+            kind = "primitive:frustum"
+        elif prim.get("volume_match") and ptype == "torus":
+            shape = Part.makeTorus(pp["major_radius"], pp["minor_radius"])
+            kind = "primitive:torus"
+        elif prim.get("volume_match") and ptype == "tube":
+            shape = Part.makeCylinder(pp["outer_radius"], pp["height"]).cut(
+                Part.makeCylinder(pp["inner_radius"], pp["height"]))
+            kind = "primitive:tube"
+
+        if shape is None:
+            # engineered part: stock block minus holes plus bosses, all placed in
+            # the principal frame where the block is axis-aligned.
+            tmp = "__rev_build_tmp__"
+            _put(tmp, body0)
+            try:
+                feats = op_holes({"name": tmp})
+            finally:
+                ex = state.shapes.pop(tmp, None)
+                if ex and doc.getObject(ex):
+                    doc.removeObject(ex)
+            bb = body0.BoundBox
+            shape = Part.makeBox(bb.XLength, bb.YLength, bb.ZLength,
+                                 V(bb.XMin, bb.YMin, bb.ZMin))
+            for f in feats["features"]:
+                if f["counterbored"]:
+                    skipped.append({"feature": f["kind"], "radii": f["radii"],
+                                    "reason": "stepped feature not reconstructed exactly"})
+                    continue
+                # a protruding boss extends the part past its block, so the AABB
+                # stock already encloses it (and the empty space beside it) -- a
+                # bbox stock cannot recover the step down to the plate, so report
+                # the boss honestly instead of fusing a double-counted lump.
+                if f["kind"] == "boss":
+                    skipped.append({"feature": "boss", "radius": f["radius"],
+                                    "reason": "protruding boss not recoverable from a bbox stock"})
+                    continue
+                p0 = V(*f["ends"][0])
+                p1 = V(*f["ends"][1])
+                seg = p1 - p0
+                length = seg.Length
+                if length <= 1e-9:
+                    continue
+                dirv = _unit_v(seg)
+                r = f["radius"]
+                m = 0.05 * diag if f["through"] else 0.0
+                cyl = Part.makeCylinder(r, length + 2 * m, p0 - dirv * m, dirv)
+                shape = shape.cut(cyl)
+            kind = "stock-minus-holes"
+
+        rebuilt = shape.Solids[0] if shape.Solids else shape
+        vol_err = abs(rebuilt.Volume - body0.Volume) / max(body0.Volume, 1e-9)
+        q_orig = _fingerprint_body(body0)
+        q_new = _fingerprint_body(rebuilt)
+        same_key = q_orig["shape_key"] == q_new["shape_key"]
+        _put(out, rebuilt)
+        return {
+            "name": name, "out": out, "recipe_kind": kind,
+            "original_volume": _round(body0.Volume),
+            "rebuilt_volume": _round(rebuilt.Volume),
+            "volume_error": _round(vol_err, 6),
+            "volume_match": vol_err < tol and not skipped,
+            "same_shape_key": same_key,
+            "skipped": skipped,
         }
 
     def op_joints(a):
@@ -3033,6 +3156,7 @@ def register(state):
         "holes": op_holes,
         "fillets": op_fillets,
         "design_intent": op_design_intent,
+        "reverse_build": op_reverse_build,
         "library_match": op_library_match, "library_index": op_library_index,
         "library_query": op_library_query,
         "interference": op_interference,
