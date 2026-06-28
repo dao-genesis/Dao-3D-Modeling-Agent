@@ -69,6 +69,30 @@ def _proper_rotations():
 _PROPER_ROTATIONS = _proper_rotations()
 
 
+def _guard_boolean_budget(op, body, a, default_max=120):
+    """Refuse loudly (not with an opaque RPC timeout) when a boolean-proof
+    operation would be too expensive.
+
+    ``solid.symmetry`` / ``solid.chirality`` prove their result with dozens of
+    full BREP boolean cuts, each O(faces). On a high-face real part (e.g. a
+    toothed pulley with hundreds of cylindrical faces) that silently blows the
+    request budget and surfaces as an unactionable timeout -- the very "silent
+    failure" we forbid. So we check the face count up front and raise a clear,
+    actionable error. ``max_faces`` tunes the ceiling; ``force=True`` runs it
+    anyway when the caller knowingly accepts the cost.
+    """
+    if a.get("force"):
+        return
+    limit = int(a.get("max_faces", default_max))
+    nf = len(body.Faces)
+    if nf > limit:
+        raise ValueError(
+            "%s proves its result with O(faces) boolean cuts; this part has %d "
+            "faces (> max_faces=%d) and would exceed the time budget. Defeature "
+            "or simplify the part first, raise max_faces, or pass force=true to "
+            "run it anyway." % (op, nf, limit))
+
+
 def _metrics(shape):
     bb = shape.BoundBox
     data = {
@@ -749,6 +773,7 @@ def register(state):
         # result is a single-solid Part.Compound, and Compound has no
         # PrincipalProperties/CenterOfMass.
         body = sols[0]
+        _guard_boolean_budget("solid.symmetry", body, a)
         com = body.CenterOfMass
         pr = body.PrincipalProperties
         a1 = _unit_v(pr["FirstAxisOfInertia"])
@@ -950,6 +975,7 @@ def register(state):
                 "a property of one part" % len(sols))
         tol = float(a.get("tol", 1e-3))
         body = sols[0]
+        _guard_boolean_budget("solid.chirality", body, a)
         vol = body.Volume
         base = _in_principal_frame(body)
         mir = body.copy()
