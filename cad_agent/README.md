@@ -25,7 +25,7 @@
 ## 入口
 
 ```bash
-# 27/27 live 套件 (真实内核)
+# 28/28 live 套件 (真实内核; 含 modal + 高阶建模 revolve/loft/shell/sweep)
 python verify_agent.py
 
 # 五物理验道 (闭式解校验)
@@ -34,8 +34,10 @@ python 30-验证_Verify/_verify_fem.py        # 5/5 PASS
 # 闭环演示 (四物理 + 应力云图 → output/fem_demo/)
 python 50-演示_Demo/demo_fem_closure.py
 
-# 大规模复杂装配实战: 8 螺栓法兰联轴器 (10 零件, 极阵列 + BOM + FEM)
-python 60-实战_Projects/flanged_coupling.py
+# 大规模复杂装配实战
+python 60-实战_Projects/flanged_coupling.py      # 8 螺栓法兰联轴器 (10 零件, 极阵列 + BOM + FEM)
+python 60-实战_Projects/gear_reducer_2stage.py   # 两级齿轮减速箱 (7 零件, 传动比5.0 闭式)
+python 60-实战_Projects/spring_in_housing.py     # 弹簧-缸套子装配 (螺旋扫掠 + 间隙装配)
 ```
 
 需真实 FreeCAD 1.0 (`FREECADCMD` 指向 `freecadcmd.exe`); CalculiX `ccx` 随 FreeCAD 自带.

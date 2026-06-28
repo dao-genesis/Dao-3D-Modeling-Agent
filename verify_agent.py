@@ -23,7 +23,8 @@ SUITES = ["tests.smoke_kernel", "tests.smoke_param", "tests.smoke_asm",
           "tests.smoke_engine", "tests.smoke_interop",
           "tests.smoke_gear_fem", "tests.smoke_pressure_vessel",
           "tests.smoke_worm", "tests.smoke_buckling",
-          "tests.smoke_thermal", "tests.smoke_rotordisk", "tests.smoke_modal"]
+          "tests.smoke_thermal", "tests.smoke_rotordisk", "tests.smoke_modal",
+          "tests.smoke_advmodel"]
 
 
 def main() -> int:
