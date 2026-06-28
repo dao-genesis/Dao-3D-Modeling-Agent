@@ -2359,6 +2359,54 @@ def register(state):
             "recipe": recipe,
         }
 
+    def _prim_shape(spec):
+        """Build one solid from a frame-agnostic recipe step. The same vocabulary
+        backs the replayable build program and reverse_build's own rebuild, so the
+        emitted program is guaranteed to be what was actually built."""
+        mk = spec["make"]
+        if mk == "box":
+            sz = spec["size"]
+            pos = spec.get("pos", [0, 0, 0])
+            return Part.makeBox(sz[0], sz[1], sz[2], V(*pos))
+        if mk == "cylinder":
+            pos = spec.get("pos", [0, 0, 0])
+            dirv = spec.get("dir", [0, 0, 1])
+            return Part.makeCylinder(spec["r"], spec["h"], V(*pos), V(*dirv))
+        if mk == "sphere":
+            return Part.makeSphere(spec["r"])
+        if mk == "cone":
+            pos = spec.get("pos", [0, 0, 0])
+            dirv = spec.get("dir", [0, 0, 1])
+            return Part.makeCone(spec["r1"], spec["r2"], spec["h"],
+                                 V(*pos), V(*dirv))
+        if mk == "torus":
+            return Part.makeTorus(spec["R"], spec["r"])
+        raise ValueError("unknown build step %r" % mk)
+
+    def _run_program(prog):
+        """Replay a {stock, cuts} build program into a single solid."""
+        shp = _prim_shape(prog["stock"])
+        for c in prog.get("cuts") or []:
+            shp = shp.cut(_prim_shape(c))
+        return shp
+
+    def op_replay(a):
+        """Re-execute a replayable build program (as emitted by reverse_build) and
+        bind the resulting solid -- so a recovered design intent is not just an
+        internal rebuild but an editable, reusable forward recipe a user can keep,
+        tweak (change a diameter, a stock size) and re-run. args: program, out."""
+        prog = a.get("program")
+        if not prog or "stock" not in prog:
+            raise ValueError(
+                "solid.replay needs a 'program' with a 'stock' step (get one "
+                "from solid.reverse_build's 'program' field)")
+        shp = _run_program(prog)
+        sol = shp.Solids[0] if shp.Solids else shp
+        out = a.get("out") or "replayed"
+        _put(out, sol)
+        return {"out": out, "volume": _round(sol.Volume),
+                "cuts": len(prog.get("cuts") or [])}
+
     def op_reverse_build(a):
         """Close the forward-reverse loop: rebuild a clean model from the
         recovered design intent and *prove* it reproduces the original.
@@ -2390,32 +2438,38 @@ def register(state):
         prim = op_recognize({"name": name})
         ptype = prim.get("type")
         pp = prim.get("params") or {}
-        shape = None
+        program = None
         kind = None
         if prim.get("volume_match") and ptype == "box":
-            shape = Part.makeBox(pp["length"], pp["width"], pp["height"])
+            program = {"stock": {"make": "box",
+                                 "size": [pp["length"], pp["width"], pp["height"]]}}
             kind = "primitive:box"
         elif prim.get("volume_match") and ptype == "cylinder":
-            shape = Part.makeCylinder(pp["radius"], pp["height"])
+            program = {"stock": {"make": "cylinder", "r": pp["radius"], "h": pp["height"]}}
             kind = "primitive:cylinder"
         elif prim.get("volume_match") and ptype == "sphere":
-            shape = Part.makeSphere(pp["radius"])
+            program = {"stock": {"make": "sphere", "r": pp["radius"]}}
             kind = "primitive:sphere"
         elif prim.get("volume_match") and ptype == "cone":
-            shape = Part.makeCone(pp["radius"], 0.0, pp["height"])
+            program = {"stock": {"make": "cone", "r1": pp["radius"], "r2": 0.0,
+                                 "h": pp["height"]}}
             kind = "primitive:cone"
         elif prim.get("volume_match") and ptype == "frustum":
-            shape = Part.makeCone(pp["base_radius"], pp["top_radius"], pp["height"])
+            program = {"stock": {"make": "cone", "r1": pp["base_radius"],
+                                 "r2": pp["top_radius"], "h": pp["height"]}}
             kind = "primitive:frustum"
         elif prim.get("volume_match") and ptype == "torus":
-            shape = Part.makeTorus(pp["major_radius"], pp["minor_radius"])
+            program = {"stock": {"make": "torus", "R": pp["major_radius"],
+                                 "r": pp["minor_radius"]}}
             kind = "primitive:torus"
         elif prim.get("volume_match") and ptype == "tube":
-            shape = Part.makeCylinder(pp["outer_radius"], pp["height"]).cut(
-                Part.makeCylinder(pp["inner_radius"], pp["height"]))
+            program = {"stock": {"make": "cylinder", "r": pp["outer_radius"],
+                                 "h": pp["height"]},
+                       "cuts": [{"make": "cylinder", "r": pp["inner_radius"],
+                                 "h": pp["height"]}]}
             kind = "primitive:tube"
 
-        if shape is None:
+        if program is None:
             # engineered part: a stock billet minus each drilled hole, placed in
             # the principal frame where the billet is axis-aligned. The billet is
             # a block by default, but a *turned* part (two equal cross-section
@@ -2449,32 +2503,37 @@ def register(state):
                         billet_r = r
                         billet_h = a0[1]
                         break
+            cuts = []
             if billet_axis is not None:
                 ax = _AX[billet_axis]
                 lo = getattr(bb, billet_axis.upper() + "Min")
                 base = V(cen.x, cen.y, cen.z) - ax * (cen.dot(ax)) + ax * lo
-                shape = Part.makeCylinder(billet_r, billet_h, base, ax)
+                stock = {"make": "cylinder", "r": billet_r, "h": billet_h,
+                         "pos": [base.x, base.y, base.z],
+                         "dir": [ax.x, ax.y, ax.z]}
                 kind = "billet:cylinder-minus-holes"
             else:
-                shape = Part.makeBox(bb.XLength, bb.YLength, bb.ZLength,
-                                     V(bb.XMin, bb.YMin, bb.ZMin))
+                stock = {"make": "box",
+                         "size": [bb.XLength, bb.YLength, bb.ZLength],
+                         "pos": [bb.XMin, bb.YMin, bb.ZMin]}
                 ax = None
                 kind = "billet:box-minus-holes"
             mtol = 1e-3 * diag
 
-            def _cut_cyl(shp, r, p0, p1, ext0, ext1):
+            def _cut_spec(r, p0, p1, ext0, ext1):
                 # ext0/ext1 push the cut a touch past an *open* end so the cut
                 # face is not coplanar with the part face (a robust boolean);
                 # an interior step boundary is cut exactly so abutting steps meet.
                 seg = p1 - p0
                 length = seg.Length
                 if length <= 1e-9:
-                    return shp
+                    return None
                 dirv = _unit_v(seg)
                 m0 = 0.05 * diag if ext0 else 0.0
                 m1 = 0.05 * diag if ext1 else 0.0
-                cyl = Part.makeCylinder(r, length + m0 + m1, p0 - dirv * m0, dirv)
-                return shp.cut(cyl)
+                b = p0 - dirv * m0
+                return {"make": "cylinder", "r": r, "h": length + m0 + m1,
+                        "pos": [b.x, b.y, b.z], "dir": [dirv.x, dirv.y, dirv.z]}
 
             for f in feats["features"]:
                 if f["kind"] == "boss":
@@ -2505,11 +2564,16 @@ def register(state):
                         sp1 = V(*st["ends"][1])
                         e0 = f["through"] and (sp0 - gp0).Length <= mtol
                         e1 = f["through"] and (sp1 - gp1).Length <= mtol
-                        shape = _cut_cyl(shape, st["radius"], sp0, sp1, e0, e1)
+                        c = _cut_spec(st["radius"], sp0, sp1, e0, e1)
+                        if c:
+                            cuts.append(c)
                 else:
-                    shape = _cut_cyl(shape, f["radius"], gp0, gp1,
-                                     f["through"], f["through"])
+                    c = _cut_spec(f["radius"], gp0, gp1, f["through"], f["through"])
+                    if c:
+                        cuts.append(c)
+            program = {"stock": stock, "cuts": cuts}
 
+        shape = _run_program(program)
         rebuilt = shape.Solids[0] if shape.Solids else shape
         vol_err = abs(rebuilt.Volume - body0.Volume) / max(body0.Volume, 1e-9)
         q_orig = _fingerprint_body(body0)
@@ -2524,6 +2588,7 @@ def register(state):
             "volume_match": vol_err < tol and not skipped,
             "same_shape_key": same_key,
             "skipped": skipped,
+            "program": program,
         }
 
     def op_joints(a):
@@ -3237,7 +3302,7 @@ def register(state):
         "holes": op_holes,
         "fillets": op_fillets,
         "design_intent": op_design_intent,
-        "reverse_build": op_reverse_build,
+        "reverse_build": op_reverse_build, "replay": op_replay,
         "library_match": op_library_match, "library_index": op_library_index,
         "library_query": op_library_query,
         "interference": op_interference,

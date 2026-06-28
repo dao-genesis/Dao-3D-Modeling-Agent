@@ -16,6 +16,7 @@ the scale-/pose-invariant shape key:
     honestly in ``skipped`` and ``volume_match`` is False -- no silent near-miss;
   * a multi-solid input is refused loudly.
 """
+import copy
 import os
 import sys
 
@@ -104,6 +105,23 @@ def main():
     m = s.act("solid.measure", {"name": "br2"}).data
     assert m["volume"] > 0, m
     print("rebuilt solid usable: volume=%g" % m["volume"])
+
+    # ---- the emitted program is a faithful, replayable forward recipe ------ #
+    # reverse_build hands back a {stock, cuts} program; replaying it independently
+    # must reproduce the same solid -- proving the recovered intent is an
+    # editable, reusable build script, not just an opaque internal rebuild.
+    prog = rcb["program"]
+    assert prog and prog["stock"]["make"] == "box", prog
+    assert len(prog["cuts"]) == 2, prog               # the counterbore: recess + bore
+    rp2 = s.act("solid.replay", {"program": prog, "out": "cb_replay"}).data
+    assert abs(rp2["volume"] - rcb["rebuilt_volume"]) < 1e-6, (rp2, rcb)
+    # and an edited program (wider bore) really changes the part
+    prog2 = copy.deepcopy(prog)
+    prog2["cuts"][0]["r"] = prog2["cuts"][0]["r"] + 1.0
+    re = s.act("solid.replay", {"program": prog2, "out": "cb_edit"}).data
+    assert re["volume"] < rp2["volume"], (re, rp2)    # bigger bore removes more
+    print("program replayed: vol=%g cuts=%d; edited bore vol=%g"
+          % (rp2["volume"], rp2["cuts"], re["volume"]))
 
     # ---- a protruding boss is reported honestly, not silently fused -------- #
     s.act("solid.box", {"name": "pb", "length": 40, "width": 40, "height": 6})
