@@ -1294,6 +1294,52 @@ def register(state):
                 "grashof": grashof,
                 "grashof_type": ("crank-rocker" if grashof else "double-rocker")}
 
+    def op_gearmesh(a):
+        """Detect meshing gear pairs purely from geometry (reverse inference).
+
+        The inter-axis complement to ``coaxial`` (which finds parts stacked on
+        one shaft). Two gears mesh when their axes are *parallel but offset* and
+        the centre distance equals the sum of their pitch radii (external mesh)
+        or their difference (a pinion inside a ring -> internal mesh). With only
+        recovered geometry we approximate the pitch radius by the gear-blank
+        cylinder radius. Each candidate mesh reports the centre distance, both
+        radii and the speed ratio r_i/r_j -- feed these straight into
+        ``geartrain`` to get the train value.
+        """
+        names = a.get("parts") or list(state.shapes.keys())
+        tol = float(a.get("tol", 1e-2))
+        parts = []
+        for n in names:
+            cyls = _cyl_axes(_get(n).Shape)
+            if cyls:
+                parts.append((n, max(cyls, key=lambda c: c["radius"])))
+        meshes = []
+        for i in range(len(parts)):
+            for j in range(i + 1, len(parts)):
+                ni, ri = parts[i]
+                nj, rj = parts[j]
+                di, dj = ri["dir"], rj["dir"]
+                if abs(abs(di[0] * dj[0] + di[1] * dj[1] + di[2] * dj[2]) - 1.0) > 1e-3:
+                    continue                       # axes not parallel
+                w = tuple(rj["center"][k] - ri["center"][k] for k in range(3))
+                wd = w[0] * di[0] + w[1] * di[1] + w[2] * di[2]
+                perp = tuple(w[k] - wd * di[k] for k in range(3))
+                dist = math.sqrt(sum(v * v for v in perp))
+                ext = ri["radius"] + rj["radius"]
+                diff = abs(ri["radius"] - rj["radius"])
+                reltol = tol * max(ext, 1.0)
+                if dist > 1e-6 and abs(dist - ext) <= reltol:
+                    kind = "external"
+                elif diff > 1e-6 and abs(dist - diff) <= reltol:
+                    kind = "internal"
+                else:
+                    continue
+                meshes.append({"gears": [ni, nj], "type": kind,
+                               "center_distance": _round(dist),
+                               "radii": [_round(ri["radius"]), _round(rj["radius"])],
+                               "ratio": _round(ri["radius"] / rj["radius"], 6)})
+        return {"parts": names, "meshes": len(meshes), "mesh_list": meshes}
+
     def op_geartrain(a):
         """Compute the train value (speed ratio) of an ordinary gear train.
 
@@ -1434,6 +1480,6 @@ def register(state):
         "compound": op_compound, "decompose": op_decompose, "joints": op_joints,
         "mechanism": op_mechanism, "drive": op_drive, "recognize": op_recognize,
         "reverse": op_reverse, "coaxial": op_coaxial, "fourbar": op_fourbar,
-        "geartrain": op_geartrain,
+        "geartrain": op_geartrain, "gearmesh": op_gearmesh,
         "list": op_list, "delete": op_delete, "export": op_export, "import_step": op_import_step,
     }
