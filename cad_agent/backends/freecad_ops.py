@@ -1915,19 +1915,19 @@ def register(state):
             return (abs(abs(ax0.dot(ax1)) - 1.0) <= 1e-6
                     and (p1 - p0).cross(ax0).Length < ptol)
 
-        # phase 1 — rings: coaxial faces of *equal* radius with overlapping axial
-        # extent are one turned/bored cylindrical surface (a bore split into a
-        # couple of faces, or a whole ring of identical-radius patches). The
-        # summed angular span tells a complete 2*pi cylinder (a real bore/boss)
-        # from a partial patch (an edge fillet, a gear-tooth flank).
+        # phase 1 — rings: coaxial faces of *equal* radius are one turned/bored
+        # cylindrical surface, even when the modeller split them into faces with
+        # an axial gap (a pin interrupted by a collar, a bore split by a groove):
+        # one radius on one axis is one cylinder. The summed angular span then
+        # tells a complete 2*pi cylinder (a real bore/boss) from a partial patch
+        # (an edge fillet, a gear-tooth flank).
         rings = []
         for cf in raw:
             tgt = None
             for rg in rings:
                 if (rg["kind"] == cf["kind"]
                         and abs(rg["radius"] - cf["radius"]) <= ptol
-                        and _coaxial(rg["axis"], rg["pt"], cf["axis"], cf["center"])
-                        and min(cf["vmax"], rg["vmax"]) >= max(cf["vmin"], rg["vmin"]) - eps):
+                        and _coaxial(rg["axis"], rg["pt"], cf["axis"], cf["center"])):
                     tgt = rg
                     break
             if tgt is None:

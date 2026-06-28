@@ -69,6 +69,22 @@ def main():
     assert cbf[0]["through"] is True, cbf[0]
     print("counterbore: one hole feature, radii=%s, counterbored, through" % cbf[0]["radii"])
 
+    # ---- a shaft interrupted by a collar is ONE boss, not two ----------- #
+    # the r2 shaft surface is split by the wider r5 collar into two coaxial
+    # same-radius segments with an axial gap; they are one physical cylinder.
+    s.act("solid.cylinder", {"name": "shaft", "radius": 2, "height": 20, "pos": [0, 0, 0]})
+    s.act("solid.cylinder", {"name": "collar", "radius": 5, "height": 4, "pos": [0, 0, 8]})
+    s.act("solid.union", {"a": "shaft", "b": "collar", "out": "shaft"})
+    rs = s.act("solid.holes", {"name": "shaft"}).data
+    # the two r2 segments merge with each other (one cylinder) and then with the
+    # telescoping r5 collar into ONE stepped boss -- not three separate features.
+    assert rs["boss_count"] == 1, rs
+    boss = [f for f in rs["features"] if f["kind"] == "boss"][0]
+    assert boss["radii"] == [2.0, 5.0] and abs(boss["depth"] - 20) < 1e-3, boss
+    assert len(boss["faces"]) >= 3, boss      # both r2 segments + the collar
+    print("shaft+collar: ONE stepped boss radii=%s depth=%s (%d faces)"
+          % (boss["radii"], boss["depth"], len(boss["faces"])))
+
     # ---- a plain block has no round features ---------------------------- #
     s.act("solid.box", {"name": "blk", "length": 10, "width": 10, "height": 10})
     rb = s.act("solid.holes", {"name": "blk"}).data
