@@ -233,7 +233,19 @@ def register(state):
             g = [sk.addGeometry(Part.LineSegment(pts[i], pts[(i + 1) % n]), False) for i in range(n)]
             for i in range(n):
                 sk.addConstraint(Sketcher.Constraint("Coincident", g[i], 2, g[(i + 1) % n], 1))
-            # freeform polygon: intentionally left under-constrained (diagnose reports honestly)
+            # By default a freeform polygon is left under-constrained (DoF = 2n
+            # minus the loop) and ``diagnose`` reports that honestly. With
+            # ``constrain: true`` every vertex is locked to its coordinate via a
+            # DistanceX/DistanceY from the origin, driving DoF -> 0 (a fully
+            # constrained sketch) without adding any redundant constraint: each
+            # segment's start point is pinned absolutely and its end point is
+            # fixed only through the coincidence with the next pinned start.
+            if profile.get("constrain"):
+                for i in range(n):
+                    cx = sk.addConstraint(Sketcher.Constraint("DistanceX", -1, 1, g[i], 1, float(pts[i].x)))
+                    cy = sk.addConstraint(Sketcher.Constraint("DistanceY", -1, 1, g[i], 1, float(pts[i].y)))
+                    sk.renameConstraint(cx, "vx%d" % i)
+                    sk.renameConstraint(cy, "vy%d" % i)
 
         elif "gear" in profile:
             # involute spur-gear outline as a closed wire of line segments.
