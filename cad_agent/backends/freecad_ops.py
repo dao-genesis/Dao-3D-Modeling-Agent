@@ -900,6 +900,58 @@ def register(state):
         return {"source": a["name"], "parts": len(parts),
                 "monolithic": len(parts) <= 1, "part_list": parts}
 
+    def op_recognize(a):
+        """Recover a primitive's design parameters from raw solid geometry.
+
+        The parametric half of butchering-the-ox: once a part is recovered, name
+        *what it is* and its driving dimensions, so it can be re-emitted as a
+        clean parametric feature (``solid.box`` / ``cylinder`` / ``sphere``). A
+        classification is accepted only if its closed-form volume reproduces the
+        measured volume; otherwise the part is reported ``freeform`` rather than
+        a primitive it merely resembles — no silent false positives.
+        """
+        sh = _get(a["name"]).Shape
+        bb = sh.BoundBox
+        vol = sh.Volume
+        faces = sh.Faces
+        kinds = {}
+        for f in faces:
+            k = f.Surface.__class__.__name__
+            kinds[k] = kinds.get(k, 0) + 1
+        base = {"name": a["name"], "faces": len(faces), "surfaces": kinds,
+                "bbox_size": [_round(bb.XLength), _round(bb.YLength), _round(bb.ZLength)],
+                "volume": _round(vol)}
+        tol = float(a.get("tol", 1e-3))
+
+        def accept(kind, params, pred_vol):
+            rel = abs(pred_vol - vol) / max(abs(vol), 1e-9)
+            return dict(base, type=kind, params=params,
+                        predicted_volume=_round(pred_vol),
+                        fit_error=_round(rel, 6), volume_match=rel < tol)
+
+        if len(faces) == 1 and kinds.get("Sphere") == 1:
+            r = float(faces[0].Surface.Radius)
+            res = accept("sphere", {"radius": _round(r)}, 4.0 / 3.0 * math.pi * r ** 3)
+            if res["volume_match"]:
+                return res
+        if len(faces) == 3 and kinds.get("Cylinder") == 1 and kinds.get("Plane") == 2:
+            ax = _cyl_axes(sh)[0]["dir"]
+            r = _cyl_axes(sh)[0]["radius"]
+            caps = [f for f in faces if f.Surface.__class__.__name__ == "Plane"]
+            c0, c1 = caps[0].CenterOfMass, caps[1].CenterOfMass
+            h = abs((c1.x - c0.x) * ax[0] + (c1.y - c0.y) * ax[1] + (c1.z - c0.z) * ax[2])
+            res = accept("cylinder", {"radius": _round(r), "height": _round(h),
+                                      "axis": [_round(c, 6) for c in ax]}, math.pi * r * r * h)
+            if res["volume_match"]:
+                return res
+        if len(faces) == 6 and kinds.get("Plane") == 6:
+            lx, ly, lz = bb.XLength, bb.YLength, bb.ZLength
+            res = accept("box", {"length": _round(lx), "width": _round(ly), "height": _round(lz)},
+                         lx * ly * lz)
+            if res["volume_match"]:
+                return res
+        return dict(base, type="freeform", params=None, volume_match=False)
+
     def op_joints(a):
         """Infer revolute joints between parts from shared coaxial cylinders.
 
@@ -1111,6 +1163,6 @@ def register(state):
         "draft": op_draft, "thickness": op_thickness, "undercut": op_undercut,
         "overhang": op_overhang, "section": op_section, "dfm_report": op_dfm_report,
         "compound": op_compound, "decompose": op_decompose, "joints": op_joints,
-        "mechanism": op_mechanism, "drive": op_drive,
+        "mechanism": op_mechanism, "drive": op_drive, "recognize": op_recognize,
         "list": op_list, "delete": op_delete, "export": op_export, "import_step": op_import_step,
     }

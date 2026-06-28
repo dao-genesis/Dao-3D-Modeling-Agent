@@ -31,7 +31,7 @@ _SOLID_OPS = {
     "chamfer", "pattern_linear", "pattern_polar", "measure", "inspect",
     "interference", "draft", "thickness", "undercut", "overhang", "section",
     "dfm_report", "compound", "decompose", "joints", "mechanism", "drive",
-    "list", "delete", "export", "import_step",
+    "recognize", "list", "delete", "export", "import_step",
 }
 
 
