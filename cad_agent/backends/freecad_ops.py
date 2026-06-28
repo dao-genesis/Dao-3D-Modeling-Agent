@@ -104,6 +104,83 @@ def _cyl_axes(shape, tol=1e-6):
     return out
 
 
+def _plane_faces(shape):
+    """Planar faces as (outward unit-normal, centre, bbox).
+
+    ``Surface.Axis`` is the underlying plane normal and ignores which side is
+    solid, so two faces flat against each other report the *same* sign. Flip by
+    the face orientation to get the true outward normal — only then do opposing
+    contact faces come out anti-parallel.
+    """
+    out = []
+    for f in shape.Faces:
+        if f.Surface.__class__.__name__ != "Plane":
+            continue
+        n = f.Surface.Axis
+        nl = n.Length or 1.0
+        sgn = -1.0 if f.Orientation == "Reversed" else 1.0
+        c = f.CenterOfMass
+        out.append({"n": (sgn * n.x / nl, sgn * n.y / nl, sgn * n.z / nl),
+                    "p": (c.x, c.y, c.z), "bb": f.BoundBox})
+    return out
+
+
+def _bb_overlap(b1, b2, tol):
+    return (b1.XMin <= b2.XMax + tol and b2.XMin <= b1.XMax + tol
+            and b1.YMin <= b2.YMax + tol and b2.YMin <= b1.YMax + tol
+            and b1.ZMin <= b2.ZMax + tol and b2.ZMin <= b1.ZMax + tol)
+
+
+def _contact_normals(sa, sb, gap=1e-3):
+    """Unit normals where a planar face of ``sa`` lies flat against an opposing
+    face of ``sb`` (anti-parallel, coincident plane, overlapping footprint).
+
+    These are the directions the contact removes from relative translation —
+    the raw material for telling a slider (prismatic) from a free part.
+    """
+    normals = []
+    for a in _plane_faces(sa):
+        for b in _plane_faces(sb):
+            na, nb = a["n"], b["n"]
+            dot = na[0] * nb[0] + na[1] * nb[1] + na[2] * nb[2]
+            if dot > -0.999:                       # require facing (opposed) planes
+                continue
+            dp = (b["p"][0] - a["p"][0], b["p"][1] - a["p"][1], b["p"][2] - a["p"][2])
+            if abs(dp[0] * na[0] + dp[1] * na[1] + dp[2] * na[2]) > max(gap, 1e-6):
+                continue                            # planes not coincident -> no contact
+            if not _bb_overlap(a["bb"], b["bb"], gap):
+                continue                            # footprints do not overlap
+            # canonicalise direction sign so +n and -n collapse to one
+            key = na if (na[0], na[1], na[2]) >= (0, 0, 0) else (-na[0], -na[1], -na[2])
+            if not any(abs(abs(key[0] * m[0] + key[1] * m[1] + key[2] * m[2]) - 1.0) < 1e-6
+                       for m in normals):
+                normals.append(key)
+    return normals
+
+
+def _free_axis(normals):
+    """The single free translation axis of a part pinned by ``normals``.
+
+    Contact normals remove translation along themselves. A slider is boxed in by
+    contacts spanning exactly two directions, leaving one free line (their cross
+    product). Rank<=1 leaves a plane free (planar joint, not prismatic); rank 3
+    is fully constrained.
+    """
+    for i in range(len(normals)):
+        for j in range(i + 1, len(normals)):
+            a, b = normals[i], normals[j]
+            cx = (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2],
+                  a[0] * b[1] - a[1] * b[0])
+            length = math.sqrt(sum(v * v for v in cx))
+            if length <= 1e-6:
+                continue
+            ax = (cx[0] / length, cx[1] / length, cx[2] / length)
+            if all(abs(ax[0] * n[0] + ax[1] * n[1] + ax[2] * n[2]) < 1e-6 for n in normals):
+                return ax           # rank exactly 2 -> one free axis
+            return None             # a third independent normal -> fully constrained
+    return None                     # rank <= 1 -> a free plane, not a slider
+
+
 def _signature(shape):
     """Compact geometry fingerprint of a solid, for reverse-engineering."""
     bb = shape.BoundBox
@@ -837,6 +914,7 @@ def register(state):
                 axes.append((n, r))
         rtol = float(a.get("radius_tol", 0.6))
         atol = float(a.get("axis_tol", 1e-3))
+        gap = float(a.get("contact_gap", 1e-3))
         seen, joints = set(), []
         for i in range(len(axes)):
             for j in range(i + 1, len(axes)):
@@ -865,7 +943,58 @@ def register(state):
                     "axis_point": [_round(c) for c in ra["center"]],
                     "axis_dir": [_round(c, 6) for c in ax],
                     "radius": _round((ra["radius"] + rb["radius"]) / 2.0, 4)})
+        # prismatic (slider) joints: a part boxed in by planar contacts that
+        # leave exactly one free translation axis.
+        seen_p = set()
+        for i in range(len(names)):
+            for j in range(i + 1, len(names)):
+                key = tuple(sorted((names[i], names[j])))
+                if key in seen_p:
+                    continue
+                normals = _contact_normals(_get(key[0]).Shape, _get(key[1]).Shape, gap)
+                fax = _free_axis(normals)
+                if fax is None:
+                    continue
+                seen_p.add(key)
+                joints.append({
+                    "type": "prismatic", "parts": list(key),
+                    "axis_dir": [_round(c, 6) for c in fax],
+                    "contacts": len(normals)})
         return {"parts": names, "joints": len(joints), "joint_list": joints}
+
+    def op_mechanism(a):
+        """Assemble inferred joints into a kinematic graph and report mobility.
+
+        Closes the reverse loop: decompose -> joints -> *how it moves*. The
+        Kutzbach–Grübler criterion gives the degrees of freedom of the linkage
+        from the link and joint counts, so a recovered slider-crank (4 links, 3
+        revolute + 1 prismatic, all 1-DOF) must come out at mobility 1 — a single
+        crank angle drives the whole chain.
+        """
+        names = a.get("parts") or list(state.shapes.keys())
+        jspec = a.get("joint_list")
+        if jspec is None:
+            sub = {k: a[k] for k in ("radius_tol", "axis_tol", "contact_gap") if k in a}
+            sub["parts"] = names
+            jspec = op_joints(sub)["joint_list"]
+        # spatial freedoms per lower-pair joint
+        fmap = {"revolute": 1, "prismatic": 1, "cylindrical": 2, "spherical": 3, "planar": 3}
+        n = len(names)
+        lower = [j for j in jspec if j["type"] in ("revolute", "prismatic")]
+        mobility_planar = 3 * (n - 1) - 2 * len(lower)
+        mobility_spatial = 6 * (n - 1) - sum(6 - fmap.get(j["type"], 1) for j in jspec)
+        graph = {nm: [] for nm in names}
+        for j in jspec:
+            x, y = j["parts"]
+            graph[x].append(y)
+            graph[y].append(x)
+        types = {}
+        for j in jspec:
+            types[j["type"]] = types.get(j["type"], 0) + 1
+        return {"links": n, "joints": len(jspec), "joint_types": types,
+                "mobility_planar": mobility_planar,
+                "mobility_spatial": mobility_spatial,
+                "graph": {k: sorted(v) for k, v in graph.items()}}
 
     # ---- document management --------------------------------------------- #
     def op_list(a):
@@ -934,5 +1063,6 @@ def register(state):
         "draft": op_draft, "thickness": op_thickness, "undercut": op_undercut,
         "overhang": op_overhang, "section": op_section, "dfm_report": op_dfm_report,
         "compound": op_compound, "decompose": op_decompose, "joints": op_joints,
+        "mechanism": op_mechanism,
         "list": op_list, "delete": op_delete, "export": op_export, "import_step": op_import_step,
     }
