@@ -1340,6 +1340,64 @@ def register(state):
                                "ratio": _round(ri["radius"] / rj["radius"], 6)})
         return {"parts": names, "meshes": len(meshes), "mesh_list": meshes}
 
+    def op_cam(a):
+        """Disc-cam follower lift for a rise-dwell-fall-dwell (RDFD) profile.
+
+        A rotating cam pushes a follower through a programmed motion. The lift
+        over the rise is set by a displacement *law*; we support the two classic
+        smooth ones:
+
+          * ``harmonic``  s = S/2 (1 - cos(pi u))           -- zero velocity at
+            the ends but a finite (step) acceleration there;
+          * ``cycloidal`` s = S (u - sin(2 pi u)/(2 pi))    -- zero velocity AND
+            zero acceleration at the ends (shock-free), u = theta_local/beta.
+
+        The cam angle theta is split into rise (``rise_angle``), top dwell
+        (``dwell_angle``), fall (``fall_angle``, mirror of the rise) and the
+        remaining bottom dwell. Returns the follower lift, the analytic velocity
+        d(lift)/d(theta) (so callers can verify end-smoothness) and the radial
+        cam-profile radius base_radius + lift -- the parametric design output.
+        """
+        S = float(a["rise"])
+        law = a.get("law", "cycloidal")
+        br = float(a.get("rise_angle", 90.0))
+        bd = float(a.get("dwell_angle", 90.0))
+        bf = float(a.get("fall_angle", br))
+        base = float(a.get("base_radius", 0.0))
+        th = float(a["angle"]) % 360.0
+
+        def lift_frac(u):
+            if law == "harmonic":
+                return 0.5 * (1.0 - math.cos(math.pi * u))
+            if law == "cycloidal":
+                return u - math.sin(2.0 * math.pi * u) / (2.0 * math.pi)
+            raise ValueError("unknown cam law %r (use harmonic|cycloidal)" % law)
+
+        def dfrac(u, beta):                       # d(frac)/d(theta_deg)
+            if law == "harmonic":
+                return 0.5 * math.pi * math.sin(math.pi * u) / beta
+            return (1.0 - math.cos(2.0 * math.pi * u)) / beta
+
+        def d2frac(u, beta):                      # d2(frac)/d(theta_deg)^2
+            if law == "harmonic":
+                return 0.5 * math.pi * math.pi * math.cos(math.pi * u) / (beta * beta)
+            return 2.0 * math.pi * math.sin(2.0 * math.pi * u) / (beta * beta)
+
+        if th < br:
+            u = th / br if br else 0.0
+            lift, vel, acc, seg = S * lift_frac(u), S * dfrac(u, br), S * d2frac(u, br), "rise"
+        elif th < br + bd:
+            lift, vel, acc, seg = S, 0.0, 0.0, "dwell-top"
+        elif th < br + bd + bf:
+            u = (th - br - bd) / bf if bf else 0.0
+            lift, vel, acc, seg = S * (1.0 - lift_frac(u)), -S * dfrac(u, bf), -S * d2frac(u, bf), "fall"
+        else:
+            lift, vel, acc, seg = 0.0, 0.0, 0.0, "dwell-bottom"
+        return {"angle": _round(th), "segment": seg, "law": law,
+                "lift": _round(lift, 6), "velocity": _round(vel, 6),
+                "acceleration": _round(acc, 6),
+                "cam_radius": _round(base + lift, 6), "rise": _round(S)}
+
     def op_rackpinion(a):
         """Rack-and-pinion: convert pinion rotation to/from rack travel.
 
@@ -1515,6 +1573,6 @@ def register(state):
         "mechanism": op_mechanism, "drive": op_drive, "recognize": op_recognize,
         "reverse": op_reverse, "coaxial": op_coaxial, "fourbar": op_fourbar,
         "geartrain": op_geartrain, "gearmesh": op_gearmesh,
-        "rackpinion": op_rackpinion,
+        "rackpinion": op_rackpinion, "cam": op_cam,
         "list": op_list, "delete": op_delete, "export": op_export, "import_step": op_import_step,
     }
