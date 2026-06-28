@@ -29,8 +29,8 @@ _SOLID_OPS = {
     "box", "cylinder", "sphere", "cone", "torus", "extrude", "revolve", "loft",
     "shell", "translate", "rotate", "mirror", "union", "cut", "common", "fillet",
     "chamfer", "pattern_linear", "pattern_polar", "measure", "inspect",
-    "interference", "draft", "thickness", "undercut", "section", "list", "delete",
-    "export", "import_step",
+    "interference", "draft", "thickness", "undercut", "overhang", "section",
+    "list", "delete", "export", "import_step",
 }
 
 

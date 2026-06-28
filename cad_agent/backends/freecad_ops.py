@@ -501,6 +501,58 @@ def register(state):
                 "moldable": len(cuts) == 0, "undercut_faces": cuts,
                 "parallel_walls": parallel}
 
+    def op_overhang(a):
+        """Additive-manufacturing overhang / support DFM against a build axis.
+
+        The additive counterpart of the mould trio: a down-facing surface prints
+        cleanly only if it is steep enough that each new layer is supported by
+        the one below. With the part grown along ``build`` (default +Z), a face's
+        inclination from horizontal is ``beta = acos(|n . build|)`` — a vertical
+        wall has beta = 90 deg (always fine), a flat ceiling has beta = 0 (worst).
+        A *down-facing* face (outward normal opposing the build axis) that is not
+        resting on the build plate and whose ``beta < max_overhang`` (deg, default
+        45) needs support material. The part is ``printable`` (support-free) only
+        when no such face exists.
+
+        Face normals follow the same ``normalAt`` convention the draft/undercut
+        analyses use. args: name, build (default +Z), max_overhang (45).
+        """
+        sh = _get(a["name"]).Shape
+        up = _vec(a.get("build", (0, 0, 1)))
+        ul = up.Length or 1.0
+        up = _vec((up.x / ul, up.y / ul, up.z / ul))
+        limit = float(a.get("max_overhang", 45.0))
+        bb = sh.BoundBox
+        plate = bb.XMin * up.x + bb.YMin * up.y + bb.ZMin * up.z
+        diag = bb.DiagonalLength
+        tol = max(1e-4, diag * 1e-5)
+        sin_v = math.sin(math.radians(0.5))    # treat near-vertical as safe walls
+        overhangs, walls, plate_faces = [], 0, 0
+        for i, f in enumerate(sh.Faces):
+            u0, u1, v0, v1 = f.ParameterRange
+            n = f.normalAt((u0 + u1) / 2.0, (v0 + v1) / 2.0)
+            nl = n.Length or 1.0
+            n = _vec((n.x / nl, n.y / nl, n.z / nl))
+            cos = n.dot(up)
+            if abs(cos) < sin_v:               # vertical wall -> self-supporting
+                walls += 1
+                continue
+            if cos > 0:                        # up-facing -> supported from below
+                continue
+            top = max(vx.Point.x * up.x + vx.Point.y * up.y + vx.Point.z * up.z
+                      for vx in f.Vertexes)
+            if top <= plate + tol:             # lies on the build plate
+                plate_faces += 1
+                continue
+            beta = math.degrees(math.acos(min(1.0, abs(cos))))
+            if beta < limit:
+                overhangs.append({"face": "Face%d" % (i + 1), "angle_deg": _round(beta, 3)})
+        return {"build": [_round(up.x), _round(up.y), _round(up.z)],
+                "max_overhang_deg": limit, "faces": len(sh.Faces),
+                "printable": len(overhangs) == 0, "overhangs": len(overhangs),
+                "overhang_faces": overhangs, "vertical_walls": walls,
+                "plate_faces": plate_faces}
+
     def op_section(a):
         """Planar cross-section properties of a solid (beam / structural design).
 
@@ -624,6 +676,6 @@ def register(state):
         "pattern_linear": op_pattern_linear, "pattern_polar": op_pattern_polar,
         "measure": op_measure, "inspect": op_inspect, "interference": op_interference,
         "draft": op_draft, "thickness": op_thickness, "undercut": op_undercut,
-        "section": op_section,
+        "overhang": op_overhang, "section": op_section,
         "list": op_list, "delete": op_delete, "export": op_export, "import_step": op_import_step,
     }
