@@ -1,0 +1,28 @@
+{
+  "frame": "base centroid at origin region, +Z = base->ring axis, millimetres",
+  "scale_mm_per_unit": 270.9,
+  "fused_aabb_mm": [
+    187.7,
+    165.3,
+    289.5
+  ],
+  "receiver_ring": {
+    "center_mm": [
+      0.3,
+      -18.1,
+      250.8
+    ],
+    "radius_mm": 59.3,
+    "outer_diam_mm": 118.7,
+    "plane_tilt_deg": 23.1
+  },
+  "base_to_ring_axial_standoff_mm": 195.5,
+  "ring_lateral_offset_mm": 20.2,
+  "firmware_ring_outer_diam_mm": 114.0,
+  "ring_diam_vs_firmware": {
+    "tripo_mm": 118.7,
+    "firmware_mm": 114.0,
+    "delta_mm": 4.7
+  },
+  "note": "Tripo mesh carries a tilted, laterally-offset receiver ring held out from the base by the crossed rod-fan; the firmware skeleton placed the ring coaxial & centred over the base (lateral offset ~0). That lateral offset + plane tilt is the assembly error the firmware lacked."
+}

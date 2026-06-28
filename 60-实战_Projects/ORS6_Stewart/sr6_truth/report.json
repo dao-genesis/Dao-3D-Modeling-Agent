@@ -1,0 +1,121 @@
+{
+  "all_pass": true,
+  "geometry": {
+    "rod_mm": 175.0,
+    "arm_main_mm": 50.0,
+    "arm_pitch_mm": 75.2,
+    "home_tilt_deg": 15.0,
+    "home_height_mm": 173.4
+  },
+  "workspace": {
+    "stroke": {
+      "min": -38.7,
+      "max": 60.4,
+      "unit": "mm",
+      "spec": 30.0
+    },
+    "surge": {
+      "min": -60,
+      "max": 60,
+      "unit": "mm",
+      "spec": 30.0
+    },
+    "sway": {
+      "min": -60,
+      "max": 60,
+      "unit": "mm",
+      "spec": 30.0
+    },
+    "roll": {
+      "min": -39.2,
+      "max": 39.2,
+      "unit": "deg",
+      "spec": 30.0
+    },
+    "pitch": {
+      "min": -60,
+      "max": 60,
+      "unit": "deg",
+      "spec": 30.0
+    },
+    "yaw": {
+      "min": -45,
+      "max": 45,
+      "unit": "deg",
+      "spec": null
+    }
+  },
+  "checks": [
+    {
+      "name": "firmware_fidelity",
+      "pass": true,
+      "SetMainServo_err": 0.0,
+      "main_home_us": {
+        "LL": -0.004,
+        "UL": 0.096,
+        "LR": 0.034,
+        "UR": -0.065
+      },
+      "detail": "python port == ESP32 C kinematics; main servos neutral at home"
+    },
+    {
+      "name": "home_closure",
+      "pass": true,
+      "max_rod_err_mm": 0.0,
+      "detail": "all 6 rods == 175 mm at rest"
+    },
+    {
+      "name": "operating_envelope_closure",
+      "pass": true,
+      "n_poses": 17,
+      "n_fail": 0,
+      "max_rod_err_mm": 2.842170943040401e-14,
+      "detail": "all rods == 175 across +-30mm / +-30deg PDF envelope"
+    },
+    {
+      "name": "meets_pdf_motion_spec",
+      "pass": true,
+      "axes": {
+        "surge": true,
+        "sway": true,
+        "stroke": true,
+        "roll": true,
+        "pitch": true
+      },
+      "detail": "reachable workspace contains PDF p5 spec (+-30mm / +-30deg)"
+    },
+    {
+      "name": "axis_decoupling",
+      "pass": true,
+      "pitch_main_arm_move_deg": 0.0,
+      "stroke_LR_asym_deg": 2.180659184175237e-06,
+      "detail": "pitch leaves main arms fixed; stroke stays L/R symmetric"
+    },
+    {
+      "name": "mirror_symmetry",
+      "pass": true,
+      "mirror_err_deg": 3.121550225107534e-05,
+      "detail": "left-right mirror symmetry holds"
+    },
+    {
+      "name": "continuity_no_singularity",
+      "pass": true,
+      "discontinuous": [],
+      "detail": "arm angles smooth across the envelope"
+    },
+    {
+      "name": "arm_within_servo_limit",
+      "pass": true,
+      "limit_deg": 80.0,
+      "worst_arm_deg": {
+        "LL": 30.6,
+        "UL": 46.7,
+        "LR": 30.6,
+        "UR": 46.7,
+        "PL": 20.0,
+        "PR": 20.0
+      },
+      "detail": "every arm stays within +-80.0 deg in the envelope"
+    }
+  ]
+}
