@@ -42,7 +42,8 @@ SUITES = ["tests.smoke_kernel", "tests.smoke_param", "tests.smoke_asm",
           "tests.smoke_cam_profile", "tests.smoke_gearbox",
           "tests.smoke_spatial_mobility", "tests.smoke_inertia",
           "tests.smoke_curvature", "tests.smoke_obb",
-          "tests.smoke_symmetry", "tests.smoke_fingerprint"]
+          "tests.smoke_symmetry", "tests.smoke_fingerprint",
+          "tests.smoke_match"]
 
 
 def main() -> int:

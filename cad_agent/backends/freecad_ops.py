@@ -752,22 +752,13 @@ def register(state):
             "orders_tested": list(orders),
         }
 
-    def op_fingerprint(a):
-        """Pose- and scale-invariant shape signature — the model-library key.
+    def _shape_fingerprint(name):
+        """Shared fingerprint kernel used by ``fingerprint`` and ``match``.
 
-        To integrate the world's models you must be able to *recognise the same
-        part again* regardless of how it was placed, scaled or named. This
-        distils a solid into invariants that survive rigid motion and uniform
-        scaling: the dimensionless isoperimetric ratio A^3/V^2 (a sphere's
-        minimum is 36*pi, a cube is 216), the sorted OBB aspect ratios, the
-        ratios of the principal moments of inertia, the surface-type histogram
-        and the V/E/F topology counts. Their hash is a ``shape_key`` — two
-        copies of one design in any pose or size collapse to the same key, while
-        genuinely different parts diverge — so a downloaded STEP can be matched
-        against everything already seen instead of being re-modelled from zero.
-        The raw size (volume, area, true OBB dimensions) is reported alongside.
+        Returns the raw (un-rounded) invariants so callers can both report them
+        and compute distances. Raises loudly unless ``name`` is a single solid.
         """
-        sh = _get(a["name"]).Shape
+        sh = _get(name).Shape
         sols = sh.Solids
         if len(sols) != 1:
             raise ValueError(
@@ -788,9 +779,9 @@ def register(state):
         loc.transformShape(mat, True, False)
         bb = loc.BoundBox
         dims = sorted([bb.XLength, bb.YLength, bb.ZLength])
-        obb_aspect = [dims[1] / dims[0], dims[2] / dims[0]] if dims[0] > 1e-9 else None
+        obb_aspect = [dims[1] / dims[0], dims[2] / dims[0]] if dims[0] > 1e-9 else [1.0, 1.0]
         mom = sorted(float(m) for m in pr["Moments"])
-        mom_ratio = [mom[1] / mom[0], mom[2] / mom[0]] if mom[0] > 1e-9 else None
+        mom_ratio = [mom[1] / mom[0], mom[2] / mom[0]] if mom[0] > 1e-9 else [1.0, 1.0]
         hist = {}
         for f in body.Faces:
             kind = f.Surface.__class__.__name__
@@ -798,24 +789,89 @@ def register(state):
         counts = [len(body.Vertexes), len(body.Edges), len(body.Faces)]
         invariants = (
             round(iso, 3) if iso is not None else None,
-            tuple(round(x, 4) for x in obb_aspect) if obb_aspect else None,
-            tuple(round(x, 4) for x in mom_ratio) if mom_ratio else None,
+            tuple(round(x, 4) for x in obb_aspect),
+            tuple(round(x, 4) for x in mom_ratio),
             tuple(sorted(hist.items())),
             tuple(counts),
         )
         shape_key = hashlib.sha1(repr(invariants).encode()).hexdigest()[:16]
+        return {"shape_key": shape_key, "iso": iso, "obb_aspect": obb_aspect,
+                "mom_ratio": mom_ratio, "hist": hist, "counts": counts,
+                "volume": vol, "area": area, "dims": dims}
+
+    def op_fingerprint(a):
+        """Pose- and scale-invariant shape signature — the model-library key.
+
+        To integrate the world's models you must be able to *recognise the same
+        part again* regardless of how it was placed, scaled or named. This
+        distils a solid into invariants that survive rigid motion and uniform
+        scaling: the dimensionless isoperimetric ratio A^3/V^2 (a sphere's
+        minimum is 36*pi, a cube is 216), the sorted OBB aspect ratios, the
+        ratios of the principal moments of inertia, the surface-type histogram
+        and the V/E/F topology counts. Their hash is a ``shape_key`` — two
+        copies of one design in any pose or size collapse to the same key, while
+        genuinely different parts diverge — so a downloaded STEP can be matched
+        against everything already seen instead of being re-modelled from zero.
+        The raw size (volume, area, true OBB dimensions) is reported alongside.
+        """
+        fp = _shape_fingerprint(a["name"])
         return {
             "name": a["name"],
-            "shape_key": shape_key,
-            "isoperimetric": _round(iso, 4) if iso is not None else None,
-            "obb_aspect": [_round(x, 4) for x in obb_aspect] if obb_aspect else None,
-            "moment_ratio": [_round(x, 4) for x in mom_ratio] if mom_ratio else None,
-            "surface_histogram": hist,
-            "topology": {"vertices": counts[0], "edges": counts[1], "faces": counts[2]},
-            "volume": _round(vol),
-            "area": _round(area),
-            "obb_dimensions": [_round(d) for d in dims],
+            "shape_key": fp["shape_key"],
+            "isoperimetric": _round(fp["iso"], 4) if fp["iso"] is not None else None,
+            "obb_aspect": [_round(x, 4) for x in fp["obb_aspect"]],
+            "moment_ratio": [_round(x, 4) for x in fp["mom_ratio"]],
+            "surface_histogram": fp["hist"],
+            "topology": {"vertices": fp["counts"][0], "edges": fp["counts"][1],
+                         "faces": fp["counts"][2]},
+            "volume": _round(fp["volume"]),
+            "area": _round(fp["area"]),
+            "obb_dimensions": [_round(d) for d in fp["dims"]],
         }
+
+    def _fp_distance(q, c):
+        """Scale-invariant dissimilarity between two fingerprints (0 = same family)."""
+        d = 0.0
+        if q["iso"] and c["iso"]:
+            d += abs(math.log(q["iso"] / c["iso"]))
+        d += sum(abs(x - y) for x, y in zip(q["obb_aspect"], c["obb_aspect"]))
+        d += sum(abs(x - y) for x, y in zip(q["mom_ratio"], c["mom_ratio"]))
+        kinds = set(q["hist"]) | set(c["hist"])
+        d += 0.1 * sum(abs(q["hist"].get(k, 0) - c["hist"].get(k, 0)) for k in kinds)
+        return d
+
+    def op_match(a):
+        """Retrieve the closest-shaped solids to a query — search before building.
+
+        反者道之动: the cheapest part to make is the one you already have. Given a
+        query solid and a set of candidates (``against`` names, else every other
+        solid in the document), this ranks them by a scale-invariant distance
+        over their fingerprints — identical shape families (a box vs the same box
+        in any pose or size) collapse to distance ~0 and share a ``shape_key``;
+        a sphere sits far from a box. The top hit, when ``same_key`` is true, is
+        a reuse candidate; ``volume_ratio`` tells you how to scale it to size.
+        """
+        q = _shape_fingerprint(a["name"])
+        names = a.get("against")
+        if names is None:
+            names = [n for n in state.shapes if n != a["name"]]
+        if not names:
+            raise ValueError(
+                "solid.match has nothing to compare against - pass 'against': "
+                "[names] or load more solids into the document")
+        ranked = []
+        for nm in names:
+            c = _shape_fingerprint(nm)
+            ranked.append({
+                "name": nm,
+                "distance": _round(_fp_distance(q, c), 6),
+                "same_key": c["shape_key"] == q["shape_key"],
+                "volume_ratio": _round(c["volume"] / q["volume"], 4) if q["volume"] > 1e-12 else None,
+            })
+        ranked.sort(key=lambda r: r["distance"])
+        return {"name": a["name"], "query_key": q["shape_key"],
+                "candidates": len(ranked), "best": ranked[0]["name"],
+                "ranking": ranked}
 
     def op_interference(a):
         sa = _get(a["a"]).Shape
@@ -2072,7 +2128,7 @@ def register(state):
         "pattern_linear": op_pattern_linear, "pattern_polar": op_pattern_polar,
         "measure": op_measure, "inspect": op_inspect, "inertia": op_inertia,
         "curvature": op_curvature, "obb": op_obb, "symmetry": op_symmetry,
-        "fingerprint": op_fingerprint, "interference": op_interference,
+        "fingerprint": op_fingerprint, "match": op_match, "interference": op_interference,
         "draft": op_draft, "thickness": op_thickness, "undercut": op_undercut,
         "overhang": op_overhang, "section": op_section, "dfm_report": op_dfm_report,
         "compound": op_compound, "decompose": op_decompose, "joints": op_joints,
