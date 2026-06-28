@@ -326,6 +326,39 @@ def register(state):
         if tot_m > 0:
             out["mass"] = _round(tot_m)
             out["center_of_mass"] = [_round(mx / tot_m), _round(my / tot_m), _round(mz / tot_m)]
+
+        # mass moment of inertia about an arbitrary axis line (point + dir), for
+        # rotating assemblies / flywheels. Each component contributes its own
+        # inertia about a parallel axis through its centroid (projecting the
+        # CoM inertia tensor onto the axis) plus the parallel-axis term
+        # m*d_perp^2 (Huygens-Steiner). MatrixOfInertia is the unit-density
+        # (volume) tensor about the component CoM, so scale by density.
+        ax = a.get("inertia_axis")
+        if ax and tot_v > 0:
+            p = V(*ax.get("point", (0, 0, 0)))
+            d = V(*ax.get("dir", (0, 0, 1)))
+            d = d.normalize() if d.Length > 1e-9 else V(0, 0, 1)
+            inertia = 0.0
+            for n in names:
+                sh = shapes[n]
+                v = sh.Volume
+                com = sh.CenterOfMass
+                rho = dens.get(n)
+                if rho is None:
+                    rho = dens.get(doc.getObject(state.components[n]["src"]).Label, default_rho)
+                rho = 1.0 if rho is None else float(rho)
+                mat = sh.MatrixOfInertia
+                j_dir = (d.x * d.x * mat.A11 + d.y * d.y * mat.A22 + d.z * d.z * mat.A33
+                         + 2 * d.x * d.y * mat.A12 + 2 * d.x * d.z * mat.A13
+                         + 2 * d.y * d.z * mat.A23)
+                # perpendicular distance from the component CoM to the axis line
+                # (d is a unit vector): d_perp^2 = |r|^2 - (r.d)^2. Computed
+                # analytically so the shared axis vector is never mutated.
+                r = com.sub(p)
+                proj = r.dot(d)
+                perp2 = r.Length * r.Length - proj * proj
+                inertia += rho * j_dir + (rho * v) * perp2
+            out["inertia_axis"] = _round(inertia)
         return out
 
     def op_tree(a):

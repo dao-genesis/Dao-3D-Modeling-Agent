@@ -49,6 +49,16 @@ def main():
     assert abs(mm["center_of_mass"][0] - expect_x) < 1e-3, (mm["center_of_mass"], expect_x)
     assert abs(mm["mass"] - (rho_a + rho_b) * vA) < 1e-3, mm["mass"]
 
+    # 3) mass moment of inertia about the global Z axis (uniform rho=1) via the
+    #    parallel-axis theorem:  I = 2*Icm + m_B*d^2  for the two cubes.
+    mi = s.act("asm.measure", {"density": 1.0, "inertia_axis": {"point": [0, 0, 0],
+                               "dir": [0, 0, 1]}}).data
+    icm = vA * (A ** 2 + A ** 2) / 12.0          # cube CoM inertia about Z
+    expect_I = 2 * icm + vA * XB ** 2            # B sits d=XB from the axis
+    print("Izz=%.1f  (closed-form %.1f, err %.2e)" % (mi["inertia_axis"], expect_I,
+          abs(mi["inertia_axis"] - expect_I) / expect_I))
+    assert abs(mi["inertia_axis"] - expect_I) / expect_I < 1e-9, (mi["inertia_axis"], expect_I)
+
     print("ASM MASSPROPS SMOKE OK", s.summary())
     s.registry.kernel.shutdown()
 
