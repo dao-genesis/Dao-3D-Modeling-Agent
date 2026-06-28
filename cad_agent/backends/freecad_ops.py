@@ -69,6 +69,57 @@ def _center(shape):
         return V(bb.Center.x, bb.Center.y, bb.Center.z)
 
 
+def _cyl_axes(shape, tol=1e-6):
+    """Cylindrical faces of a shape as (center, unit-axis, radius) records.
+
+    The raw material for joint inference: a revolute joint shows up as two
+    parts sharing a coaxial cylindrical face (a pin in a hole). Coincident
+    duplicates (the same axis reported by several faces) are merged.
+    """
+    out = []
+    for f in shape.Faces:
+        surf = f.Surface
+        if surf.__class__.__name__ != "Cylinder":
+            continue
+        ax = surf.Axis
+        al = ax.Length or 1.0
+        ax = (ax.x / al, ax.y / al, ax.z / al)
+        c = surf.Center
+        rec = {"center": (c.x, c.y, c.z), "dir": ax, "radius": float(surf.Radius)}
+        dup = False
+        for e in out:
+            if (abs(e["radius"] - rec["radius"]) < 1e-4
+                    and abs(abs(e["dir"][0] * ax[0] + e["dir"][1] * ax[1]
+                                + e["dir"][2] * ax[2]) - 1.0) < 1e-6):
+                # same radius & parallel axis: coaxial if centre offset is axial
+                dx = (c.x - e["center"][0], c.y - e["center"][1], c.z - e["center"][2])
+                cross = (dx[1] * ax[2] - dx[2] * ax[1],
+                         dx[2] * ax[0] - dx[0] * ax[2],
+                         dx[0] * ax[1] - dx[1] * ax[0])
+                if math.sqrt(sum(v * v for v in cross)) < 1e-4:
+                    dup = True
+                    break
+        if not dup:
+            out.append(rec)
+    return out
+
+
+def _signature(shape):
+    """Compact geometry fingerprint of a solid, for reverse-engineering."""
+    bb = shape.BoundBox
+    com = _center(shape)
+    axes = _cyl_axes(shape)
+    return {
+        "volume": _round(shape.Volume),
+        "bbox_size": [_round(bb.XLength), _round(bb.YLength), _round(bb.ZLength)],
+        "center_of_mass": [_round(com.x), _round(com.y), _round(com.z)],
+        "faces": len(shape.Faces),
+        "cyl_axes": [{"center": [_round(c) for c in r["center"]],
+                      "dir": [_round(c, 6) for c in r["dir"]],
+                      "radius": _round(r["radius"], 4)} for r in axes],
+    }
+
+
 def _profile_face(spec):
     """Build a planar face (on XY) from a profile spec dict.
 
@@ -736,6 +787,86 @@ def register(state):
                 "axis": [_round(axis[0]), _round(axis[1]), _round(axis[2])],
                 "manufacturable": ok, "checks": checks, "issues": issues}
 
+    # ---- reverse engineering (庖丁解牛) ----------------------------------- #
+    def op_compound(a):
+        """Gather several solids into one multi-solid shape.
+
+        The forward counterpart of ``decompose``: it makes the kind of single
+        'monolithic' object (many disjoint solids, no part structure) that a
+        downloaded model often is, without fusing the parts the way ``union``
+        would. Round-trips with ``decompose``.
+        """
+        names = a["names"]
+        comp = Part.makeCompound([_get(n).Shape for n in names])
+        _put(a.get("out", "compound"), comp)
+        return _metrics(comp)
+
+    def op_decompose(a):
+        """Take a monolithic model apart: split a shape into its constituent
+        solids, register each as a named part, and fingerprint each one.
+
+        A typical 'downloaded' model is one object holding many disjoint solids
+        (a STEP assembly with no part names, a multi-lump import). ``Shape.Solids``
+        recovers the individual parts. A single fused solid cannot be split this
+        way — that needs feature segmentation — so we flag ``monolithic`` rather
+        than silently pretending the model was already one part.
+        """
+        sh = _get(a["name"]).Shape
+        prefix = a.get("prefix", a["name"] + "_part")
+        parts = []
+        for i, sol in enumerate(sh.Solids):
+            nm = "%s%d" % (prefix, i + 1)
+            _put(nm, sol)
+            parts.append(dict(name=nm, **_signature(sol)))
+        # largest part first — usually the frame/block the others hang off of
+        parts.sort(key=lambda p: p["volume"], reverse=True)
+        return {"source": a["name"], "parts": len(parts),
+                "monolithic": len(parts) <= 1, "part_list": parts}
+
+    def op_joints(a):
+        """Infer revolute joints between parts from shared coaxial cylinders.
+
+        A pin riding in a hole is two parts whose cylindrical faces are coaxial
+        (parallel axes, the same line) with matching radius. That is exactly a
+        revolute (hinge) joint, and its axis is the shared cylinder axis.
+        """
+        names = a.get("parts") or list(state.shapes.keys())
+        axes = []
+        for n in names:
+            for r in _cyl_axes(_get(n).Shape):
+                axes.append((n, r))
+        rtol = float(a.get("radius_tol", 0.6))
+        atol = float(a.get("axis_tol", 1e-3))
+        seen, joints = set(), []
+        for i in range(len(axes)):
+            for j in range(i + 1, len(axes)):
+                na, ra = axes[i]
+                nb, rb = axes[j]
+                if na == nb:
+                    continue
+                ax = ra["dir"]
+                dot = abs(ax[0] * rb["dir"][0] + ax[1] * rb["dir"][1] + ax[2] * rb["dir"][2])
+                if abs(dot - 1.0) > 1e-3:
+                    continue
+                if abs(ra["radius"] - rb["radius"]) > rtol:
+                    continue
+                dx = tuple(rb["center"][k] - ra["center"][k] for k in range(3))
+                cross = (dx[1] * ax[2] - dx[2] * ax[1],
+                         dx[2] * ax[0] - dx[0] * ax[2],
+                         dx[0] * ax[1] - dx[1] * ax[0])
+                if math.sqrt(sum(v * v for v in cross)) > max(atol, 1e-4):
+                    continue
+                key = tuple(sorted((na, nb)))
+                if key in seen:
+                    continue
+                seen.add(key)
+                joints.append({
+                    "type": "revolute", "parts": list(key),
+                    "axis_point": [_round(c) for c in ra["center"]],
+                    "axis_dir": [_round(c, 6) for c in ax],
+                    "radius": _round((ra["radius"] + rb["radius"]) / 2.0, 4)})
+        return {"parts": names, "joints": len(joints), "joint_list": joints}
+
     # ---- document management --------------------------------------------- #
     def op_list(a):
         return {"solids": list(state.shapes.keys())}
@@ -802,5 +933,6 @@ def register(state):
         "measure": op_measure, "inspect": op_inspect, "interference": op_interference,
         "draft": op_draft, "thickness": op_thickness, "undercut": op_undercut,
         "overhang": op_overhang, "section": op_section, "dfm_report": op_dfm_report,
+        "compound": op_compound, "decompose": op_decompose, "joints": op_joints,
         "list": op_list, "delete": op_delete, "export": op_export, "import_step": op_import_step,
     }
