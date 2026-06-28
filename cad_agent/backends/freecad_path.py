@@ -29,6 +29,7 @@ def _round(x, n=4):
 def register(state):
     import Path  # noqa: F401  (ensures the Path module initialises)
     import Path.Main.Job as PJob
+    import Path.Op.Drilling as PDrilling
     import Path.Op.Pocket as PPocket
     import Path.Op.Profile as PProfile
     import Path.Post.Processor as Proc
@@ -93,6 +94,36 @@ def register(state):
             if abs(f.CenterOfMass.z - zmax) < 1e-6:
                 return "Face%d" % (i + 1)
         return "Face1"
+
+    def _select_holes(shape, sel):
+        """Pick cylindrical hole faces for drilling.
+
+        A hole is a cylindrical face whose axis is parallel to ``axis_dir``
+        (default +Z). Optionally filter by ``diameter`` (mm). Returns the face
+        names plus the distinct hole-center XY positions and the z-extent the
+        bores span (so the drill depth can be bound from geometry).
+        """
+        axis = V(*sel.get("axis_dir", (0, 0, 1)))
+        axis = axis.normalize() if axis.Length > 1e-9 else V(0, 0, 1)
+        want_r = float(sel["diameter"]) / 2.0 if sel.get("diameter") else None
+        rtol = float(sel.get("tol", 0.5))
+        names, centers, zmin, zmax = [], [], None, None
+        for i, f in enumerate(shape.Faces):
+            surf = f.Surface
+            if surf.__class__.__name__ != "Cylinder":
+                continue
+            fa = V(*surf.Axis)
+            if fa.Length < 1e-9 or abs(fa.normalize().dot(axis)) < 0.99:
+                continue
+            if want_r is not None and abs(surf.Radius - want_r) > rtol:
+                continue
+            names.append("Face%d" % (i + 1))
+            c = surf.Center
+            centers.append((_round(c.x, 3), _round(c.y, 3)))
+            bb = f.BoundBox
+            zmin = bb.ZMin if zmin is None else min(zmin, bb.ZMin)
+            zmax = bb.ZMax if zmax is None else max(zmax, bb.ZMax)
+        return names, sorted(set(centers)), zmin, zmax
 
     def _job():
         j = doc.getObject(state.cam.get("job", ""))
@@ -227,6 +258,52 @@ def register(state):
                 "step_down": _round(sd) if sd else None, "passes": passes,
                 "path_bbox": _path_bbox(op)}
 
+    def drill(a):
+        """Drill the cylindrical holes of the target solid.
+
+        Picks cylindrical bore faces (axis along ``select.axis_dir``, default
+        +Z, optionally filtered by ``select.diameter``) and emits a drilling
+        cycle at each hole center. Depths are bound from the bore geometry:
+        StartDepth = bore top, FinalDepth = bore bottom (drill through), so a
+        through hole drills the full thickness without manual depths. Enable
+        peck drilling with ``peck`` (mm) for deep holes / chip clearing.
+
+        args: select{axis_dir, diameter, tol} (optional), start_depth,
+              final_depth, peck (all optional, mm)
+        """
+        j = _job()
+        obj = doc.getObject(state.cam["target"])
+        names, centers, zmin, zmax = _select_holes(obj.Shape, a.get("select", {}))
+        if not names:
+            raise ValueError("no cylindrical holes matched selector: %r" % a.get("select", {}))
+        op = PDrilling.Create("Drilling")
+        op.Base = [(obj, names)]
+        op.ToolController = doc.getObject(state.cam["tc"])
+        j.Proxy.addOperation(op)
+        doc.recompute()
+        start = float(a.get("start_depth", zmax if zmax is not None else obj.Shape.BoundBox.ZMax))
+        final = float(a.get("final_depth", zmin if zmin is not None else obj.Shape.BoundBox.ZMin))
+        for prop, val in (("StartDepth", start), ("FinalDepth", final)):
+            if prop in op.PropertiesList:
+                try:
+                    op.setExpression(prop, None)
+                except Exception:
+                    pass
+                setattr(op, prop, val)
+        peck = a.get("peck")
+        if peck and "PeckDepth" in op.PropertiesList:
+            if "PeckEnabled" in op.PropertiesList:
+                op.PeckEnabled = True
+            op.PeckDepth = float(peck)
+        doc.recompute()
+        n = len(op.Path.Commands) if op.Path else 0
+        state.cam["ops"].append(op.Name)
+        return {"op": "drill", "faces": names, "holes": len(centers),
+                "centers": centers, "commands": n,
+                "start_depth": _round(start), "final_depth": _round(final),
+                "depth": _round(start - final), "peck": _round(peck) if peck else None,
+                "path_bbox": _path_bbox(op)}
+
     def gcode(a):
         """Post-process the job to a G-code file and return move statistics.
 
@@ -256,5 +333,6 @@ def register(state):
         "path.job": job,
         "path.profile": profile,
         "path.pocket": pocket,
+        "path.drill": drill,
         "path.gcode": gcode,
     }
