@@ -1032,6 +1032,56 @@ def register(state):
                     "contacts": len(normals)})
         return {"parts": names, "joints": len(joints), "joint_list": joints}
 
+    def op_coaxial(a):
+        """Group parts that share a common cylinder axis line -- the rotational
+        backbone of an assembly.
+
+        A real rotary assembly (a gearmotor's output shaft carrying gears and
+        bearings, a hinge stack) is a set of parts threaded onto one axis. Unlike
+        ``joints``, this does *not* require matching radii or a pin-in-hole fit:
+        any parts whose cylindrical faces are collinear count, so a thin shaft
+        and the wide gears around it are recognised as one spindle. Each returned
+        group lists the parts on that axis and the radii present (smallest =
+        shaft/bore, larger = gears/hubs).
+        """
+        names = a.get("parts") or list(state.shapes.keys())
+        atol = float(a.get("axis_tol", 1e-3))
+        recs = []
+        for n in names:
+            for r in _cyl_axes(_get(n).Shape):
+                recs.append((n, r))
+
+        def collinear(ra, rb):
+            ax = ra["dir"]
+            if abs(abs(ax[0] * rb["dir"][0] + ax[1] * rb["dir"][1]
+                       + ax[2] * rb["dir"][2]) - 1.0) > 1e-3:
+                return False
+            dx = tuple(rb["center"][k] - ra["center"][k] for k in range(3))
+            cross = (dx[1] * ax[2] - dx[2] * ax[1], dx[2] * ax[0] - dx[0] * ax[2],
+                     dx[0] * ax[1] - dx[1] * ax[0])
+            return math.sqrt(sum(v * v for v in cross)) <= max(atol, 1e-4)
+
+        groups = []        # each: {"dir","center","parts":set,"radii":[]}
+        for n, r in recs:
+            for g in groups:
+                if collinear(g["rep"], r):
+                    g["parts"].add(n)
+                    g["radii"].append(r["radius"])
+                    break
+            else:
+                groups.append({"rep": r, "dir": r["dir"], "center": r["center"],
+                               "parts": {n}, "radii": [r["radius"]]})
+        out = []
+        for g in groups:
+            if len(g["parts"]) < 2:           # a lone part is not an assembly axis
+                continue
+            out.append({"axis_dir": [_round(c, 6) for c in g["dir"]],
+                        "axis_point": [_round(c) for c in g["center"]],
+                        "parts": sorted(g["parts"]),
+                        "radii": sorted(_round(x, 4) for x in set(g["radii"]))})
+        out.sort(key=lambda x: len(x["parts"]), reverse=True)
+        return {"parts": names, "groups": len(out), "group_list": out}
+
     def op_mechanism(a):
         """Assemble inferred joints into a kinematic graph and report mobility.
 
@@ -1129,12 +1179,14 @@ def register(state):
                         "volume": r["volume"]})
         jspec = op_joints({"parts": names})["joint_list"]
         mech = op_mechanism({"parts": names, "joint_list": jspec})
+        coax = op_coaxial({"parts": names})["group_list"]
         kinds = {}
         for e in bom:
             kinds[e["type"]] = kinds.get(e["type"], 0) + 1
         return {"parts": len(names), "part_types": kinds, "bom": bom,
                 "joints": len(jspec), "joint_list": jspec,
                 "joint_types": mech["joint_types"],
+                "coaxial_groups": coax,
                 "mobility_planar": mech["mobility_planar"],
                 "mobility_spatial": mech["mobility_spatial"]}
 
@@ -1213,6 +1265,6 @@ def register(state):
         "overhang": op_overhang, "section": op_section, "dfm_report": op_dfm_report,
         "compound": op_compound, "decompose": op_decompose, "joints": op_joints,
         "mechanism": op_mechanism, "drive": op_drive, "recognize": op_recognize,
-        "reverse": op_reverse,
+        "reverse": op_reverse, "coaxial": op_coaxial,
         "list": op_list, "delete": op_delete, "export": op_export, "import_step": op_import_step,
     }
