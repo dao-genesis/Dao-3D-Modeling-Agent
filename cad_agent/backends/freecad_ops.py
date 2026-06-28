@@ -27,6 +27,12 @@ def _unit(v):
     return tuple(c / n for c in v) if n else tuple(v)
 
 
+def _unit_v(v):
+    """Normalise an ``App.Vector`` (returns it unchanged if it has zero length)."""
+    n = v.Length
+    return V(v.x / n, v.y / n, v.z / n) if n else v
+
+
 def _vec(seq, default=(0, 0, 0)):
     if seq is None:
         seq = default
@@ -622,6 +628,53 @@ def register(state):
             "min_radius_of_curvature": _round(1.0 / kmax_abs, 4) if kmax_abs > 1e-9 else None,
             "tightest_face": kmax_face,
             "detail": detail,
+        }
+
+    def op_obb(a):
+        """Oriented bounding box — recover a part's natural frame and true size.
+
+        An imported or downloaded model arrives at some arbitrary placement, so
+        its axis-aligned bounding box (``measure``'s ``bbox``) is inflated and
+        tells you nothing about the real dimensions. This finds the part's own
+        coordinate frame from the principal axes of inertia, re-expresses the
+        solid in that frame with a *rigid* transform (so analytic faces stay
+        analytic and the box stays tight — baking to NURBS would balloon it),
+        and reports the tight oriented box: its three edge lengths, the three
+        unit axes, the world-space centre and the fill ratio Vol/Vol_obb. The
+        fill ratio is itself a closed-form fingerprint: 1 for a box, pi/4 for a
+        cylinder, pi/6 for a sphere — the reverse half's first read on "what
+        rough stock does this part come from, and how is it oriented".
+        """
+        sh = _get(a["name"]).Shape
+        if not sh.Solids:
+            raise ValueError(
+                "solid.obb needs a solid (got a shell/compound with no volume); "
+                "the natural frame comes from the mass distribution")
+        pr = sh.PrincipalProperties
+        a1 = _unit_v(pr["FirstAxisOfInertia"])
+        a2 = pr["SecondAxisOfInertia"]
+        a2 = _unit_v(a2 - a1 * a2.dot(a1))          # Gram-Schmidt: kill the
+        a3 = a1.cross(a2)                            # degeneracy of symmetric
+        mat = App.Matrix(a1.x, a1.y, a1.z, 0,        # bodies, force orthonormal
+                         a2.x, a2.y, a2.z, 0,
+                         a3.x, a3.y, a3.z, 0, 0, 0, 0, 1)
+        local = sh.copy()
+        local.transformShape(mat, True, False)       # rigid: analytic stays tight
+        bb = local.BoundBox
+        dims = [bb.XLength, bb.YLength, bb.ZLength]
+        cworld = mat.inverse().multiply(bb.Center)
+        obb_vol = dims[0] * dims[1] * dims[2]
+        ab = sh.BoundBox
+        return {
+            "name": a["name"],
+            "dimensions": [_round(d) for d in dims],
+            "sorted_dimensions": [_round(d) for d in sorted(dims)],
+            "axes": [[_round(c, 6) for c in (ax.x, ax.y, ax.z)]
+                     for ax in (a1, a2, a3)],
+            "obb_center": [_round(cworld.x), _round(cworld.y), _round(cworld.z)],
+            "obb_volume": _round(obb_vol),
+            "fill_ratio": _round(sh.Volume / obb_vol, 6) if obb_vol > 1e-12 else None,
+            "aabb_size": [_round(ab.XLength), _round(ab.YLength), _round(ab.ZLength)],
         }
 
     def op_interference(a):
@@ -1878,7 +1931,7 @@ def register(state):
         "common": lambda a: _boolean("common", a), "fillet": op_fillet, "chamfer": op_chamfer,
         "pattern_linear": op_pattern_linear, "pattern_polar": op_pattern_polar,
         "measure": op_measure, "inspect": op_inspect, "inertia": op_inertia,
-        "curvature": op_curvature, "interference": op_interference,
+        "curvature": op_curvature, "obb": op_obb, "interference": op_interference,
         "draft": op_draft, "thickness": op_thickness, "undercut": op_undercut,
         "overhang": op_overhang, "section": op_section, "dfm_report": op_dfm_report,
         "compound": op_compound, "decompose": op_decompose, "joints": op_joints,
