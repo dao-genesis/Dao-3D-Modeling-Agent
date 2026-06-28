@@ -197,10 +197,25 @@ def register(state):
     def op_shell(a):
         obj = _get(a["name"])
         thickness = float(a["thickness"])
-        faces = []
-        if a.get("open_faces"):
-            faces = [obj.Shape.Faces[i] for i in a["open_faces"]]
+        nf = len(obj.Shape.Faces)
+        open_faces = a.get("open_faces")
+        # makeThickness cannot hollow a solid without at least one removed face:
+        # an empty list returns a null shape with an opaque OCC error. Require the
+        # opening explicitly and report a clear, actionable message instead.
+        if not open_faces:
+            raise ValueError(
+                "solid.shell needs 'open_faces': indices of the face(s) to remove "
+                "to open the shell (a solid cannot be hollowed without an opening)")
+        bad = [i for i in open_faces if i < 0 or i >= nf]
+        if bad:
+            raise ValueError("open_faces %s out of range (solid has %d faces 0..%d)"
+                             % (bad, nf, nf - 1))
+        faces = [obj.Shape.Faces[i] for i in open_faces]
         s = obj.Shape.makeThickness(faces, thickness, 1e-3)
+        if s.isNull() or s.Volume <= 1e-9:
+            raise ValueError(
+                "solid.shell produced an empty shape — |thickness|=%g is likely too "
+                "large for the wall, or the open_faces are wrong" % abs(thickness))
         out = a.get("out", a["name"])
         _put(out, s)
         return _metrics(s)
