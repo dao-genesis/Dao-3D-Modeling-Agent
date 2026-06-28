@@ -27,10 +27,11 @@ R, L = 12.0, 34.0
 XB = math.sqrt(L * L - R * R)        # crank at theta=90: A=(0,R), B=(XB,0)
 
 
-def main():
-    s = new_session("mechanism")
-    print("FreeCAD", s.registry.kernel.freecad_version)
-
+def build_slidercrank(s):
+    """Build the slider-crank as four bare solids in one assembled pose
+    (theta=90, crank vertical). Returns the part-name list. Shared with the
+    reverse-drive smoke so both exercise the same recovered geometry.
+    """
     # ---- frame: base plate with pivot bore + U-channel guide along X -------- #
     assert s.act("solid.box", {"name": "base", "length": 80, "width": 40,
                                "height": 6, "pos": [-12, -20, 0]}).ok
@@ -59,8 +60,13 @@ def main():
     s.act("solid.box", {"name": "sbk", "length": 12, "width": 16, "height": 10, "pos": [XB - 6, -8, 6]})
     s.act("solid.cylinder", {"name": "bpin", "radius": 3, "height": 20, "pos": [XB, 0, -4]})
     s.act("solid.union", {"a": "sbk", "b": "bpin", "out": "slider"})
+    return ["frame", "crank", "rod", "slider"]
 
-    parts = ["frame", "crank", "rod", "slider"]
+
+def main():
+    s = new_session("mechanism")
+    print("FreeCAD", s.registry.kernel.freecad_version)
+    parts = build_slidercrank(s)
 
     # ---- infer the joints purely from geometry ----------------------------- #
     j = s.act("solid.joints", {"parts": parts})

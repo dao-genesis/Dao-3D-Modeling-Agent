@@ -996,6 +996,47 @@ def register(state):
                 "mobility_spatial": mobility_spatial,
                 "graph": {k: sorted(v) for k, v in graph.items()}}
 
+    def op_drive(a):
+        """Drive a recovered planar slider-crank through a crank angle.
+
+        Closes the reverse loop end to end: the geometry told us the pivot O, the
+        slider's guide line, and (from the joint points) the crank length
+        R=|OA| and rod length L=|AB|; this turns that into motion. For crank
+        angle theta the crank pin is A = O + R(cos, sin); the wrist pin B is where
+        the rod of length L meets the guide line, i.e. the line/circle
+        intersection — which handles an offset guide too, not just the centred
+        case. Returns the pose with |AB| held at L so callers can place parts.
+        """
+        ox, oy = [float(v) for v in a["ground_point"][:2]]
+        gx, gy = [float(v) for v in a.get("guide_point", (ox, oy))[:2]]
+        ux, uy = [float(v) for v in a["guide_dir"][:2]]
+        un = math.hypot(ux, uy) or 1.0
+        ux, uy = ux / un, uy / un
+        R = float(a["crank_len"])
+        L = float(a["rod_len"])
+        th = math.radians(float(a["angle"]))
+        ax, ay = ox + R * math.cos(th), oy + R * math.sin(th)
+        # B = G + t*u with |A-B| = L  ->  t^2 - 2 t (w.u) + (|w|^2 - L^2) = 0,
+        # where w = A - G. Pick the branch reached from top dead centre (larger t).
+        wx, wy = ax - gx, ay - gy
+        b = wx * ux + wy * uy
+        c = wx * wx + wy * wy - L * L
+        disc = b * b - c
+        if disc < 0:
+            raise ValueError(
+                "slider-crank cannot close: rod L=%g too short to reach the guide "
+                "at crank angle %g deg (need L >= perpendicular offset)" % (L, float(a["angle"])))
+        # two line/circle intersections along the guide. With ``guide_dir``
+        # oriented toward the slider's travel, "far" (default) = the outboard
+        # branch b+sqrt (standard slider-crank), "near" = the inboard branch.
+        sq = math.sqrt(disc)
+        t = (b - sq) if a.get("branch") == "near" else (b + sq)
+        bx, by = gx + t * ux, gy + t * uy
+        rod = math.hypot(ax - bx, ay - by)
+        return {"A": [_round(ax), _round(ay)], "B": [_round(bx), _round(by)],
+                "piston": _round(t), "crank_angle": _round(float(a["angle"])),
+                "rod_len": _round(rod), "rod_len_ok": abs(rod - L) < 1e-6}
+
     # ---- document management --------------------------------------------- #
     def op_list(a):
         return {"solids": list(state.shapes.keys())}
@@ -1063,6 +1104,6 @@ def register(state):
         "draft": op_draft, "thickness": op_thickness, "undercut": op_undercut,
         "overhang": op_overhang, "section": op_section, "dfm_report": op_dfm_report,
         "compound": op_compound, "decompose": op_decompose, "joints": op_joints,
-        "mechanism": op_mechanism,
+        "mechanism": op_mechanism, "drive": op_drive,
         "list": op_list, "delete": op_delete, "export": op_export, "import_step": op_import_step,
     }
