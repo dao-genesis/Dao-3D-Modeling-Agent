@@ -356,6 +356,73 @@ def register(state):
                 "draftable": len(walls) == 0, "insufficient_draft": len(walls),
                 "walls": walls, "toward_pull": toward, "away_pull": away}
 
+    def op_thickness(a):
+        """Minimum wall-thickness DFM analysis (mould/casting/print thin walls).
+
+        For each face a grid of sample points is taken; from each point a ray is
+        fired straight into the solid along the inward normal and the chord it
+        cuts through the material (``edge.common(solid)``) is the local wall
+        thickness at that point. The smallest chord over every face is the part's
+        minimum wall thickness. A part ``ok`` only when that minimum is at least
+        ``min_wall`` (mm); every face thinner than it is reported.
+
+        args: name, min_wall (mm, default 1.0), samples (per-axis, default 3)
+        """
+        sh = _get(a["name"]).Shape
+        min_wall = float(a.get("min_wall", 1.0))
+        ns = max(1, int(a.get("samples", 3)))
+        diag = sh.BoundBox.DiagonalLength
+        eps = max(1e-4, diag * 1e-6)
+        worst = None
+        thins = []
+        for i, f in enumerate(sh.Faces):
+            u0, u1, v0, v1 = f.ParameterRange
+            face_min = None
+            for su in range(ns):
+                for sv in range(ns):
+                    u = u0 + (u1 - u0) * (su + 0.5) / ns
+                    v = v0 + (v1 - v0) * (sv + 0.5) / ns
+                    try:
+                        p = f.valueAt(u, v)
+                        nrm = f.normalAt(u, v)
+                    except Exception:
+                        continue
+                    nl = nrm.Length or 1.0
+                    inward = _vec((-nrm.x / nl, -nrm.y / nl, -nrm.z / nl))
+                    a_pt = _vec((p.x + inward.x * eps, p.y + inward.y * eps, p.z + inward.z * eps))
+                    if not sh.isInside(a_pt, eps * 10, True):  # normal points inward? flip if not
+                        inward = _vec((nrm.x / nl, nrm.y / nl, nrm.z / nl))
+                        a_pt = _vec((p.x + inward.x * eps, p.y + inward.y * eps, p.z + inward.z * eps))
+                        if not sh.isInside(a_pt, eps * 10, True):
+                            continue
+                    b_pt = _vec((p.x + inward.x * diag * 1.1, p.y + inward.y * diag * 1.1,
+                                 p.z + inward.z * diag * 1.1))
+                    try:
+                        inside = Part.makeLine(a_pt, b_pt).common(sh)
+                    except Exception:
+                        continue
+                    best = None  # chord that starts at this surface point
+                    for e in inside.Edges:
+                        d0 = min(p.distanceToPoint(vx.Point) for vx in e.Vertexes)
+                        if best is None or d0 < best[0]:
+                            best = (d0, e.Length)
+                    if best is None:
+                        continue
+                    t = best[1] + eps
+                    if face_min is None or t < face_min:
+                        face_min = t
+            if face_min is None:
+                continue
+            if worst is None or face_min < worst[0]:
+                worst = (face_min, i)
+            if face_min < min_wall:
+                thins.append({"face": "Face%d" % (i + 1), "thickness": _round(face_min, 3)})
+        return {"faces": len(sh.Faces),
+                "min_thickness": _round(worst[0], 3) if worst else None,
+                "min_thickness_face": ("Face%d" % (worst[1] + 1)) if worst else None,
+                "min_wall": min_wall, "ok": bool(worst and worst[0] >= min_wall),
+                "thin_walls": thins}
+
     # ---- document management --------------------------------------------- #
     def op_list(a):
         return {"solids": list(state.shapes.keys())}
@@ -420,6 +487,6 @@ def register(state):
         "common": lambda a: _boolean("common", a), "fillet": op_fillet, "chamfer": op_chamfer,
         "pattern_linear": op_pattern_linear, "pattern_polar": op_pattern_polar,
         "measure": op_measure, "inspect": op_inspect, "interference": op_interference,
-        "draft": op_draft,
+        "draft": op_draft, "thickness": op_thickness,
         "list": op_list, "delete": op_delete, "export": op_export, "import_step": op_import_step,
     }
