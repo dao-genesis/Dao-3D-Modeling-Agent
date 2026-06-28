@@ -70,6 +70,43 @@ def _proper_rotations():
 _PROPER_ROTATIONS = _proper_rotations()
 
 
+def _face_entries(shape):
+    """(centroid, area, surface-type) per face — the rotation/reflection-stable
+    signature an isometry must preserve. Shared by the fast 'invariant' paths of
+    ``symmetry`` and ``chirality`` (no BREP booleans, so it scales to high-face
+    real parts the volumetric proof must refuse)."""
+    return [(f.CenterOfMass, f.Area, f.Surface.__class__.__name__)
+            for f in shape.Faces]
+
+
+def _face_bijection(src, dst, tol, dtol):
+    """True iff every ``src`` face maps one-to-one onto a ``dst`` face of the
+    same surface type and (relatively) equal area whose centroid lands within
+    ``dtol``. Returns ``(ok, max_centroid_deviation)``. A necessary condition
+    for two face sets to be the same shape under an isometry — strong for real
+    parts, but not a volumetric proof, so callers mark ``proven=False``."""
+    if len(src) != len(dst):
+        return False, None
+    used = [False] * len(dst)
+    maxdev = 0.0
+    for c, ar, ty in src:
+        best, bestd = None, None
+        for i, (c0, ar0, ty0) in enumerate(dst):
+            if used[i] or ty0 != ty:
+                continue
+            if abs(ar0 - ar) > tol * max(ar, ar0, 1e-9):
+                continue
+            d = c.distanceToPoint(c0)
+            if bestd is None or d < bestd:
+                best, bestd = i, d
+        if best is None or bestd > dtol:
+            return False, None
+        used[best] = True
+        if bestd > maxdev:
+            maxdev = bestd
+    return True, maxdev
+
+
 def _guard_boolean_budget(op, body, a, default_max=120):
     """Refuse loudly (not with an opaque RPC timeout) when a boolean-proof
     operation would be too expensive.
@@ -804,32 +841,13 @@ def register(state):
             # is a strong *necessary* condition, not a volumetric proof -- hence
             # ``proven=False``; use the default exact method when you need the
             # proof and the part is within budget.
-            faces = body.Faces
             diag = body.BoundBox.DiagonalLength or 1.0
             dtol = max(tol * diag, 1e-6)
-            entries = [(f.CenterOfMass, f.Area, f.Surface.__class__.__name__)
-                       for f in faces]
+            entries = _face_entries(body)
 
             def _invariant_under(pointmap):
-                used = [False] * len(entries)
-                maxdev = 0.0
-                for c, ar, ty in entries:
-                    c2 = pointmap(c)
-                    best, bestd = None, None
-                    for i, (c0, ar0, ty0) in enumerate(entries):
-                        if used[i] or ty0 != ty:
-                            continue
-                        if abs(ar0 - ar) > tol * max(ar, ar0, 1e-9):
-                            continue
-                        d = c2.distanceToPoint(c0)
-                        if bestd is None or d < bestd:
-                            best, bestd = i, d
-                    if best is None or bestd > dtol:
-                        return False, None
-                    used[best] = True
-                    if bestd > maxdev:
-                        maxdev = bestd
-                return True, maxdev
+                mapped = [(pointmap(c), ar, ty) for c, ar, ty in entries]
+                return _face_bijection(mapped, entries, tol, dtol)
 
             def _mirror_map(n):
                 return lambda p: p - n * (2.0 * (p - com).dot(n))
@@ -1126,13 +1144,47 @@ def register(state):
                 "a property of one part" % len(sols))
         tol = float(a.get("tol", 1e-3))
         body = sols[0]
-        _guard_boolean_budget("solid.chirality", body, a)
-        vol = body.Volume
+        method = a.get("method", "exact")
+        if method not in ("exact", "invariant"):
+            raise ValueError(
+                "solid.chirality method must be 'exact' (BREP boolean proof, "
+                "default) or 'invariant' (fast face-centroid test, works at any "
+                "face count but proven=False); got %r" % method)
         base = _in_principal_frame(body)
         mir = body.copy()
         mir.transformShape(App.Matrix(1, 0, 0, 0, 0, 1, 0, 0,
                                       0, 0, -1, 0, 0, 0, 0, 1), True, True)
         mir = _in_principal_frame(mir)
+
+        if method == "invariant":
+            # Achiral iff the mirror image can be brought back onto the original
+            # by a proper rotation. Instead of a volumetric symmetric-difference
+            # per rotation (dozens of BREP booleans), match the two face sets
+            # under each of the 24 axis-aligned proper rotations -- O(faces^2)
+            # each, no booleans, so it scales to high-face real parts. Necessary
+            # condition only, hence proven=False.
+            diag = base.BoundBox.DiagonalLength or 1.0
+            dtol = max(tol * diag, 1e-6)
+            baseE = _face_entries(base)
+            mirE = _face_entries(mir)
+            best = None
+            for rm in _PROPER_ROTATIONS:
+                rotated = [(rm.multVec(c), ar, ty) for c, ar, ty in mirE]
+                ok, dev = _face_bijection(rotated, baseE, tol, dtol)
+                if ok:
+                    best = dev if best is None else min(best, dev)
+                    if best <= dtol:
+                        break
+            achiral = best is not None
+            return {
+                "name": a["name"], "method": "face-invariant", "proven": False,
+                "achiral": achiral, "chiral": not achiral,
+                "mirror_distance": _round(best, 6) if achiral else None,
+                "tol": tol,
+            }
+
+        _guard_boolean_budget("solid.chirality", body, a)
+        vol = body.Volume
         best = None
         for rm in _PROPER_ROTATIONS:
             t = mir.copy()
@@ -1142,7 +1194,7 @@ def register(state):
             if best < tol:
                 break
         return {
-            "name": a["name"],
+            "name": a["name"], "method": "exact-boolean", "proven": True,
             "achiral": best < tol,
             "chiral": best >= tol,
             "mirror_distance": _round(best, 6),

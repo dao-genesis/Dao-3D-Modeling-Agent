@@ -64,6 +64,27 @@ def main():
     assert rm["chiral"], rm
     print("its mirror is also chiral (the other enantiomer)")
 
+    # ---- fast 'invariant' method must AGREE with the exact boolean proof - #
+    # This face-matching path is what lets the high-face real parts (a 299-face
+    # pulley the boolean proof must refuse) still get a handedness verdict; its
+    # trust rests on matching the exact proof on shapes we know the answer for.
+    for nm, want_achiral in (("blk", True), ("cyl", True), ("sph", True), ("hand", False)):
+        iv = s.act("solid.chirality", {"name": nm, "method": "invariant"}).data
+        assert iv["proven"] is False and iv["method"] == "face-invariant", iv
+        assert iv["achiral"] is want_achiral, (nm, iv)
+    print("invariant chirality agrees with exact on box/cyl/sphere(achiral) + pentacube(chiral)")
+
+    # ---- invariant bypasses the O(faces) boolean budget by design -------- #
+    refused = s.act("solid.chirality", {"name": "hand", "max_faces": 2})
+    assert not refused.ok and "max_faces" in (refused.error or ""), refused
+    okfast = s.act("solid.chirality", {"name": "hand", "method": "invariant", "max_faces": 2})
+    assert okfast.ok and okfast.data["chiral"], okfast
+    print("invariant chirality runs under a budget that refuses the exact proof")
+
+    # ---- an unknown method is refused loudly ----------------------------- #
+    badm = s.act("solid.chirality", {"name": "blk", "method": "guess"})
+    assert not badm.ok and "method must be" in (badm.error or ""), badm
+
     # ---- the motivating defect: fingerprints CANNOT tell them apart ---- #
     f0 = s.act("solid.fingerprint", {"name": "hand"}).data
     fm = s.act("solid.fingerprint", {"name": "hand_mir"}).data
