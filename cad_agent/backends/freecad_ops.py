@@ -1340,6 +1340,54 @@ def register(state):
                                "ratio": _round(ri["radius"] / rj["radius"], 6)})
         return {"parts": names, "meshes": len(meshes), "mesh_list": meshes}
 
+    def op_geneva(a):
+        """External Geneva (Maltese-cross) intermittent indexer.
+
+        A continuously turning drive crank with one pin enters the radial slots
+        of an ``n``-slot wheel, rotating it one step (360/n deg) then leaving it
+        locked for the rest of the revolution -- intermittent indexing. For a
+        right-angle entry/exit (no shock) the centre distance d, crank-pin radius
+        r and slot count obey r = d sin(pi/n); let m = d/r = 1/sin(pi/n). With
+        the drive angle ``alpha`` measured from the symmetric centre, the driven
+        angle is
+
+            phi(alpha) = atan2(sin alpha, m - cos alpha)
+
+        swinging from -pi/n to +pi/n over the engagement (so each index is
+        exactly 2 pi/n). The crank is engaged only for |alpha| <= 90 - 180/n
+        degrees; outside that the wheel is geometrically locked (dwell). The
+        angular-velocity ratio is (m cos a - 1)/(m^2 - 2 m cos a + 1), peaking at
+        1/(m-1) at centre.
+        """
+        n = int(a["slots"])
+        if n < 3:
+            raise ValueError("Geneva wheel needs at least 3 slots")
+        s = math.sin(math.pi / n)
+        if "center_distance" in a:
+            d = float(a["center_distance"])
+            r = d * s
+        elif "crank_radius" in a:
+            r = float(a["crank_radius"])
+            d = r / s
+        else:
+            raise ValueError("geneva needs center_distance or crank_radius")
+        m = d / r                                       # = 1/sin(pi/n)
+        alpha0 = 90.0 - 180.0 / n                        # half engagement (deg)
+        out = {"slots": n, "center_distance": _round(d), "crank_radius": _round(r),
+               "index_angle": _round(360.0 / n), "engagement_angle": _round(2 * alpha0),
+               "max_velocity_ratio": _round(1.0 / (m - 1.0), 6)}
+        if "angle" in a:
+            al = float(a["angle"])
+            ar = math.radians(al)
+            if abs(al) <= alpha0 + 1e-9:
+                phi = math.degrees(math.atan2(math.sin(ar), m - math.cos(ar)))
+                vr = (m * math.cos(ar) - 1.0) / (m * m - 2 * m * math.cos(ar) + 1.0)
+                out.update(engaged=True, driven_angle=_round(phi, 6), velocity_ratio=_round(vr, 6))
+            else:
+                locked = 180.0 / n if al > 0 else -180.0 / n
+                out.update(engaged=False, driven_angle=_round(locked, 6), velocity_ratio=0.0)
+        return out
+
     def op_planetary(a):
         """Solve a sun-planet-ring epicyclic set via the Willis equation.
 
@@ -1616,5 +1664,6 @@ def register(state):
         "reverse": op_reverse, "coaxial": op_coaxial, "fourbar": op_fourbar,
         "geartrain": op_geartrain, "gearmesh": op_gearmesh,
         "rackpinion": op_rackpinion, "cam": op_cam, "planetary": op_planetary,
+        "geneva": op_geneva,
         "list": op_list, "delete": op_delete, "export": op_export, "import_step": op_import_step,
     }
