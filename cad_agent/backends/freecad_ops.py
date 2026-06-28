@@ -1719,7 +1719,19 @@ def register(state):
             logical = o.Label
             state.shapes[logical] = o.Name
             imported.append(logical)
-        return {"imported": imported}
+        out = a.get("out")
+        if out:
+            # Bundle every imported leaf solid into one named handle so the
+            # reverse pipeline can butcher a downloaded assembly directly --
+            # ``reverse`` will ``decompose`` it back into the same parts. With no
+            # leaves (a surface/shell-only STEP) we refuse rather than emit an
+            # empty compound that would silently "succeed".
+            if not imported:
+                raise ValueError("no solids imported from %r; cannot build %r "
+                                 "(surface/shell-only STEP?)" % (a["path"], out))
+            comp = Part.makeCompound([_get(n).Shape for n in imported])
+            _put(out, comp)
+        return {"imported": imported, "out": out, "solids": len(imported)}
 
     return {
         "box": op_box, "cylinder": op_cylinder, "sphere": op_sphere, "cone": op_cone,

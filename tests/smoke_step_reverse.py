@@ -72,6 +72,27 @@ def main():
                                "guide_dir": [1, 0], "crank_len": R, "rod_len": L, "angle": 90})
     assert d.ok and d.data["rod_len_ok"], d.error or d.data
     assert abs(d.data["B"][0] - XB) < 1e-3, d.data
+    # ---- import as a single bundled handle and butcher it via reverse ------- #
+    # A downloaded assembly is most naturally fed to ``reverse`` as one object;
+    # ``out`` compounds the imported leaves so the whole pipeline runs in one
+    # call. (This fixed a real defect: import named parts by their own labels,
+    # so reverse({"name": ...}) could not find the assembly at all.)
+    s3 = new_session("step_bundle")
+    impb = s3.act("solid.import_step", {"path": STEP, "out": "asm"})
+    assert impb.ok and impb.data["out"] == "asm" and impb.data["solids"] == len(parts), impb.data
+    rv = s3.act("solid.reverse", {"name": "asm"})
+    assert rv.ok, rv.error
+    assert rv.data["parts"] == len(parts), rv.data
+    assert rv.data["mobility_planar"] == 1, rv.data
+    print("bundled import -> reverse butchered %d parts, mobility 1" % rv.data["parts"])
+    # a surface/shell-only STEP yields no solids: out must refuse, not fake it
+    empty = os.path.join(os.path.dirname(STEP), "_empty.step")
+    with open(empty, "w") as fh:
+        fh.write("ISO-10303-21;\nHEADER;\nENDSEC;\nDATA;\nENDSEC;\nEND-ISO-10303-21;\n")
+    assert not s3.act("solid.import_step", {"path": empty, "out": "asm2"}).ok
+    print("shell-only STEP with out= is honestly refused")
+    s3.registry.kernel.shutdown()
+
     print("STEP-REVERSE SMOKE OK", s2.summary())
     s2.registry.kernel.shutdown()
 
