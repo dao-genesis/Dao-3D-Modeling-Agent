@@ -11,6 +11,7 @@
   2 屈曲  fem.buckle  Euler 临界载荷因子  pi^2 EI/(KL)^2  (K=2 悬臂)
   3 热    fem.thermal 受约束杆热应力      E*alpha*dT
   4 静力  fem.solve   悬臂弯曲根部应力    6FL/bH^2
+  5 模态  fem.modal   悬臂一阶固有频率    (1.875^2/2pi)*sqrt(EI/rho A L^4)
 
 运行:  python 30-验证_Verify/_verify_fem.py
 需真实 FreeCAD (FREECADCMD 环境变量或标准安装路径); CalculiX 随 FreeCAD 自带.
@@ -28,6 +29,7 @@ from cad_agent import new_session  # noqa: E402
 E, NU = 210000.0, 0.30
 ALPHA = 1.2e-5
 RHO_TMM3 = 7900.0 * 1e-12  # t/mm^3
+RHO_MODAL = 7.9e-9         # steel t/mm^3 (material library)
 TOL = 0.05  # 5% closed-form tolerance
 
 
@@ -103,10 +105,24 @@ def v_static():
     return _chk("static", fem, closed)
 
 
+def v_modal():
+    s = new_session("v_modal")
+    L, b, h = 200.0, 20.0, 10.0
+    s.act("solid.box", {"name": "beam", "length": b, "width": h, "height": L})
+    s.act("fem.setup", {"target": "beam", "material": "steel", "order": 2, "mesh_size": 6})
+    s.act("fem.fix", {"select": {"axis": "z", "side": "min"}})
+    freqs = s.act("fem.modal", {"modes": 6}).data["frequencies_hz"]
+    imin = max(b, h) * min(b, h) ** 3 / 12.0
+    closed = (1.875104 ** 2 / (2 * math.pi)) * math.sqrt(E * imin / (RHO_MODAL * b * h * L ** 4))
+    s.registry.kernel.shutdown()
+    return _chk("modal", freqs[0], closed)
+
+
 def main():
     print("FreeCAD live-kernel CalculiX 多物理验道 (闭式解校验)")
     checks = [("rotational", v_spin), ("buckling", v_buckle),
-              ("thermal", v_thermal), ("static", v_static)]
+              ("thermal", v_thermal), ("static", v_static),
+              ("modal", v_modal)]
     results = []
     for name, fn in checks:
         try:

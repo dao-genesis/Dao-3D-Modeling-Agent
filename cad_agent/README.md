@@ -20,15 +20,16 @@
   | `fem.buckle` | Euler 屈曲 | π²EI/(KL)² | 0.12% |
   | `fem.thermal` | 受约束杆热应力 | E·α·ΔT | 0.00% |
   | `fem.solve` | 悬臂弯曲屈服 | 6FL/bH² | 0.46% |
+  | `fem.modal` | 悬臂一阶固有频率 | (1.875²/2π)·√(EI/ρAL⁴) | 0.36% |
 
 ## 入口
 
 ```bash
-# 26/26 live 套件 (真实内核)
+# 27/27 live 套件 (真实内核)
 python verify_agent.py
 
-# 四物理验道 (闭式解校验)
-python 30-验证_Verify/_verify_fem.py        # 4/4 PASS
+# 五物理验道 (闭式解校验)
+python 30-验证_Verify/_verify_fem.py        # 5/5 PASS
 
 # 闭环演示 (四物理 + 应力云图 → output/fem_demo/)
 python 50-演示_Demo/demo_fem_closure.py
