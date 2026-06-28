@@ -1107,6 +1107,37 @@ def register(state):
                 "piston": _round(t), "crank_angle": _round(float(a["angle"])),
                 "rod_len": _round(rod), "rod_len_ok": abs(rod - L) < 1e-6}
 
+    def op_reverse(a):
+        """One-shot 'butcher the ox': the whole reverse chain in a single call.
+
+        Given a monolithic model (``name``) or an explicit ``parts`` list, this
+        orchestrates decompose -> recognize each part (a parametric BOM naming
+        what every part *is* and its driving dimensions) -> infer joints ->
+        Kutzbach mobility. The DFM layer has ``dfm_report`` as its editorial
+        front; this is the reverse pipeline's. Parts that are not clean
+        primitives come back ``freeform`` rather than mislabelled.
+        """
+        if a.get("parts"):
+            names = list(a["parts"])
+        else:
+            names = [p["name"] for p in op_decompose({"name": a["name"],
+                                                       "prefix": a.get("prefix", a["name"] + "_part")})["part_list"]]
+        bom = []
+        for nm in names:
+            r = op_recognize({"name": nm, "tol": a.get("tol", 1e-3)})
+            bom.append({"name": nm, "type": r["type"], "params": r["params"],
+                        "volume": r["volume"]})
+        jspec = op_joints({"parts": names})["joint_list"]
+        mech = op_mechanism({"parts": names, "joint_list": jspec})
+        kinds = {}
+        for e in bom:
+            kinds[e["type"]] = kinds.get(e["type"], 0) + 1
+        return {"parts": len(names), "part_types": kinds, "bom": bom,
+                "joints": len(jspec), "joint_list": jspec,
+                "joint_types": mech["joint_types"],
+                "mobility_planar": mech["mobility_planar"],
+                "mobility_spatial": mech["mobility_spatial"]}
+
     # ---- document management --------------------------------------------- #
     def op_list(a):
         return {"solids": list(state.shapes.keys())}
@@ -1182,5 +1213,6 @@ def register(state):
         "overhang": op_overhang, "section": op_section, "dfm_report": op_dfm_report,
         "compound": op_compound, "decompose": op_decompose, "joints": op_joints,
         "mechanism": op_mechanism, "drive": op_drive, "recognize": op_recognize,
+        "reverse": op_reverse,
         "list": op_list, "delete": op_delete, "export": op_export, "import_step": op_import_step,
     }
