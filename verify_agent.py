@@ -29,7 +29,7 @@ SUITES = ["tests.smoke_kernel", "tests.smoke_param", "tests.smoke_asm",
           "tests.smoke_cam_drill", "tests.smoke_asm_massprops",
           "tests.smoke_pattern", "tests.smoke_draft",
           "tests.smoke_thickness", "tests.smoke_undercut",
-          "tests.smoke_dfm_housing"]
+          "tests.smoke_dfm_housing", "tests.smoke_section"]
 
 
 def main() -> int:

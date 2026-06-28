@@ -501,6 +501,64 @@ def register(state):
                 "moldable": len(cuts) == 0, "undercut_faces": cuts,
                 "parallel_walls": parallel}
 
+    def op_section(a):
+        """Planar cross-section properties of a solid (beam / structural design).
+
+        Cuts the solid with a plane (``normal`` + offset ``d`` along that normal,
+        or a point ``at`` on the plane) and builds the section face — outer
+        contour with any interior holes. Reports the engineering section
+        properties used for bending and torsion:
+
+          * ``area`` and ``centroid`` of the section;
+          * ``Ix`` / ``Iy`` — second moments of area about the centroidal axes
+            (∫y²dA, ∫x²dA), i.e. bending stiffness terms;
+          * ``J`` — polar second moment about the centroidal normal axis
+            (= Ix + Iy for a plane section), the torsion term;
+          * ``Ixy`` — product of area (0 for a doubly-symmetric section).
+
+        These come from the face inertia tensor taken about the centroid, so for
+        a section lying in a global coordinate plane (the usual axis-perpendicular
+        cut) they equal the textbook closed forms exactly. The part is reported
+        ``solid`` only when the plane actually intersects material.
+
+        args: name, normal (default +Z), d (offset along normal) | at (point)
+        """
+        sh = _get(a["name"]).Shape
+        n = _vec(a.get("normal", (0, 0, 1)))
+        nl = n.Length or 1.0
+        n = _vec((n.x / nl, n.y / nl, n.z / nl))
+        if a.get("at") is not None:
+            p = _vec(a["at"])
+            d = p.dot(n)
+        else:
+            d = float(a.get("d", 0.0))
+        wires = sh.slice(n, d)
+        if not wires:
+            return {"hit": False, "normal": [_round(n.x), _round(n.y), _round(n.z)],
+                    "offset": _round(d), "area": 0.0}
+        face = Part.Face(wires)
+        c = face.CenterOfMass
+        m = face.MatrixOfInertia
+        diag = [m.A11, m.A22, m.A33]
+        # polar second moment about the centroidal normal axis: n . M . n
+        mn = (m.A11 * n.x + m.A12 * n.y + m.A13 * n.z,
+              m.A12 * n.x + m.A22 * n.y + m.A23 * n.z,
+              m.A13 * n.x + m.A23 * n.y + m.A33 * n.z)
+        polar = mn[0] * n.x + mn[1] * n.y + mn[2] * n.z
+        out = {"hit": True, "normal": [_round(n.x), _round(n.y), _round(n.z)],
+               "offset": _round(d), "area": _round(face.Area),
+               "centroid": [_round(c.x), _round(c.y), _round(c.z)],
+               "J": _round(polar, 3), "loops": len(wires)}
+        # for an axis-aligned cut the two in-plane bending moments are exactly
+        # the other two tensor-diagonal terms; label them, else leave None.
+        axis = next((k for k in range(3) if abs((n.x, n.y, n.z)[k]) > 0.999999), None)
+        if axis is not None:
+            bend = [diag[k] for k in range(3) if k != axis]
+            out["Ix"], out["Iy"] = _round(bend[0], 3), _round(bend[1], 3)
+        else:
+            out["Ix"] = out["Iy"] = None
+        return out
+
     # ---- document management --------------------------------------------- #
     def op_list(a):
         return {"solids": list(state.shapes.keys())}
@@ -566,5 +624,6 @@ def register(state):
         "pattern_linear": op_pattern_linear, "pattern_polar": op_pattern_polar,
         "measure": op_measure, "inspect": op_inspect, "interference": op_interference,
         "draft": op_draft, "thickness": op_thickness, "undercut": op_undercut,
+        "section": op_section,
         "list": op_list, "delete": op_delete, "export": op_export, "import_step": op_import_step,
     }
