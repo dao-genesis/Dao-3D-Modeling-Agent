@@ -7,6 +7,7 @@ and the workhorse for boolean modelling, measurement and interference checks.
 The PartDesign feature-tree (editable, parametric) lives in ``freecad_parametric``.
 """
 
+import hashlib
 import math
 
 import FreeCAD as App
@@ -749,6 +750,71 @@ def register(state):
             "max_rotational_order": max((r["order"] for r in rotational), default=1),
             "point_symmetric": _symdiff(inv) < tol,
             "orders_tested": list(orders),
+        }
+
+    def op_fingerprint(a):
+        """Pose- and scale-invariant shape signature — the model-library key.
+
+        To integrate the world's models you must be able to *recognise the same
+        part again* regardless of how it was placed, scaled or named. This
+        distils a solid into invariants that survive rigid motion and uniform
+        scaling: the dimensionless isoperimetric ratio A^3/V^2 (a sphere's
+        minimum is 36*pi, a cube is 216), the sorted OBB aspect ratios, the
+        ratios of the principal moments of inertia, the surface-type histogram
+        and the V/E/F topology counts. Their hash is a ``shape_key`` — two
+        copies of one design in any pose or size collapse to the same key, while
+        genuinely different parts diverge — so a downloaded STEP can be matched
+        against everything already seen instead of being re-modelled from zero.
+        The raw size (volume, area, true OBB dimensions) is reported alongside.
+        """
+        sh = _get(a["name"]).Shape
+        sols = sh.Solids
+        if len(sols) != 1:
+            raise ValueError(
+                "solid.fingerprint expects a single solid (got %d); fingerprint "
+                "one part at a time" % len(sols))
+        body = sols[0]
+        vol = body.Volume
+        area = body.Area
+        iso = area ** 3 / (vol * vol) if vol > 1e-12 else None
+        pr = body.PrincipalProperties
+        a1 = _unit_v(pr["FirstAxisOfInertia"])
+        a2 = pr["SecondAxisOfInertia"]
+        a2 = _unit_v(a2 - a1 * a2.dot(a1))
+        a3 = a1.cross(a2)
+        mat = App.Matrix(a1.x, a1.y, a1.z, 0, a2.x, a2.y, a2.z, 0,
+                         a3.x, a3.y, a3.z, 0, 0, 0, 0, 1)
+        loc = body.copy()
+        loc.transformShape(mat, True, False)
+        bb = loc.BoundBox
+        dims = sorted([bb.XLength, bb.YLength, bb.ZLength])
+        obb_aspect = [dims[1] / dims[0], dims[2] / dims[0]] if dims[0] > 1e-9 else None
+        mom = sorted(float(m) for m in pr["Moments"])
+        mom_ratio = [mom[1] / mom[0], mom[2] / mom[0]] if mom[0] > 1e-9 else None
+        hist = {}
+        for f in body.Faces:
+            kind = f.Surface.__class__.__name__
+            hist[kind] = hist.get(kind, 0) + 1
+        counts = [len(body.Vertexes), len(body.Edges), len(body.Faces)]
+        invariants = (
+            round(iso, 3) if iso is not None else None,
+            tuple(round(x, 4) for x in obb_aspect) if obb_aspect else None,
+            tuple(round(x, 4) for x in mom_ratio) if mom_ratio else None,
+            tuple(sorted(hist.items())),
+            tuple(counts),
+        )
+        shape_key = hashlib.sha1(repr(invariants).encode()).hexdigest()[:16]
+        return {
+            "name": a["name"],
+            "shape_key": shape_key,
+            "isoperimetric": _round(iso, 4) if iso is not None else None,
+            "obb_aspect": [_round(x, 4) for x in obb_aspect] if obb_aspect else None,
+            "moment_ratio": [_round(x, 4) for x in mom_ratio] if mom_ratio else None,
+            "surface_histogram": hist,
+            "topology": {"vertices": counts[0], "edges": counts[1], "faces": counts[2]},
+            "volume": _round(vol),
+            "area": _round(area),
+            "obb_dimensions": [_round(d) for d in dims],
         }
 
     def op_interference(a):
@@ -2006,7 +2072,7 @@ def register(state):
         "pattern_linear": op_pattern_linear, "pattern_polar": op_pattern_polar,
         "measure": op_measure, "inspect": op_inspect, "inertia": op_inertia,
         "curvature": op_curvature, "obb": op_obb, "symmetry": op_symmetry,
-        "interference": op_interference,
+        "fingerprint": op_fingerprint, "interference": op_interference,
         "draft": op_draft, "thickness": op_thickness, "undercut": op_undercut,
         "overhang": op_overhang, "section": op_section, "dfm_report": op_dfm_report,
         "compound": op_compound, "decompose": op_decompose, "joints": op_joints,
