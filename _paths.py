@@ -57,6 +57,7 @@ LAYER_DIRS = {
     "demo":      "50-演示_Demo",
     "projects":  "60-实战_Projects",
     "world":     "70-天下_World",
+    "agent":     "80-智体_Agent",
     "logs":      "90-日志_Logs",
 }
 
@@ -68,6 +69,7 @@ TEMPLATES = ROOT / LAYER_DIRS["templates"]
 DEMO      = ROOT / LAYER_DIRS["demo"]
 PROJECTS  = ROOT / LAYER_DIRS["projects"]
 WORLD     = ROOT / LAYER_DIRS["world"]
+AGENT     = ROOT / LAYER_DIRS["agent"]
 LOGS      = ROOT / LAYER_DIRS["logs"]
 
 # 兼容层: 原始扁平路径 → 新分层位置
@@ -84,7 +86,7 @@ LEGACY_ALIAS = {
 # ─── 注册到 sys.path (幂等, 只插入一次) ───────────────────────────────
 _REGISTERED_FLAG = "_DAO_PATHS_REGISTERED"
 if not getattr(sys, _REGISTERED_FLAG, False):
-    for _sub in (ORIGIN, REVERSE, FORGE, VERIFY):
+    for _sub in (ORIGIN, REVERSE, FORGE, VERIFY, AGENT):
         _s = str(_sub)
         if _sub.exists() and _s not in sys.path:
             sys.path.insert(0, _s)

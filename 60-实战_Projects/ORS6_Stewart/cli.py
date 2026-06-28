@@ -24,6 +24,12 @@ Commands:
     ik-forward L0 L1 L2 R0 R1 R2  — 正运动学 (0-1 归一化)
     collision P1 P2               — 两零件碰撞
     rods [L0 L1 L2 R0 R1 R2]      — 杆几何 (默认 home)
+    render [L0...R2] [label] [dir]— 逐件着色软件渲染 (多视角PNG, 无外部引擎)
+    glb [L0...R2] [path]          — 导出逐件着色 GLB (可旋转查看)
+    fused [label] [dir]           — Tripo真相拟合装配 (反解, 多视角PNG)
+    fused-glb [path]              — 导出 Tripo真相拟合装配 GLB
+    tripo [dir] [W]               — 渲染 Tripo image-to-3D 真相模型 (多视角PNG)
+    tripo-info                    — Tripo 模型 顶点/面/包围盒/尺寸(mm)
     build [L0...R2] [label]       — CadQuery 构建一姿态
     build-fc [L0...R2] [label]    — FreeCAD 构建 (需 FreeCAD 环境)
     motion [cadquery|freecad]     — 15 姿态动画序列
@@ -219,6 +225,41 @@ def main():
         print(json.dumps(S.collision_check(p1, p2), indent=2, ensure_ascii=False, default=str))
     elif cmd == "rods":
         cmd_rods(args[1:7])
+    elif cmd == "render":
+        pose_args = args[1:7]
+        pose = tuple(int(a) for a in pose_args) if len(pose_args) == 6 else S.TCODE_HOME
+        label = args[7] if len(args) > 7 else "home"
+        out_dir = args[8] if len(args) > 8 else "output/renders"
+        paths = S.render_views(pose=pose, out_dir=out_dir, label=label)
+        for p in paths:
+            print(f"  {p}")
+        print(f"\n{len(paths)} views rendered → {out_dir}")
+    elif cmd == "fused":
+        label = args[1] if len(args) > 1 else "fused"
+        out_dir = args[2] if len(args) > 2 else "output/renders"
+        paths = S.render_fused_views(out_dir=out_dir, label=label)
+        for p in paths:
+            print(f"  {p}")
+        print(f"\n{len(paths)} fused views rendered → {out_dir}")
+    elif cmd == "fused-glb":
+        out_path = args[1] if len(args) > 1 else "output/ORS6_fused_colored.glb"
+        p = S.export_fused_glb(out_path=out_path)
+        print(f"Fused GLB exported: {p} ({os.path.getsize(p)//1024}KB)")
+    elif cmd == "tripo":
+        out_dir = args[1] if len(args) > 1 else "output/tripo"
+        W = int(args[2]) if len(args) > 2 else 720
+        paths = S.render_tripo_views(out_dir=out_dir, W=W, H=W)
+        for p in paths:
+            print(f"  {p}")
+        print(f"\n{len(paths)} Tripo views rendered → {out_dir}")
+    elif cmd == "tripo-info":
+        print(json.dumps(S.tripo_info(), indent=2, ensure_ascii=False, default=str))
+    elif cmd == "glb":
+        pose_args = args[1:7]
+        pose = tuple(int(a) for a in pose_args) if len(pose_args) == 6 else S.TCODE_HOME
+        out_path = args[7] if len(args) > 7 else "output/ORS6_home_colored.glb"
+        p = S.export_glb(pose=pose, out_path=out_path)
+        print(f"GLB exported: {p} ({os.path.getsize(p)//1024}KB)")
     elif cmd == "build":
         pose_args = args[1:7]
         pose = tuple(int(a) for a in pose_args) if len(pose_args) == 6 else S.TCODE_HOME

@@ -1,0 +1,43 @@
+{
+  "ref": {
+    "n_components": 1,
+    "solidity": 0.726,
+    "elongation": 1.67,
+    "fill_fraction": 0.481,
+    "two_mass": 0.262,
+    "area": 221157
+  },
+  "tripo": {
+    "n_components": 1,
+    "solidity": 0.64,
+    "elongation": 1.42,
+    "fill_fraction": 0.465,
+    "two_mass": 0.256,
+    "area": 76979
+  },
+  "mine": {
+    "n_components": 1,
+    "solidity": 0.719,
+    "elongation": 1.31,
+    "fill_fraction": 0.564,
+    "two_mass": 0.245,
+    "area": 112363
+  },
+  "tripo_verdict": "PASS",
+  "mine_verdict": "PASS",
+  "tripo_proportions": {
+    "aspect": 1.478,
+    "end_spread_lo": 0.516,
+    "end_spread_hi": 0.675
+  },
+  "mine_proportions": {
+    "aspect": 1.172,
+    "end_spread_lo": 0.79,
+    "end_spread_hi": 0.532
+  },
+  "tripo_viewpoint": {
+    "mirror": false,
+    "elev": 40,
+    "azim": -30
+  }
+}

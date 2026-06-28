@@ -30,13 +30,8 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # STL_ROOT 解析 — 道法自然: 先看环境, 再看近邻, 再看本地
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _locate_stl_root(strict: bool = False) -> str:
-    """按优先级定位 STL 根目录.
-
-    反者道之动: STL 是渲染期才需要的资源 (常驻用户电脑, 经 DAO Bridge 拉取).
-    为让 parts.py 的纯常数 (SR6/SERVO_SLOTS/HOME_H) 在无 STL 环境也能 import,
-    找不到时返回 "" 而非 raise; 仅 stl_path() 实际取用时才 strict raise.
-    """
+def _locate_stl_root(require: bool = True) -> Optional[str]:
+    """按优先级定位 STL 根目录. require=False 时找不到返回 None 而非抛错."""
     # 1. 环境变量
     env = os.environ.get("ORS6_STL_ROOT")
     if env and os.path.isdir(env):
@@ -51,20 +46,21 @@ def _locate_stl_root(strict: bool = False) -> str:
     if ors6_default.is_dir():
         return str(ors6_default)
 
-    # 3. 本地 symlink / 目录
+    # 3. 本地 symlink
     local = Path(SCRIPT_DIR) / "STLs"
     if local.is_dir():
         return str(local)
 
-    if strict:
-        raise RuntimeError(
-            "ORS6 STL root not found. Set ORS6_STL_ROOT env var or place STLs "
-            f"under {ors6_default} or {local}."
-        )
-    return ""
+    if not require:
+        return None
+    raise RuntimeError(
+        "ORS6 STL root not found. Set ORS6_STL_ROOT env var or place STLs "
+        f"under {ors6_default} or {local}."
+    )
 
 
-STL_ROOT: str = _locate_stl_root(strict=False)
+# 延迟解析: 仅在真正加载 STL 时才要求其存在, 故纯几何/运动学可在任何环境 import.
+STL_ROOT: Optional[str] = _locate_stl_root(require=False)
 BOUNDS_FILE: str = os.path.join(SCRIPT_DIR, "_stl_bounds.json")
 
 
@@ -167,13 +163,17 @@ RECV_PARTS: Set[str] = {"Receiver", "Twist_Base", "Twist_Body", "Twist_Lid",
 
 # 6 servo slots (STL coords, Z-up, mm) — 物理布局 · 固件 out1-out6 顺序
 # (name, type, x_mm, y_mm, sign_to_receiver)
+# 真本源: 实测机架舵机腔轴心 (见 closed_loop/true_kinematics.py SERVO_O)。
+# 旧硬编码 (±99.6, ±37) 是幻觉, 与实测/固件均不符; 已纠正:
+#   main  X=±85.0 (实测腔轴), Y=±30.0 (腔中心)
+#   pitch X=±84.0 (实测俯仰舵机腔, 非旧 HALLUCINATION_MAP 猜的 ±45), Y=0
 SERVO_SLOTS: List[Tuple[str, str, float, float, int]] = [
-    ("LowerLeft",  "main",  -99.6, +37.0, -1),
-    ("UpperLeft",  "main",  -99.6, -37.0, -1),
-    ("LeftPitch",  "pitch", -99.6,   0.0, -1),
-    ("RightPitch", "pitch", +99.6,   0.0, +1),
-    ("UpperRight", "main",  +99.6, -37.0, +1),
-    ("LowerRight", "main",  +99.6, +37.0, +1),
+    ("LowerLeft",  "main",  -85.0, +30.0, -1),
+    ("UpperLeft",  "main",  -85.0, -30.0, -1),
+    ("LeftPitch",  "pitch", -84.0,   0.0, -1),
+    ("RightPitch", "pitch", +84.0,   0.0, +1),
+    ("UpperRight", "main",  +85.0, -30.0, +1),
+    ("LowerRight", "main",  +85.0, +30.0, +1),
 ]
 
 
@@ -186,12 +186,12 @@ def stl_path(name: str) -> str:
     if name not in PARTS:
         raise KeyError(f"Unknown part: {name!r}. Valid: {sorted(PARTS)}")
     sub, fn, _, _ = PARTS[name]
-    root = STL_ROOT or _locate_stl_root(strict=True)
     if sub == "__custom__":
         # ESP32_Mount lives in ORS6-VAM饮料摇匀器/custom_parts (sibling of 3D建模Agent)
         workspace_root = Path(SCRIPT_DIR).parents[2]  # 一生二
         p = workspace_root / "ORS6-VAM饮料摇匀器" / "custom_parts" / fn
         return str(p)
+    root = STL_ROOT if STL_ROOT else _locate_stl_root(require=True)
     return os.path.join(root, sub, fn)
 
 
