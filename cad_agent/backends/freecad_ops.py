@@ -2296,6 +2296,24 @@ def register(state):
             logical = o.Label
             state.shapes[logical] = o.Name
             imported.append(logical)
+        # Honour the caller's requested handle for a single-solid import: a
+        # downloaded part arrives labelled by its vendor ("Aluminum Timing
+        # Pulley v1"), but a caller that said name="q" expects to refer to it as
+        # "q". Silently keeping the STEP label made every downstream op fail with
+        # "no such solid: q". For multi-solid assemblies a single name is
+        # ambiguous, so we refuse loudly and point at ``out`` (which bundles
+        # them) instead of guessing.
+        name = a.get("name")
+        if name:
+            if len(imported) == 1:
+                state.shapes[name] = state.shapes.pop(imported[0])
+                imported = [name]
+            else:
+                raise ValueError(
+                    "import_step got name=%r but the file holds %d solids; a "
+                    "single name is ambiguous - drop 'name' to keep each part's "
+                    "label, or use 'out' to bundle them into one handle"
+                    % (name, len(imported)))
         out = a.get("out")
         if out:
             # Bundle every imported leaf solid into one named handle so the

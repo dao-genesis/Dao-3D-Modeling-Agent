@@ -85,6 +85,21 @@ def main():
     assert rv.data["parts"] == len(parts), rv.data
     assert rv.data["mobility_planar"] == 1, rv.data
     print("bundled import -> reverse butchered %d parts, mobility 1" % rv.data["parts"])
+
+    # ---- a single-solid import must honour the caller's name --------------- #
+    # A downloaded part is labelled by its vendor; a caller that says name="q"
+    # must be able to refer to it as "q". (Defect: import_step accepted 'name'
+    # but kept the STEP label, so every downstream op failed "no such solid".)
+    one = os.path.join(os.path.dirname(STEP), "_one.step")
+    s3.act("solid.export", {"names": [parts[0]], "path": one, "format": "step"})
+    ione = s3.act("solid.import_step", {"path": one, "name": "reuse"})
+    assert ione.ok and ione.data["imported"] == ["reuse"], ione.data
+    assert s3.act("solid.fingerprint", {"name": "reuse"}).ok, "named handle unusable"
+    # a single name for a multi-solid assembly is ambiguous -> refuse loudly
+    amb = s3.act("solid.import_step", {"path": STEP, "name": "whole"})
+    assert not amb.ok and "ambiguous" in (amb.error or "").lower(), amb.error
+    print("single-solid import honours name='reuse'; multi-solid + name refused")
+
     # a surface/shell-only STEP yields no solids: out must refuse, not fake it
     empty = os.path.join(os.path.dirname(STEP), "_empty.step")
     with open(empty, "w") as fh:
