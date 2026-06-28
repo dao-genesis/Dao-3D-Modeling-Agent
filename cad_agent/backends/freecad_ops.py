@@ -423,6 +423,68 @@ def register(state):
                 "min_wall": min_wall, "ok": bool(worst and worst[0] >= min_wall),
                 "thin_walls": thins}
 
+    def op_undercut(a):
+        """Undercut detection for a two-plate mould pulled along ``pull``.
+
+        A face can be formed by a simple open/close mould only if it is visible
+        from its mould half: a ray fired from the face *outward* along the pull
+        axis (toward whichever half that face parts to) must escape without
+        re-entering the solid. If that ray hits material again the face is
+        shadowed -> it is an undercut needing a side core / lifter. Faces nearly
+        parallel to the pull (|n.pull| < sin(parallel_tol)) are side walls handled
+        by draft analysis, not undercuts. The part is ``moldable`` (no side
+        action) only when no face is an undercut.
+
+        args: name, pull (default +Z), parallel_tol (deg, default 1.0),
+              samples (per-axis, default 2)
+        """
+        sh = _get(a["name"]).Shape
+        pull = _vec(a.get("pull", (0, 0, 1)))
+        pl = pull.Length or 1.0
+        pull = _vec((pull.x / pl, pull.y / pl, pull.z / pl))
+        ptol = math.sin(math.radians(float(a.get("parallel_tol", 1.0))))
+        ns = max(1, int(a.get("samples", 2)))
+        diag = sh.BoundBox.DiagonalLength
+        eps = max(1e-4, diag * 1e-6)
+        cuts, parallel = [], 0
+        for i, f in enumerate(sh.Faces):
+            u0, u1, v0, v1 = f.ParameterRange
+            nc = f.normalAt((u0 + u1) / 2.0, (v0 + v1) / 2.0)
+            ncl = nc.Length or 1.0
+            cos_c = nc.dot(pull) / ncl
+            if abs(cos_c) < ptol:                       # side wall -> draft domain
+                parallel += 1
+                continue
+            ray = pull if cos_c > 0 else _vec((-pull.x, -pull.y, -pull.z))
+            occluded = False
+            for su in range(ns):
+                for sv in range(ns):
+                    u = u0 + (u1 - u0) * (su + 0.5) / ns
+                    v = v0 + (v1 - v0) * (sv + 0.5) / ns
+                    try:
+                        p = f.valueAt(u, v)
+                    except Exception:
+                        continue
+                    a_pt = _vec((p.x + ray.x * eps, p.y + ray.y * eps, p.z + ray.z * eps))
+                    b_pt = _vec((p.x + ray.x * diag * 1.1, p.y + ray.y * diag * 1.1,
+                                 p.z + ray.z * diag * 1.1))
+                    try:
+                        inside = Part.makeLine(a_pt, b_pt).common(sh)
+                    except Exception:
+                        continue
+                    if any(e.Length > eps * 10 for e in inside.Edges):
+                        occluded = True
+                        break
+                if occluded:
+                    break
+            if occluded:
+                cuts.append({"face": "Face%d" % (i + 1),
+                             "half": "+pull" if cos_c > 0 else "-pull"})
+        return {"pull": [_round(pull.x), _round(pull.y), _round(pull.z)],
+                "faces": len(sh.Faces), "undercuts": len(cuts),
+                "moldable": len(cuts) == 0, "undercut_faces": cuts,
+                "parallel_walls": parallel}
+
     # ---- document management --------------------------------------------- #
     def op_list(a):
         return {"solids": list(state.shapes.keys())}
@@ -487,6 +549,6 @@ def register(state):
         "common": lambda a: _boolean("common", a), "fillet": op_fillet, "chamfer": op_chamfer,
         "pattern_linear": op_pattern_linear, "pattern_polar": op_pattern_polar,
         "measure": op_measure, "inspect": op_inspect, "interference": op_interference,
-        "draft": op_draft, "thickness": op_thickness,
+        "draft": op_draft, "thickness": op_thickness, "undercut": op_undercut,
         "list": op_list, "delete": op_delete, "export": op_export, "import_step": op_import_step,
     }
