@@ -390,49 +390,394 @@
     "volume_cm3": 12.12
   },
   "Shield": {
-    "error": "string is not a file: `C:\\Users\\Administrator\\Dao-3D-Modeling-Agent\\60-实战_Projects\\ORS6_Stewart\\STLs\\SR6测试版防护罩\\SR6 Shield 40mm Fan.stl`"
+    "center": [
+      0.0,
+      -60.0,
+      98.07322311401367
+    ],
+    "size": [
+      86.0,
+      74.0,
+      14.146446228027344
+    ],
+    "min": [
+      -43.0,
+      -97.0,
+      91.0
+    ],
+    "max": [
+      43.0,
+      -23.0,
+      105.14644622802734
+    ],
+    "vertices": 1212,
+    "faces": 2492,
+    "watertight": true,
+    "volume_cm3": 24.94
   },
   "Shield_OLED": {
-    "error": "string is not a file: `C:\\Users\\Administrator\\Dao-3D-Modeling-Agent\\60-实战_Projects\\ORS6_Stewart\\STLs\\SR6测试版防护罩\\SR6 Shield 40mm Fan + OLED Display.stl`"
+    "center": [
+      0.0,
+      -60.0,
+      98.07322311401367
+    ],
+    "size": [
+      86.0,
+      74.0,
+      14.146446228027344
+    ],
+    "min": [
+      -43.0,
+      -97.0,
+      91.0
+    ],
+    "max": [
+      43.0,
+      -23.0,
+      105.14644622802734
+    ],
+    "vertices": 1542,
+    "faces": 3156,
+    "watertight": true,
+    "volume_cm3": 25.26
   },
   "Shield_Alt": {
-    "error": "string is not a file: `C:\\Users\\Administrator\\Dao-3D-Modeling-Agent\\60-实战_Projects\\ORS6_Stewart\\STLs\\SR6测试版防护罩\\SR6 Shield 40mm Fan + OLED Display(alternate dimensions).stl`"
+    "center": [
+      0.0,
+      -60.0,
+      98.07322311401367
+    ],
+    "size": [
+      86.0,
+      74.0,
+      14.146446228027344
+    ],
+    "min": [
+      -43.0,
+      -97.0,
+      91.0
+    ],
+    "max": [
+      43.0,
+      -23.0,
+      105.14644622802734
+    ],
+    "vertices": 1638,
+    "faces": 3348,
+    "watertight": true,
+    "volume_cm3": 25.71
   },
   "Tray": {
-    "error": "string is not a file: `C:\\Users\\Administrator\\Dao-3D-Modeling-Agent\\60-实战_Projects\\ORS6_Stewart\\STLs\\SR6测试版托盘\\SR6 Tray Standard Beta1.stl`"
+    "center": [
+      0.0,
+      -67.99999809265137,
+      51.650001525878906
+    ],
+    "size": [
+      75.4000015258789,
+      55.39999771118164,
+      55.30000305175781
+    ],
+    "min": [
+      -37.70000076293945,
+      -95.69999694824219,
+      24.0
+    ],
+    "max": [
+      37.70000076293945,
+      -40.29999923706055,
+      79.30000305175781
+    ],
+    "vertices": 1343,
+    "faces": 2758,
+    "watertight": true,
+    "volume_cm3": 18.83
   },
   "Tray_ScrewJack": {
-    "error": "string is not a file: `C:\\Users\\Administrator\\Dao-3D-Modeling-Agent\\60-实战_Projects\\ORS6_Stewart\\STLs\\SR6测试版托盘\\SR6 Tray Screw Jack Beta1.stl`"
+    "center": [
+      0.0,
+      -67.99999809265137,
+      71.6500015258789
+    ],
+    "size": [
+      75.4000015258789,
+      55.39999771118164,
+      55.30000305175781
+    ],
+    "min": [
+      -37.70000076293945,
+      -95.69999694824219,
+      44.0
+    ],
+    "max": [
+      37.70000076293945,
+      -40.29999923706055,
+      99.30000305175781
+    ],
+    "vertices": 1234,
+    "faces": 2536,
+    "watertight": true,
+    "volume_cm3": 18.28
   },
   "Tray_XT60": {
-    "error": "string is not a file: `C:\\Users\\Administrator\\Dao-3D-Modeling-Agent\\60-实战_Projects\\ORS6_Stewart\\STLs\\SR6测试版托盘\\SR6 Tray XT60E1-M Beta1.stl`"
+    "center": [
+      0.0,
+      -67.99999809265137,
+      71.6500015258789
+    ],
+    "size": [
+      75.4000015258789,
+      55.39999771118164,
+      55.30000305175781
+    ],
+    "min": [
+      -37.70000076293945,
+      -95.69999694824219,
+      44.0
+    ],
+    "max": [
+      37.70000076293945,
+      -40.29999923706055,
+      99.30000305175781
+    ],
+    "vertices": 1306,
+    "faces": 2688,
+    "watertight": true,
+    "volume_cm3": 18.05
   },
   "Twist_Base": {
-    "error": "string is not a file: `C:\\Users\\Administrator\\Dao-3D-Modeling-Agent\\60-实战_Projects\\ORS6_Stewart\\STLs\\SR6 T-wist4\\T-wist4 SR6 Base Beta1.stl`"
+    "center": [
+      0.0,
+      15.408218383789062,
+      -3.0
+    ],
+    "size": [
+      126.98014831542969,
+      157.76712036132812,
+      10.0
+    ],
+    "min": [
+      -63.490074157714844,
+      -63.475341796875,
+      -8.0
+    ],
+    "max": [
+      63.490074157714844,
+      94.29177856445312,
+      2.0
+    ],
+    "vertices": 2737,
+    "faces": 5490,
+    "watertight": true,
+    "volume_cm3": 32.69
   },
   "Twist_Body": {
-    "error": "string is not a file: `C:\\Users\\Administrator\\Dao-3D-Modeling-Agent\\60-实战_Projects\\ORS6_Stewart\\STLs\\SR6 T-wist4\\T-wist4 SR6 Body Beta1.stl`"
+    "center": [
+      0.0,
+      15.456594467163086,
+      40.562629699707024
+    ],
+    "size": [
+      140.0,
+      157.87038040161133,
+      81.12525939941408
+    ],
+    "min": [
+      -70.0,
+      -63.47859573364258,
+      -1.2348767130111304e-14
+    ],
+    "max": [
+      70.0,
+      94.39178466796875,
+      81.12525939941406
+    ],
+    "vertices": 8391,
+    "faces": 16850,
+    "watertight": false,
+    "volume_cm3": null
   },
   "Twist_Lid": {
-    "error": "string is not a file: `C:\\Users\\Administrator\\Dao-3D-Modeling-Agent\\60-实战_Projects\\ORS6_Stewart\\STLs\\SR6 T-wist4\\T-wist4 Lid Beta1.stl`"
+    "center": [
+      0.0,
+      65.75786209106445,
+      84.0
+    ],
+    "size": [
+      78.0,
+      46.29999542236328,
+      40.0
+    ],
+    "min": [
+      -39.0,
+      42.60786437988281,
+      64.0
+    ],
+    "max": [
+      39.0,
+      88.9078598022461,
+      104.0
+    ],
+    "vertices": 534,
+    "faces": 1064,
+    "watertight": true,
+    "volume_cm3": 11.01
   },
   "RingGear": {
-    "error": "string is not a file: `C:\\Users\\Administrator\\Dao-3D-Modeling-Agent\\60-实战_Projects\\ORS6_Stewart\\STLs\\SR6 T-wist4\\T-wist Clip Ring Gear Beta4.stl`"
+    "center": [
+      0.0,
+      0.0,
+      5.999999999999996
+    ],
+    "size": [
+      114.38843536376953,
+      114.38843536376953,
+      12.000000000000009
+    ],
+    "min": [
+      -57.194217681884766,
+      -57.194217681884766,
+      -9.245680562570014e-15
+    ],
+    "max": [
+      57.194217681884766,
+      57.194217681884766,
+      12.0
+    ],
+    "vertices": 14172,
+    "faces": 28344,
+    "watertight": true,
+    "volume_cm3": 21.72
   },
   "ExchangeGear": {
-    "error": "string is not a file: `C:\\Users\\Administrator\\Dao-3D-Modeling-Agent\\60-实战_Projects\\ORS6_Stewart\\STLs\\SR6 T-wist4\\T-wist Exchange Gear Beta1.stl`"
+    "center": [
+      11.046574115753174,
+      73.01701354980469,
+      3.75
+    ],
+    "size": [
+      37.80049419403076,
+      37.80049133300781,
+      17.5
+    ],
+    "min": [
+      -7.853672981262207,
+      54.11676788330078,
+      -5.0
+    ],
+    "max": [
+      29.946821212768555,
+      91.9172592163086,
+      12.5
+    ],
+    "vertices": 6384,
+    "faces": 12768,
+    "watertight": true,
+    "volume_cm3": 6.84
   },
   "DriveGear": {
-    "error": "string is not a file: `C:\\Users\\Administrator\\Dao-3D-Modeling-Agent\\60-实战_Projects\\ORS6_Stewart\\STLs\\SR6 T-wist4\\T-wist4 Drive Beta1.stl`"
+    "center": [
+      -15.000000476837158,
+      71.34789085388184,
+      8.25
+    ],
+    "size": [
+      41.09984493255615,
+      41.0998420715332,
+      11.5
+    ],
+    "min": [
+      -35.549922943115234,
+      50.797969818115234,
+      2.5
+    ],
+    "max": [
+      5.549921989440918,
+      91.89781188964844,
+      14.0
+    ],
+    "vertices": 10931,
+    "faces": 21878,
+    "watertight": true,
+    "volume_cm3": 10.82
   },
   "GrommetLink": {
-    "error": "string is not a file: `C:\\Users\\Administrator\\Dao-3D-Modeling-Agent\\60-实战_Projects\\ORS6_Stewart\\STLs\\SR6 T-wist4\\SR6 Grommet Pitcher Link Beta1.stl`"
+    "center": [
+      0.0,
+      -30.0,
+      -2.86102294921875e-06
+    ],
+    "size": [
+      191.0,
+      64.0,
+      16.00001335144043
+    ],
+    "min": [
+      -95.5,
+      -62.0,
+      -8.000009536743164
+    ],
+    "max": [
+      95.5,
+      2.0,
+      8.000003814697266
+    ],
+    "vertices": 908,
+    "faces": 1830,
+    "watertight": false,
+    "volume_cm3": null
   },
   "L_AngleLink": {
-    "error": "string is not a file: `C:\\Users\\Administrator\\Dao-3D-Modeling-Agent\\60-实战_Projects\\ORS6_Stewart\\STLs\\SR6 T-wist4\\SR6 L-Pitcher Angle Link Beta1.stl`"
+    "center": [
+      0.0,
+      -30.25,
+      3.7162041664123535
+    ],
+    "size": [
+      141.0,
+      67.5,
+      23.432408332824707
+    ],
+    "min": [
+      -70.5,
+      -64.0,
+      -8.0
+    ],
+    "max": [
+      70.5,
+      3.5,
+      15.432408332824707
+    ],
+    "vertices": 1067,
+    "faces": 2162,
+    "watertight": true,
+    "volume_cm3": 17.75
   },
   "R_AngleLink": {
-    "error": "string is not a file: `C:\\Users\\Administrator\\Dao-3D-Modeling-Agent\\60-实战_Projects\\ORS6_Stewart\\STLs\\SR6 T-wist4\\SR6 R-Pitcher Angle Link Beta1.stl`"
+    "center": [
+      0.0,
+      30.25,
+      0.0
+    ],
+    "size": [
+      141.0,
+      67.5,
+      16.0
+    ],
+    "min": [
+      -70.5,
+      -3.5,
+      -8.0
+    ],
+    "max": [
+      70.5,
+      64.0,
+      8.0
+    ],
+    "vertices": 758,
+    "faces": 1532,
+    "watertight": true,
+    "volume_cm3": 19.9
   },
   "ESP32_Mount": {
     "error": "string is not a file: `C:\\Users\\Administrator\\ORS6-VAM饮料摇匀器\\custom_parts\\ESP32_Mount.stl`"
