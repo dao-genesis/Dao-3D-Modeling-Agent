@@ -2012,6 +2012,136 @@ def register(state):
                 "blend_count": len(blends),
                 "through_holes": sum(1 for h in holes if h["through"])}
 
+    def op_fillets(a):
+        """Recover edge blends -- fillets and rounds -- from a solid.
+
+        ``holes`` recovers full-round bores and turned bosses; the other
+        pervasive manufacturing intent is "break every sharp edge". A *round*
+        softens a convex edge (a partial cylinder swept along a straight edge, a
+        sphere patch over a convex corner); a *fillet* fills a concave re-entrant
+        edge (where a boss meets a floor -- a circular edge yields a toroidal
+        fillet whose *minor* radius is the blend radius). Every case is an
+        analytic surface read exactly: straight-edge blend = partial cylinder of
+        radius = blend radius; corner = sphere of that radius; circular-edge
+        fillet = torus, minor radius = blend radius. The solid's true outward
+        normal sign separates round (points away from the blend's curvature
+        centre -- material is inside) from fillet (points toward it). Faces are
+        grouped by (kind, geometry, radius) so a "fillet all 12 edges at r2"
+        comes back as one group with count 12. args: name, tol.
+        """
+        sh = _get(a["name"]).Shape
+        sols = sh.Solids
+        if not sols:
+            raise ValueError(
+                "solid.fillets needs a solid (got a shell/compound with no "
+                "volume); edge blends live on a body")
+        if len(sols) != 1:
+            raise ValueError(
+                "solid.fillets expects a single solid (got %d); run "
+                "solid.decompose and analyse one part at a time" % len(sols))
+        body = sols[0]
+        diag = body.BoundBox.DiagonalLength or 1.0
+        ptol = max(float(a.get("tol", 1e-4)) * diag, 1e-6)
+
+        def _coaxial(ax0, p0, ax1, p1):
+            return (abs(abs(ax0.dot(ax1)) - 1.0) <= 1e-6
+                    and (p1 - p0).cross(ax0).Length < ptol)
+
+        # cylinders: group coaxial same-radius faces and sum the angular span, so
+        # a full bore split into faces is recognised as a bore (skipped) rather
+        # than mistaken for a blend -- only sub-2*pi sweeps are edge blends.
+        cyl_rings, blends = [], []
+        for idx, f in enumerate(body.Faces):
+            su = f.Surface
+            kind = su.__class__.__name__
+            u0, u1, v0, v1 = f.ParameterRange
+            um, vm = (u0 + u1) / 2.0, (v0 + v1) / 2.0
+            try:
+                n = f.normalAt(um, vm)
+                p = f.valueAt(um, vm)
+            except Exception:
+                continue
+            if kind == "Cylinder":
+                ax = _unit_v(su.Axis)
+                ctr = su.Center
+                radial = p - ctr
+                radial = radial - ax * radial.dot(ax)
+                rl = radial.Length or 1.0
+                outward = (n.x * radial.x + n.y * radial.y + n.z * radial.z) / rl
+                ts = [(vx.Point - ctr).dot(ax) for vx in f.Vertexes]
+                vmin, vmax = (min(ts), max(ts)) if ts else (0.0, 0.0)
+                tgt = None
+                for rg in cyl_rings:
+                    if (abs(rg["radius"] - su.Radius) <= ptol
+                            and _coaxial(rg["axis"], rg["pt"], ax, ctr)):
+                        tgt = rg
+                        break
+                if tgt is None:
+                    tgt = {"axis": ax, "pt": ctr, "radius": float(su.Radius),
+                           "span": 0.0, "vmin": vmin, "vmax": vmax,
+                           "faces": [], "outward": outward}
+                    cyl_rings.append(tgt)
+                tgt["span"] += abs(u1 - u0)
+                tgt["vmin"] = min(tgt["vmin"], vmin)
+                tgt["vmax"] = max(tgt["vmax"], vmax)
+                tgt["faces"].append(idx)
+            elif kind == "Sphere":
+                ctr = su.Center
+                radial = p - ctr
+                rl = radial.Length or 1.0
+                outward = (n.x * radial.x + n.y * radial.y + n.z * radial.z) / rl
+                blends.append({"geom": "sphere", "radius": float(su.Radius),
+                               "edge_length": 0.0, "faces": [idx],
+                               "kind": "round" if outward > 0 else "fillet"})
+            elif kind == "Toroid":
+                ctr = su.Center
+                ax = _unit_v(su.Axis)
+                rad = p - ctr
+                rad = rad - ax * rad.dot(ax)
+                rl = rad.Length or 1.0
+                circ = ctr + rad * (float(su.MajorRadius) / rl)
+                tube = p - circ
+                tl = tube.Length or 1.0
+                outward = (n.x * tube.x + n.y * tube.y + n.z * tube.z) / tl
+                arc = 2.0 * math.pi * float(su.MajorRadius) * (abs(u1 - u0) / (2.0 * math.pi))
+                blends.append({"geom": "torus", "radius": float(su.MinorRadius),
+                               "edge_length": arc, "faces": [idx],
+                               "kind": "round" if outward > 0 else "fillet"})
+
+        for rg in cyl_rings:
+            if rg["span"] >= 2.0 * math.pi - 1e-2:
+                continue                       # a complete bore/boss, not a blend
+            blends.append({"geom": "cylinder", "radius": rg["radius"],
+                           "edge_length": rg["vmax"] - rg["vmin"], "faces": rg["faces"],
+                           "kind": "round" if rg["outward"] > 0 else "fillet"})
+
+        groups = []
+        for b in blends:
+            g = None
+            for e in groups:
+                if (e["kind"] == b["kind"] and e["geom"] == b["geom"]
+                        and abs(e["radius"] - b["radius"]) <= ptol):
+                    g = e
+                    break
+            if g is None:
+                g = {"kind": b["kind"], "geom": b["geom"], "radius": _round(b["radius"]),
+                     "count": 0, "faces": [], "edge_length": 0.0}
+                groups.append(g)
+            g["count"] += 1
+            g["faces"].extend(b["faces"])
+            g["edge_length"] += b["edge_length"]
+        for g in groups:
+            g["edge_length"] = _round(g["edge_length"])
+            g["faces"] = sorted(g["faces"])
+        groups.sort(key=lambda x: (x["kind"], -x["radius"]))
+        rounds = [g for g in groups if g["kind"] == "round"]
+        fillets = [g for g in groups if g["kind"] == "fillet"]
+        return {"name": a["name"], "blend_groups": groups,
+                "blend_face_count": len(blends),
+                "round_count": sum(g["count"] for g in rounds),
+                "fillet_count": sum(g["count"] for g in fillets),
+                "radii": sorted({g["radius"] for g in groups})}
+
     def op_joints(a):
         """Infer revolute joints between parts from shared coaxial cylinders.
 
@@ -2721,6 +2851,7 @@ def register(state):
         "curvature": op_curvature, "obb": op_obb, "symmetry": op_symmetry,
         "fingerprint": op_fingerprint, "match": op_match, "chirality": op_chirality,
         "holes": op_holes,
+        "fillets": op_fillets,
         "library_match": op_library_match, "library_index": op_library_index,
         "interference": op_interference,
         "draft": op_draft, "thickness": op_thickness, "undercut": op_undercut,
