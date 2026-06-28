@@ -33,6 +33,17 @@ def main():
     r = s.act("solid.inspect", {"name": "flange_f", "density": 0.00785})  # steel g/mm^3
     print("inspect mass(g)", r.data.get("mass"), "com", r.data.get("center_of_mass"))
 
+    # selecting an out-of-range edge must fail with a clear message (which index,
+    # what range), not leak a bare IndexError the caller cannot act on.
+    s.act("solid.box", {"name": "cube", "length": 10, "width": 10, "height": 10})
+    fr = s.act("solid.fillet", {"name": "cube", "radius": 1, "edges": [999], "out": "cf"})
+    assert not fr.ok and "out of range" in (fr.error or ""), fr
+    cr = s.act("solid.chamfer", {"name": "cube", "size": 1, "edges": [999], "out": "cc"})
+    assert not cr.ok and "out of range" in (cr.error or ""), cr
+    ok_edge = s.act("solid.chamfer", {"name": "cube", "size": 1, "edges": [0], "out": "cc"})
+    assert ok_edge.ok, ok_edge.error
+    print("edge-index guard ok: out-of-range rejected, valid index chamfers")
+
     # interference: overlap two boxes
     s.act("solid.box", {"name": "A", "length": 10, "width": 10, "height": 10})
     s.act("solid.box", {"name": "B", "length": 10, "width": 10, "height": 10, "pos": [5, 0, 0]})

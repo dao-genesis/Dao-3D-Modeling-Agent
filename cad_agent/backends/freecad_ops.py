@@ -269,20 +269,31 @@ def register(state):
         return _metrics(s)
 
     # ---- fillet / chamfer ------------------------------------------------- #
+    def _pick_edges(shape, idxs):
+        """Select edges by index, or all edges when none are given.
+
+        An out-of-range index otherwise leaks a bare ``IndexError`` that the
+        caller cannot act on; report which indices were bad and the valid range.
+        """
+        ne = len(shape.Edges)
+        if not idxs:
+            return shape.Edges
+        bad = [i for i in idxs if i < -ne or i >= ne]
+        if bad:
+            raise ValueError("edge indices %s out of range (shape has %d edges 0..%d)"
+                             % (bad, ne, ne - 1))
+        return [shape.Edges[i] for i in idxs]
+
     def op_fillet(a):
         obj = _get(a["name"])
-        edges = obj.Shape.Edges
-        if a.get("edges"):
-            edges = [obj.Shape.Edges[i] for i in a["edges"]]
+        edges = _pick_edges(obj.Shape, a.get("edges"))
         s = obj.Shape.makeFillet(float(a["radius"]), edges)
         _put(a.get("out", a["name"]), s)
         return _metrics(s)
 
     def op_chamfer(a):
         obj = _get(a["name"])
-        edges = obj.Shape.Edges
-        if a.get("edges"):
-            edges = [obj.Shape.Edges[i] for i in a["edges"]]
+        edges = _pick_edges(obj.Shape, a.get("edges"))
         s = obj.Shape.makeChamfer(float(a["size"]), edges)
         _put(a.get("out", a["name"]), s)
         return _metrics(s)
