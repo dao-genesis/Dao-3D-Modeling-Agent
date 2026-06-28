@@ -1,0 +1,61 @@
+name: closed-loop-ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  closure:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: "utf-8"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install cold-start deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+
+      - name: "Gate 1 - universal 8-dimension verifier (self-demo + tests)"
+        run: |
+          python "80-实践_Practice/verifier.py"
+          python -m pytest "80-实践_Practice/tests/test_verifier.py" -v
+
+      - name: "Gate 2 - self-heal closed loop converges to full pass"
+        run: |
+          python "80-实践_Practice/self_heal.py"
+          python -m pytest "80-实践_Practice/tests/test_self_heal.py" -v
+
+      - name: "Gate 3 - SR6 true-3D FK/IK closure residual ~ 0"
+        run: |
+          python -m pytest "60-实战_Projects/ORS6_Stewart/closed_loop/tests/test_closure.py" -v
+
+      - name: "Gate 3b - generate SR6 closure report (json + figure)"
+        working-directory: "60-实战_Projects/ORS6_Stewart/closed_loop"
+        run: python closure_report.py
+
+      - name: "Gate 4 - SR6 physical-assembly closure (links = 175/186mm exact)"
+        run: |
+          python "60-实战_Projects/ORS6_Stewart/closed_loop/assembly/verify_assembly.py"
+          python -m pytest "60-实战_Projects/ORS6_Stewart/closed_loop/tests/test_assembly.py" -v
+
+      - name: "Gate 5 - SR6 TRUTH backend verification (firmware port + rigid FK + PDF motion spec)"
+        run: |
+          python "60-实战_Projects/ORS6_Stewart/sr6_truth/validate.py"
+          python -m pytest "60-实战_Projects/ORS6_Stewart/sr6_truth/tests/test_truth.py" -v
+          cp "60-实战_Projects/ORS6_Stewart/sr6_truth/report.json" docs/models/verify_report.json
+
+      - name: Upload SR6 closure artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sr6-closure-report
+          path: "60-实战_Projects/ORS6_Stewart/closed_loop/out/"
+          if-no-files-found: warn

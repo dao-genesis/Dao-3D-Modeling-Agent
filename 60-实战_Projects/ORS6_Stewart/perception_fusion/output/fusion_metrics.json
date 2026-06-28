@@ -1,0 +1,75 @@
+{
+  "photo": "SmartSelect_20260626_115856_Baidu.jpg",
+  "judge": "Dao.Gan.Jiao envelope-silhouette IoU (scale/rotation/mirror invariant)",
+  "note": "envelope-IoU compares only the gross outer blob, so it saturates ~0.66-0.69 for ALL models; the decisive difference is internal/topological: Tripo carries the rod-fan + servo arms but not the receiver ring, the firmware skeleton carries the ring + kinematics but not the crossed rod-fan. The two directions are complementary -> fusion is required.",
+  "results": [
+    {
+      "model": "Tripo visual mesh",
+      "direction": 1,
+      "iou": 0.687,
+      "pose": {
+        "az": 355,
+        "el": 28,
+        "mirror": 1,
+        "roll": 210
+      }
+    },
+    {
+      "model": "firmware skeleton (extreme)",
+      "direction": 2,
+      "iou": 0.657,
+      "pose": {
+        "az": 270,
+        "el": 60,
+        "mirror": 0,
+        "roll": 45
+      }
+    },
+    {
+      "model": "firmware skeleton (thrust_up)",
+      "direction": 2,
+      "iou": 0.648,
+      "pose": {
+        "az": 270,
+        "el": 60,
+        "mirror": 0,
+        "roll": 45
+      }
+    },
+    {
+      "model": "firmware skeleton (combo_diag)",
+      "direction": 2,
+      "iou": 0.647,
+      "pose": {
+        "az": 270,
+        "el": 60,
+        "mirror": 0,
+        "roll": 45
+      }
+    },
+    {
+      "model": "firmware skeleton (home)",
+      "direction": 2,
+      "iou": 0.638,
+      "pose": {
+        "az": 270,
+        "el": 60,
+        "mirror": 1,
+        "roll": 45
+      }
+    },
+    {
+      "model": "firmware skeleton (forward)",
+      "direction": 2,
+      "iou": 0.626,
+      "pose": {
+        "az": 270,
+        "el": 60,
+        "mirror": 1,
+        "roll": 45
+      }
+    }
+  ],
+  "tripo_best_iou": 0.687,
+  "firmware_best_iou": 0.657
+}
