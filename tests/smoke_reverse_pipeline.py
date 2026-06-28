@@ -55,6 +55,19 @@ def main():
     assert rv2.data["mobility_planar"] == 1, rv2.data
     print("slider-crank reverse: %d parts (all freeform), joints %s, mobility = %d"
           % (rv2.data["parts"], rv2.data["joint_types"], rv2.data["mobility_planar"]))
+    assert isinstance(rv2.data["gear_meshes"], list), rv2.data
+
+    # ---- 3. a gear pair: reverse surfaces the mesh straight from geometry -- #
+    s.act("solid.cylinder", {"name": "ga", "radius": 20, "height": 6, "pos": [0, 0, 0]})
+    s.act("solid.cylinder", {"name": "gb", "radius": 30, "height": 6, "pos": [50, 0, 0]})
+    s.act("solid.compound", {"names": ["ga", "gb"], "out": "gearbox"})
+    rv3 = s.act("solid.reverse", {"name": "gearbox"})
+    assert rv3.ok, rv3.error
+    assert len(rv3.data["gear_meshes"]) == 1, rv3.data["gear_meshes"]
+    m = rv3.data["gear_meshes"][0]
+    assert m["type"] == "external" and abs(m["center_distance"] - 50) < 1e-6, m
+    print("gear-pair reverse: 1 external mesh, centre distance %.0f, ratio %.3f"
+          % (m["center_distance"], m["ratio"]))
 
     print("REVERSE-PIPELINE SMOKE OK", s.summary())
     s.registry.kernel.shutdown()

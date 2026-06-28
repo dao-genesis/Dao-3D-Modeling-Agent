@@ -1394,6 +1394,7 @@ def register(state):
         jspec = op_joints({"parts": names})["joint_list"]
         mech = op_mechanism({"parts": names, "joint_list": jspec})
         coax = op_coaxial({"parts": names})["group_list"]
+        meshes = op_gearmesh({"parts": names})["mesh_list"]
         kinds = {}
         for e in bom:
             kinds[e["type"]] = kinds.get(e["type"], 0) + 1
@@ -1401,6 +1402,7 @@ def register(state):
                 "joints": len(jspec), "joint_list": jspec,
                 "joint_types": mech["joint_types"],
                 "coaxial_groups": coax,
+                "gear_meshes": meshes,
                 "mobility_planar": mech["mobility_planar"],
                 "mobility_spatial": mech["mobility_spatial"]}
 
