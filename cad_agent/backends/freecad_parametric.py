@@ -521,12 +521,12 @@ def register(state):
         (deg) sets the total tooth twist over the face width
         ``twist = W*tan(beta)/rp``; ``hand`` ("right"/"left") sets its sign.
         Falls back to a spur gear when ``beta`` is 0."""
-        m_ = float(a["module"])
-        z_ = int(a["teeth"])
-        w_ = float(a.get("length", 10))
-        beta = float(a.get("helix_angle", 0.0))
-        nsec = max(2, int(a.get("sections", 5)))
-        pa = float(a.get("pressure_angle", 20.0))
+        m_ = _num(a, "module", label="module")
+        z_ = _int(a, "teeth", label="teeth")
+        w_ = _num(a, "length", 10, "length")
+        beta = _num(a, "helix_angle", 0.0, "helix_angle")
+        nsec = max(2, _int(a, "sections", 5, "sections"))
+        pa = _num(a, "pressure_angle", 20.0, "pressure_angle")
         rp = m_ * z_ / 2.0
         twist = math.degrees(w_ * math.tan(math.radians(beta)) / rp) if beta else 0.0
         if str(a.get("hand", "right")).lower().startswith("l"):
@@ -551,12 +551,12 @@ def register(state):
         axial height. ``pitch_cone_angle`` (deg, default 45 => a miter gear) and
         ``face_width`` set the cone. Back pitch radius R=m*z/2, cone distance
         Ro=R/sin(gamma), axial height H=face_width*cos(gamma)."""
-        m_ = float(a["module"])
-        z_ = int(a["teeth"])
-        gamma = math.radians(float(a.get("pitch_cone_angle", 45.0)))
-        b_ = float(a.get("face_width", 10.0))
-        nsec = max(2, int(a.get("sections", 6)))
-        pa = float(a.get("pressure_angle", 20.0))
+        m_ = _num(a, "module", label="module")
+        z_ = _int(a, "teeth", label="teeth")
+        gamma = math.radians(_num(a, "pitch_cone_angle", 45.0, "pitch_cone_angle"))
+        b_ = _num(a, "face_width", 10.0, "face_width")
+        nsec = max(2, _int(a, "sections", 6, "sections"))
+        pa = _num(a, "pressure_angle", 20.0, "pressure_angle")
         r_ = m_ * z_ / 2.0
         ro = r_ / math.sin(gamma)
         h_ = b_ * math.cos(gamma)
@@ -656,6 +656,10 @@ def register(state):
         body = _body(a["body"])
         feat = a.get("feature", kind)
         tip = body.Tip
+        if tip is None:
+            raise ValueError(
+                "body %r has no feature to %s; add a pad or pocket first"
+                % (a["body"], kind.lower()))
         _check_feature_name(feat)
         edges = a.get("edges")
         ne = len(tip.Shape.Edges)
@@ -747,6 +751,10 @@ def register(state):
         """Resolve the feature(s) to replicate; default to the body tip."""
         names = a.get("originals")
         if not names:
+            if body.Tip is None:
+                raise ValueError(
+                    "body %r has no feature to pattern/mirror; add a pad or "
+                    "pocket first (or pass 'originals')" % (a["body"],))
             return [body.Tip]
         bodyname = a["body"]
         objs = []

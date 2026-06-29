@@ -211,6 +211,25 @@ def main():
     assert clashing > meshed, ("unphased gears should clash", clashing)
     print("gear pair center dist:", dist, "meshed overlap:", round(meshed, 4),
           "unphased overlap:", round(clashing, 1))
+
+    # malformed numeric/vector args must guide, never leak a bare float()
+    # 'could not convert' or a KeyError on an out-of-range axis letter.
+    def _bad(res, *needles):
+        assert not res.ok, ("expected failure", res.data)
+        e = res.error or ""
+        for raw in ("could not convert", "TypeError", "AttributeError",
+                    "KeyError", "invalid literal"):
+            assert raw not in e, (raw, e)
+        for n in needles:
+            assert n in e, (n, e)
+    _bad(p.act("asm.rotate", {"name": "g2", "angle": "x"}), "angle")
+    _bad(p.act("asm.rotate", {"name": "g2", "angle": 5, "axis": "x"}), "axis")
+    _bad(p.act("asm.align", {"a": "g1", "b": "g2", "offset": "x"}), "offset")
+    _bad(p.act("asm.align", {"a": "g1", "b": "g2", "axis": "q"}),
+         "'x'/'y'/'z'")
+    _bad(p.act("asm.stack", {"base": "g1", "top": "g2", "gap": "x"}), "gap")
+    _bad(p.act("asm.bom", {"density": "x"}), "density")
+    print("asm malformed-arg guards ok")
     pk.shutdown()
 
 
