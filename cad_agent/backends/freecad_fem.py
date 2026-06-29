@@ -405,6 +405,15 @@ def register(state):
         state.fem["result"] = result.Name
         vm = list(result.vonMises or [])
         disp = list(result.DisplacementLengths or [])
+        # A result object with an *empty* field is CalculiX failing silently
+        # (a nonpositive-Jacobian mesh, a non-converged step): the .frd carries
+        # the mesh but no nodal results. Reporting that as max_vm=0 / safety=inf
+        # would be a dangerous false pass, so fail loudly instead.
+        if not vm and not disp:
+            raise RuntimeError(
+                "CalculiX produced no stress/displacement field — the static "
+                "solve did not converge (often a distorted/nonpositive-Jacobian "
+                "mesh); refine the mesh or drop to 1st-order elements")
         max_vm = max(vm) if vm else 0.0
         max_disp = max(disp) if disp else 0.0
         allow = float(a.get("allowable_mpa") or state.fem.get("yield") or 250.0)
@@ -461,6 +470,11 @@ def register(state):
         vm = list(result.vonMises or [])
         temp = list(getattr(result, "Temperature", []) or [])
         disp = list(result.DisplacementLengths or [])
+        if not vm and not disp and not temp:
+            raise RuntimeError(
+                "CalculiX produced no thermomechanical field — the coupled solve "
+                "did not converge (often a distorted/nonpositive-Jacobian mesh); "
+                "refine the mesh or drop to 1st-order elements")
         max_vm = max(vm) if vm else 0.0
         allow = float(a.get("allowable_mpa") or state.fem.get("yield") or 250.0)
         sf = (allow / max_vm) if max_vm > 1e-9 else float("inf")

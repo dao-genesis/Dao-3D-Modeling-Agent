@@ -28,7 +28,26 @@ SUITES = ["tests.smoke_kernel", "tests.smoke_param", "tests.smoke_asm",
           "tests.smoke_drawing", "tests.smoke_sketch_constraint",
           "tests.smoke_cam_drill", "tests.smoke_asm_massprops",
           "tests.smoke_pattern", "tests.smoke_draft",
-          "tests.smoke_thickness", "tests.smoke_undercut"]
+          "tests.smoke_thickness", "tests.smoke_undercut",
+          "tests.smoke_dfm_housing", "tests.smoke_section",
+          "tests.smoke_beam_theory", "tests.smoke_overhang",
+          "tests.smoke_dfm_report", "tests.smoke_fem_guard",
+          "tests.smoke_reverse", "tests.smoke_mechanism",
+          "tests.smoke_drive", "tests.smoke_step_reverse",
+          "tests.smoke_recognize", "tests.smoke_reverse_pipeline",
+          "tests.smoke_coaxial", "tests.smoke_fourbar",
+          "tests.smoke_geartrain", "tests.smoke_gearmesh",
+          "tests.smoke_rackpinion", "tests.smoke_cam",
+          "tests.smoke_planetary", "tests.smoke_geneva",
+          "tests.smoke_cam_profile", "tests.smoke_gearbox",
+          "tests.smoke_spatial_mobility", "tests.smoke_inertia",
+          "tests.smoke_curvature", "tests.smoke_obb",
+          "tests.smoke_symmetry", "tests.smoke_fingerprint",
+          "tests.smoke_match", "tests.smoke_chirality",
+          "tests.smoke_complexity_guard", "tests.smoke_library_match",
+          "tests.smoke_holes", "tests.smoke_fillets",
+          "tests.smoke_design_intent", "tests.smoke_library_query",
+          "tests.smoke_reverse_build", "tests.smoke_reuse"]
 
 
 def main() -> int:
