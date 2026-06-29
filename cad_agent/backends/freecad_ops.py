@@ -3589,6 +3589,72 @@ def register(state):
                 "point_a": [_round(pa.x), _round(pa.y), _round(pa.z)],
                 "point_b": [_round(pb.x), _round(pb.y), _round(pb.z)]}
 
+    def op_thermal_expansion(a):
+        """Free thermal growth of a solid for a uniform temperature change.
+
+        Isotropic linear expansion: every length scales by ``1 + alpha*dT`` so
+        each bounding dimension grows by ``alpha*dT*L`` and the volume by
+        ``(1+alpha*dT)^3 - 1`` (~= ``3*alpha*dT`` for small strains). The op reads
+        the real bounding box and volume off the kernel, then reports linear and
+        volumetric strain plus the grown dimensions — the closed form behind
+        shrink-fits, clearance loss at temperature and CTE-mismatch checks.
+
+        args: name, cte (1/K, e.g. 23e-6 for Al), delta_t (K)
+        """
+        sh = _get(a["name"]).Shape
+        alpha = float(a["cte"])
+        dt = float(a["delta_t"])
+        eps = alpha * dt                       # linear strain
+        s = 1.0 + eps
+        bb = sh.BoundBox
+        dims = [bb.XLength, bb.YLength, bb.ZLength]
+        v0 = sh.Volume
+        return {"name": a["name"], "cte": alpha, "delta_t": dt,
+                "linear_strain": _round(eps, 8),
+                "volumetric_strain": _round(s**3 - 1.0, 8),
+                "dims": [_round(d) for d in dims],
+                "expanded_dims": [_round(d * s) for d in dims],
+                "delta_dims": [_round(d * eps) for d in dims],
+                "volume": _round(v0), "expanded_volume": _round(v0 * s**3)}
+
+    def op_pressure_vessel(a):
+        """Thin-wall pressure-vessel membrane stresses (Barlow / boiler formula).
+
+        For a thin shell (``r/t >= 10``) under internal gauge ``pressure`` the
+        membrane stresses are, for a ``cylinder``: hoop ``sigma_h = p*r/t`` and
+        longitudinal ``sigma_l = p*r/(2t)``; for a ``sphere`` both equal
+        ``p*r/(2t)``. The governing (max) stress drives a von-Mises equivalent
+        and, when a material ``yield_strength`` is given, a safety factor. ``r``
+        and ``t`` may be passed directly or derived from a hollow round ``name``.
+
+        args: pressure, radius|r, thickness|t, kind(cylinder|sphere),
+              yield_strength(optional), name(optional, to read r,t)
+        """
+        kind = a.get("kind", "cylinder")
+        p = float(a["pressure"])
+        r = float(a.get("radius", a.get("r")))
+        t = float(a.get("thickness", a.get("t")))
+        if t <= 0:
+            raise ValueError("pressure_vessel needs a positive wall thickness")
+        if kind == "sphere":
+            sh_hoop = sl = p * r / (2.0 * t)
+        else:
+            sh_hoop = p * r / t
+            sl = p * r / (2.0 * t)
+        # plane-stress von Mises of the (sigma_h, sigma_l) membrane state.
+        vm = math.sqrt(sh_hoop**2 - sh_hoop * sl + sl**2)
+        out = {"kind": kind, "pressure": p, "radius": _round(r),
+               "thickness": _round(t), "r_over_t": _round(r / t, 2),
+               "thin_wall": (r / t) >= 10.0,
+               "hoop_stress": _round(sh_hoop, 4),
+               "longitudinal_stress": _round(sl, 4),
+               "von_mises": _round(vm, 4)}
+        if "yield_strength" in a:
+            sy = float(a["yield_strength"])
+            out["yield_strength"] = sy
+            out["safety_factor"] = _round(sy / vm, 3) if vm > 0 else None
+        return out
+
     return {
         "box": op_box, "cylinder": op_cylinder, "sphere": op_sphere, "cone": op_cone,
         "torus": op_torus, "extrude": op_extrude, "revolve": op_revolve, "loft": op_loft,
@@ -3618,5 +3684,7 @@ def register(state):
         "spatial_mobility": op_spatial_mobility,
         "projected_area": op_projected_area, "hydrostatics": op_hydrostatics,
         "tolerance_stack": op_tolerance_stack, "clearance": op_clearance,
+        "thermal_expansion": op_thermal_expansion,
+        "pressure_vessel": op_pressure_vessel,
         "list": op_list, "delete": op_delete, "export": op_export, "import_step": op_import_step,
     }
