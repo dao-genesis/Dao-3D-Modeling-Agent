@@ -212,7 +212,7 @@ def _guard_boolean_budget(op, body, a, default_max=120):
     """
     if a.get("force"):
         return
-    limit = int(a.get("max_faces", default_max))
+    limit = _int(a, "max_faces", default_max, "max_faces")
     nf = len(body.Faces)
     if nf > limit:
         raise ValueError(
@@ -1558,7 +1558,7 @@ def register(state):
                 "solid.library_query found no feature signatures in the library; "
                 "rebuild the index with solid.library_index features=True")
 
-        dtol = float(a.get("diam_tol", 0.2))
+        dtol = _num(a, "diam_tol", 0.2, "diam_tol")
         min_holes = a.get("min_holes")
         need_through = a.get("through")
         need_boss = a.get("boss")
@@ -1671,8 +1671,8 @@ def register(state):
         cache_dir = a.get("cache") or a.get("dir") or os.path.join(
             os.path.expanduser("~"), ".dao_cad", "library")
         os.makedirs(cache_dir, exist_ok=True)
-        timeout = float(a.get("timeout", 30))
-        max_bytes = int(a.get("max_bytes", 64 * 1024 * 1024))
+        timeout = _num(a, "timeout", 30, "timeout")
+        max_bytes = _int(a, "max_bytes", 64 * 1024 * 1024, "max_bytes")
         skipped = []
         fetched = []
         for src in urls:
@@ -1835,7 +1835,7 @@ def register(state):
                 "draft needs a non-zero 'pull' (de-mould) direction (got [0,0,0])")
         plen = pull.Length
         com = _center(sh)
-        min_draft = float(a.get("min_draft", 1.0))
+        min_draft = _num(a, "min_draft", 1.0, "min_draft")
         sin_min = math.sin(math.radians(min_draft))
         walls, toward, away = [], 0, 0
         for i, f in enumerate(sh.Faces):
@@ -1868,8 +1868,8 @@ def register(state):
         args: name, min_wall (mm, default 1.0), samples (per-axis, default 3)
         """
         sh = _get(a["name"]).Shape
-        min_wall = float(a.get("min_wall", 1.0))
-        ns = max(1, int(a.get("samples", 3)))
+        min_wall = _num(a, "min_wall", 1.0, "min_wall")
+        ns = max(1, _int(a, "samples", 3, "samples"))
         diag = sh.BoundBox.DiagonalLength
         eps = max(1e-4, diag * 1e-6)
         worst = None
@@ -1946,8 +1946,8 @@ def register(state):
                 "undercut needs a non-zero 'pull' direction (got [0,0,0])")
         pl = pull.Length
         pull = _vec((pull.x / pl, pull.y / pl, pull.z / pl))
-        ptol = math.sin(math.radians(float(a.get("parallel_tol", 1.0))))
-        ns = max(1, int(a.get("samples", 2)))
+        ptol = math.sin(math.radians(_num(a, "parallel_tol", 1.0, "parallel_tol")))
+        ns = max(1, _int(a, "samples", 2, "samples"))
         diag = sh.BoundBox.DiagonalLength
         eps = max(1e-4, diag * 1e-6)
         cuts, parallel = [], 0
@@ -2019,8 +2019,8 @@ def register(state):
                 "overhang needs a non-zero 'build' direction (got [0,0,0])")
         ul = up.Length
         up = _vec((up.x / ul, up.y / ul, up.z / ul))
-        limit = float(a.get("max_overhang", 45.0))
-        ns = max(2, int(a.get("samples", 5)))
+        limit = _num(a, "max_overhang", 45.0, "max_overhang")
+        ns = max(2, _int(a, "samples", 5, "samples"))
         bb = sh.BoundBox
         plate = bb.XMin * up.x + bb.YMin * up.y + bb.ZMin * up.z
         tol = max(1e-4, bb.DiagonalLength * 1e-5)
@@ -2106,7 +2106,7 @@ def register(state):
             p = _vec(a["at"])
             d = p.dot(n)
         else:
-            d = float(a.get("d", 0.0))
+            d = _num(a, "d", 0.0, "d")
         wires = sh.slice(n, d)
         if not wires:
             return {"hit": False, "normal": [_round(n.x), _round(n.y), _round(n.z)],
@@ -3039,7 +3039,7 @@ def register(state):
         note rather than dropped silently. args: name|<feature preds>,
         index|dir|paths, top (default 3), diam_tol.
         """
-        top = int(a.get("top", 3))
+        top = _int(a, "top", 3, "top")
         skipped = []
         feat_keys = ("min_holes", "through", "boss", "hole_diam", "boss_diam")
         by_feature = any(a.get(k) is not None for k in feat_keys)
@@ -3133,9 +3133,9 @@ def register(state):
         for n in names:
             for r in _cyl_axes(_get(n).Shape):
                 axes.append((n, r))
-        rtol = float(a.get("radius_tol", 0.6))
-        atol = float(a.get("axis_tol", 1e-3))
-        gap = float(a.get("contact_gap", 1e-3))
+        rtol = _num(a, "radius_tol", 0.6, "radius_tol")
+        atol = _num(a, "axis_tol", 1e-3, "axis_tol")
+        gap = _num(a, "contact_gap", 1e-3, "contact_gap")
         seen, joints = set(), []
         for i in range(len(axes)):
             for j in range(i + 1, len(axes)):
@@ -3196,7 +3196,7 @@ def register(state):
         shaft/bore, larger = gears/hubs).
         """
         names = a.get("parts") or list(state.shapes.keys())
-        atol = float(a.get("axis_tol", 1e-3))
+        atol = _num(a, "axis_tol", 1e-3, "axis_tol")
         recs = []
         for n in names:
             for r in _cyl_axes(_get(n).Shape):
@@ -3287,7 +3287,7 @@ def register(state):
         fmap = {"revolute": 1, "prismatic": 1, "helical": 1, "screw": 1,
                 "cylindrical": 2, "universal": 2, "gear": 2, "cam": 2,
                 "spherical": 3, "planar": 3}
-        n = int(a["links"])
+        n = _int(a, "links", label="links")
         if n < 1:
             raise ValueError("need at least one link (ground)")
         joints = a["joints"]
@@ -3301,7 +3301,7 @@ def register(state):
             j += cnt
             terms.append({"type": t, "count": cnt, "f": fmap[t]})
         gross = 6 * (n - 1) - sum((6 - fmap[x["type"]]) * x["count"] for x in terms)
-        idle = int(a.get("idle_dof", 0))
+        idle = _int(a, "idle_dof", 0, "idle_dof")
         return {"links": n, "joints": j, "sum_freedoms": total_f,
                 "mobility": gross, "idle_dof": idle, "effective_mobility": gross - idle,
                 "overconstrained": gross <= 0, "joint_table": terms}
@@ -3322,9 +3322,9 @@ def register(state):
         ux, uy = [float(v) for v in a["guide_dir"][:2]]
         un = math.hypot(ux, uy) or 1.0
         ux, uy = ux / un, uy / un
-        R = float(a["crank_len"])
-        L = float(a["rod_len"])
-        th = math.radians(float(a["angle"]))
+        R = _num(a, "crank_len", label="crank_len")
+        L = _num(a, "rod_len", label="rod_len")
+        th = math.radians(_num(a, "angle", label="angle"))
         ax, ay = ox + R * math.cos(th), oy + R * math.sin(th)
         # B = G + t*u with |A-B| = L  ->  t^2 - 2 t (w.u) + (|w|^2 - L^2) = 0,
         # where w = A - G. Pick the branch reached from top dead centre (larger t).
@@ -3335,7 +3335,7 @@ def register(state):
         if disc < 0:
             raise ValueError(
                 "slider-crank cannot close: rod L=%g too short to reach the guide "
-                "at crank angle %g deg (need L >= perpendicular offset)" % (L, float(a["angle"])))
+                "at crank angle %g deg (need L >= perpendicular offset)" % (L, _num(a, "angle", label="angle")))
         # two line/circle intersections along the guide. With ``guide_dir``
         # oriented toward the slider's travel, "far" (default) = the outboard
         # branch b+sqrt (standard slider-crank), "near" = the inboard branch.
@@ -3344,7 +3344,7 @@ def register(state):
         bx, by = gx + t * ux, gy + t * uy
         rod = math.hypot(ax - bx, ay - by)
         return {"A": [_round(ax), _round(ay)], "B": [_round(bx), _round(by)],
-                "piston": _round(t), "crank_angle": _round(float(a["angle"])),
+                "piston": _round(t), "crank_angle": _round(_num(a, "angle", label="angle")),
                 "rod_len": _round(rod), "rod_len_ok": abs(rod - L) < 1e-6}
 
     def op_fourbar(a):
@@ -3370,11 +3370,11 @@ def register(state):
             raise ValueError(
                 "fourbar needs link lengths 'crank'/'coupler'/'rocker'/'ground' "
                 "and input 'angle' (deg); missing %s" % ", ".join(miss))
-        la = float(a["crank"])
-        lb = float(a["coupler"])
-        lc = float(a["rocker"])
-        lg = float(a["ground"])
-        th = math.radians(float(a["angle"]))
+        la = _num(a, "crank", label="crank")
+        lb = _num(a, "coupler", label="coupler")
+        lc = _num(a, "rocker", label="rocker")
+        lg = _num(a, "ground", label="ground")
+        th = math.radians(_num(a, "angle", label="angle"))
         # crank turns in the linkage plane; +y is the in-plane normal of ground dir
         nx, ny = -gdy, gdx
         ax = o2x + la * (math.cos(th) * gdx + math.sin(th) * nx)
@@ -3386,7 +3386,7 @@ def register(state):
         if d > lb + lc + 1e-9 or d < abs(lb - lc) - 1e-9 or d == 0:
             raise ValueError(
                 "four-bar cannot assemble at theta=%g deg: coupler %g and rocker "
-                "%g cannot span A->O4 distance %g" % (float(a["angle"]), lb, lc, d))
+                "%g cannot span A->O4 distance %g" % (_num(a, "angle", label="angle"), lb, lc, d))
         aa = (lb * lb - lc * lc + d * d) / (2 * d)
         h = math.sqrt(max(lb * lb - aa * aa, 0.0))
         mx, my = ax + aa * dx / d, ay + aa * dy / d
@@ -3400,7 +3400,7 @@ def register(state):
         rocker = math.hypot(bx - o4x, by - o4y)
         return {"O2": [_round(o2x), _round(o2y)], "O4": [_round(o4x), _round(o4y)],
                 "A": [_round(ax), _round(ay)], "B": [_round(bx), _round(by)],
-                "crank_angle": _round(float(a["angle"])),
+                "crank_angle": _round(_num(a, "angle", label="angle")),
                 "coupler_len": _round(coupler), "rocker_len": _round(rocker),
                 "coupler_ok": abs(coupler - lb) < 1e-6, "rocker_ok": abs(rocker - lc) < 1e-6,
                 "grashof": grashof,
@@ -3473,15 +3473,15 @@ def register(state):
         """
         if "slots" not in a:
             raise ValueError("geneva needs 'slots' (number of wheel slots, >= 3)")
-        n = int(a["slots"])
+        n = _int(a, "slots", label="slots")
         if n < 3:
             raise ValueError("Geneva wheel needs at least 3 slots")
         s = math.sin(math.pi / n)
         if "center_distance" in a:
-            d = float(a["center_distance"])
+            d = _num(a, "center_distance", label="center_distance")
             r = d * s
         elif "crank_radius" in a:
-            r = float(a["crank_radius"])
+            r = _num(a, "crank_radius", label="crank_radius")
             d = r / s
         else:
             raise ValueError("geneva needs center_distance or crank_radius")
@@ -3491,7 +3491,7 @@ def register(state):
                "index_angle": _round(360.0 / n), "engagement_angle": _round(2 * alpha0),
                "max_velocity_ratio": _round(1.0 / (m - 1.0), 6)}
         if "angle" in a:
-            al = float(a["angle"])
+            al = _num(a, "angle", label="angle")
             ar = math.radians(al)
             if abs(al) <= alpha0 + 1e-9:
                 phi = math.degrees(math.atan2(math.sin(ar), m - math.cos(ar)))
@@ -3519,8 +3519,8 @@ def register(state):
         """
         if "teeth_sun" not in a or "teeth_ring" not in a:
             raise ValueError("planetary needs 'teeth_sun' and 'teeth_ring'")
-        ns = float(a["teeth_sun"])
-        nr = float(a["teeth_ring"])
+        ns = _num(a, "teeth_sun", label="teeth_sun")
+        nr = _num(a, "teeth_ring", label="teeth_ring")
         if ns <= 0 or nr <= 0:
             raise ValueError("sun/ring teeth must be positive")
         if nr <= ns:
@@ -3566,12 +3566,12 @@ def register(state):
         """
         if "rise" not in a or "angle" not in a:
             raise ValueError("cam needs 'rise' (lift S) and 'angle' (cam angle, deg)")
-        S = float(a["rise"])
+        S = _num(a, "rise", label="rise")
         law = a.get("law", "cycloidal")
-        br = float(a.get("rise_angle", 90.0))
-        bd = float(a.get("dwell_angle", 90.0))
-        bf = float(a.get("fall_angle", br))
-        base = float(a.get("base_radius", 0.0))
+        br = _num(a, "rise_angle", 90.0, "rise_angle")
+        bd = _num(a, "dwell_angle", 90.0, "dwell_angle")
+        bf = _num(a, "fall_angle", br, "fall_angle")
+        base = _num(a, "base_radius", 0.0, "base_radius")
         # negative segment spans are meaningless; the four spans must fit one turn.
         if br < 0 or bd < 0 or bf < 0:
             raise ValueError(
@@ -3586,7 +3586,7 @@ def register(state):
             raise ValueError(
                 "cam needs positive 'rise_angle' and 'fall_angle' for a non-zero "
                 "rise (a zero span is an infinite-velocity follower)")
-        th = float(a["angle"]) % 360.0
+        th = _num(a, "angle", label="angle") % 360.0
 
         def lift_frac(u):
             if law == "harmonic":
@@ -3633,10 +3633,10 @@ def register(state):
         """
         if "rise" not in a or "name" not in a:
             raise ValueError("cam_profile needs 'rise' (lift S) and 'name' (output solid)")
-        S = float(a["rise"])
-        base = float(a.get("base_radius", 0.0))
-        thick = float(a.get("thickness", 5.0))
-        step = float(a.get("step", 2.0))
+        S = _num(a, "rise", label="rise")
+        base = _num(a, "base_radius", 0.0, "base_radius")
+        thick = _num(a, "thickness", 5.0, "thickness")
+        step = _num(a, "step", 2.0, "step")
         if base <= 0 or thick <= 0 or step <= 0:
             raise ValueError("base_radius, thickness and step must be positive")
         camargs = {k: a[k] for k in ("law", "rise_angle", "dwell_angle", "fall_angle")
@@ -3667,20 +3667,20 @@ def register(state):
         ``travel`` to get the pinion angle -- the map is exact and invertible.
         """
         if "pitch_radius" in a:
-            r = float(a["pitch_radius"])
+            r = _num(a, "pitch_radius", label="pitch_radius")
         elif "module" in a and "teeth" in a:
-            r = float(a["module"]) * float(a["teeth"]) / 2.0
+            r = _num(a, "module", label="module") * _num(a, "teeth", label="teeth") / 2.0
         else:
             raise ValueError("rackpinion needs pitch_radius or (module, teeth)")
         if r <= 0:
             raise ValueError("pitch radius must be positive")
         out = {"pitch_radius": _round(r), "travel_per_rev": _round(2 * math.pi * r)}
         if "angle" in a:
-            th = math.radians(float(a["angle"]))
-            out["angle"] = _round(float(a["angle"]))
+            th = math.radians(_num(a, "angle", label="angle"))
+            out["angle"] = _round(_num(a, "angle", label="angle"))
             out["travel"] = _round(r * th)
         elif "travel" in a:
-            x = float(a["travel"])
+            x = _num(a, "travel", label="travel")
             out["travel"] = _round(x)
             out["angle"] = _round(math.degrees(x / r))
         else:
@@ -3721,7 +3721,7 @@ def register(state):
                 raise ValueError("gear teeth/radius must be positive: %r" % (m,))
             f = drv / dvn
             e *= f if m.get("internal") else -f
-        inp = float(a.get("input_rpm", 1.0))
+        inp = _num(a, "input_rpm", 1.0, "input_rpm")
         return {"stages": len(meshes), "train_value": _round(e, 6),
                 "ratio_magnitude": _round(abs(e), 6),
                 "reduction": _round(1.0 / abs(e), 6) if e else None,
@@ -3914,7 +3914,7 @@ def register(state):
             raise ValueError(
                 "projected_area needs a non-zero 'dir' projection direction (got [0,0,0])")
         d = _unit_v(dv)
-        defl = float(a.get("deflection", 0.05))
+        defl = _num(a, "deflection", 0.05, "deflection")
         acc = 0.0
         all_planar = True
         for f in sh.Faces:
@@ -4067,14 +4067,14 @@ def register(state):
         if E <= 0:
             raise ValueError(
                 "buckling: modulus E must be positive (got %g)" % E)
-        K = float(a.get("K", 1.0))
+        K = _num(a, "K", 1.0, "K")
         axis = _unit_v(_vec(a.get("axis", (0, 0, 1))))
         corners = [V(x, y, z)
                    for x in (sh.BoundBox.XMin, sh.BoundBox.XMax)
                    for y in (sh.BoundBox.YMin, sh.BoundBox.YMax)
                    for z in (sh.BoundBox.ZMin, sh.BoundBox.ZMax)]
         proj = [p.dot(axis) for p in corners]
-        L = float(a["length"]) if "length" in a else max(proj) - min(proj)
+        L = _num(a, "length", label="length") if "length" in a else max(proj) - min(proj)
         if L <= 0:
             raise ValueError("buckling: column length along axis is zero")
         sp = _section_props(sh, axis, _center(sh), "buckling")
@@ -4137,12 +4137,12 @@ def register(state):
             raise ValueError(
                 "beam_deflection needs 'modulus' (E) and 'load' (point force P, "
                 "or distributed w per length when load_type='udl')")
-        E = float(a["modulus"])
+        E = _num(a, "modulus", label="modulus")
         # a zero modulus divides by zero in PL^3/(EI); E is strictly positive.
         if E <= 0:
             raise ValueError(
                 "beam_deflection: modulus E must be positive (got %g)" % E)
-        Q = float(a["load"])
+        Q = _num(a, "load", label="load")
         support = a.get("support", "cantilever")
         load_type = a.get("load_type", "point")
         key = (support, load_type)
@@ -4158,7 +4158,7 @@ def register(state):
                    for y in (sh.BoundBox.YMin, sh.BoundBox.YMax)
                    for z in (sh.BoundBox.ZMin, sh.BoundBox.ZMax)]
         proj = [p.dot(axis) for p in corners]
-        L = float(a["length"]) if "length" in a else max(proj) - min(proj)
+        L = _num(a, "length", label="length") if "length" in a else max(proj) - min(proj)
         if L <= 0:
             raise ValueError("beam_deflection: beam length along axis is zero")
         sp = _section_props(sh, axis, _center(sh), "beam_deflection")
@@ -4213,8 +4213,8 @@ def register(state):
         if "torque" not in a or "shear_modulus" not in a:
             raise ValueError(
                 "torsion needs 'torque' (T) and 'shear_modulus' (G)")
-        T = float(a["torque"])
-        G = float(a["shear_modulus"])
+        T = _num(a, "torque", label="torque")
+        G = _num(a, "shear_modulus", label="shear_modulus")
         # a zero shear modulus divides by zero in TL/GJ; G is strictly positive.
         if G <= 0:
             raise ValueError(
@@ -4225,7 +4225,7 @@ def register(state):
                    for y in (sh.BoundBox.YMin, sh.BoundBox.YMax)
                    for z in (sh.BoundBox.ZMin, sh.BoundBox.ZMax)]
         proj = [p.dot(axis) for p in corners]
-        L = float(a["length"]) if "length" in a else max(proj) - min(proj)
+        L = _num(a, "length", label="length") if "length" in a else max(proj) - min(proj)
         if L <= 0:
             raise ValueError("torsion: shaft length along axis is zero")
         sp = _section_props(sh, axis, _center(sh), "torsion")
@@ -4302,14 +4302,14 @@ def register(state):
             raise ValueError(
                 "natural_frequency: unsupported support=%r; pick one of %s"
                 % (support, sorted(_BEAM_MODES)))
-        n_modes = int(a.get("modes", 3))
+        n_modes = _int(a, "modes", 3, "modes")
         axis = _unit_v(_vec(a.get("axis", (0, 0, 1))))
         corners = [V(x, y, z)
                    for x in (sh.BoundBox.XMin, sh.BoundBox.XMax)
                    for y in (sh.BoundBox.YMin, sh.BoundBox.YMax)
                    for z in (sh.BoundBox.ZMin, sh.BoundBox.ZMax)]
         proj = [p.dot(axis) for p in corners]
-        L = float(a["length"]) if "length" in a else max(proj) - min(proj)
+        L = _num(a, "length", label="length") if "length" in a else max(proj) - min(proj)
         if L <= 0:
             raise ValueError("natural_frequency: beam length along axis is zero")
         sp = _section_props(sh, axis, _center(sh), "natural_frequency")
@@ -4359,7 +4359,7 @@ def register(state):
         if "conductivity" not in a:
             raise ValueError(
                 "thermal_resistance needs 'conductivity' (k, power/(length.K))")
-        k = float(a["conductivity"])
+        k = _num(a, "conductivity", label="conductivity")
         if k <= 0:
             raise ValueError("thermal_resistance: conductivity must be > 0")
         axis = _unit_v(_vec(a.get("axis", (0, 0, 1))))
@@ -4368,7 +4368,7 @@ def register(state):
                    for y in (sh.BoundBox.YMin, sh.BoundBox.YMax)
                    for z in (sh.BoundBox.ZMin, sh.BoundBox.ZMax)]
         proj = [p.dot(axis) for p in corners]
-        L = float(a["length"]) if "length" in a else max(proj) - min(proj)
+        L = _num(a, "length", label="length") if "length" in a else max(proj) - min(proj)
         if L <= 0:
             raise ValueError("thermal_resistance: path length along axis is zero")
         sp = _section_props(sh, axis, _center(sh), "thermal_resistance")
@@ -4380,7 +4380,7 @@ def register(state):
                "conduction_resistance": _round(r_cond, 6),
                "conductance": _round(1.0 / r_cond, 6)}
         if "film_coefficient" in a:
-            h = float(a["film_coefficient"])
+            h = _num(a, "film_coefficient", label="film_coefficient")
             a_lat = max(sh.Area - 2.0 * area, 0.0)   # strip the two end caps
             r_conv = 1.0 / (h * a_lat) if h > 0 and a_lat > 0 else None
             out["film_coefficient"] = h
@@ -4389,11 +4389,11 @@ def register(state):
             if r_conv:
                 out["total_resistance"] = _round(r_cond + r_conv, 6)
         if "heat_flow" in a:
-            Q = float(a["heat_flow"])
+            Q = _num(a, "heat_flow", label="heat_flow")
             out["heat_flow"] = Q
             out["temperature_drop"] = _round(Q * r_cond, 4)
         elif "temperature_drop" in a:
-            dT = float(a["temperature_drop"])
+            dT = _num(a, "temperature_drop", label="temperature_drop")
             out["temperature_drop"] = dT
             out["heat_flow"] = _round(dT / r_cond, 4)
         return out
@@ -4426,10 +4426,10 @@ def register(state):
         if "R1" not in a or "modulus" not in a or "load" not in a:
             raise ValueError(
                 "contact_stress needs 'R1', 'modulus' (E1) and 'load' (F)")
-        R1 = float(a["R1"])
+        R1 = _num(a, "R1", label="R1")
         invR = (1.0 / R1 if R1 else 0.0)
         if "R2" in a:
-            R2 = float(a["R2"])
+            R2 = _num(a, "R2", label="R2")
             invR += (1.0 / R2 if R2 else 0.0)
         else:
             R2 = None
@@ -4437,18 +4437,18 @@ def register(state):
             raise ValueError(
                 "contact_stress: effective radius is non-convex (1/Re <= 0)")
         Re = 1.0 / invR
-        E1 = float(a["modulus"])
-        E2 = float(a.get("modulus2", E1))
+        E1 = _num(a, "modulus", label="modulus")
+        E2 = _num(a, "modulus2", E1, "modulus2")
         # zero/negative moduli divide by zero in the effective-modulus harmonic
         # mean; both contacting bodies' E are strictly positive.
         if E1 <= 0 or E2 <= 0:
             raise ValueError(
                 "contact_stress: modulus (E1) and modulus2 (E2) must be positive "
                 "(got E1=%g, E2=%g)" % (E1, E2))
-        nu1 = float(a.get("poisson", 0.3))
-        nu2 = float(a.get("poisson2", nu1))
+        nu1 = _num(a, "poisson", 0.3, "poisson")
+        nu2 = _num(a, "poisson2", nu1, "poisson2")
         Estar = 1.0 / ((1.0 - nu1 ** 2) / E1 + (1.0 - nu2 ** 2) / E2)
-        F = float(a["load"])
+        F = _num(a, "load", label="load")
         # a zero/negative load collapses the contact patch to a point and divides
         # by zero in p_max; Hertz contact needs a real compressive load.
         if F <= 0:
@@ -4468,7 +4468,7 @@ def register(state):
         else:
             if "length" not in a:
                 raise ValueError("contact_stress: line contact needs 'length' (L)")
-            L = float(a["length"])
+            L = _num(a, "length", label="length")
             if L <= 0:
                 raise ValueError("contact_stress: length must be > 0")
             b = math.sqrt(4.0 * F * Re / (math.pi * L * Estar))
@@ -4513,11 +4513,11 @@ def register(state):
             raise ValueError(
                 "fatigue: criterion must be 'goodman', 'soderberg' or 'gerber'")
         if "stress_alt" in a or "stress_mean" in a:
-            sa = abs(float(a.get("stress_alt", 0.0)))
-            sm = float(a.get("stress_mean", 0.0))
+            sa = abs(_num(a, "stress_alt", 0.0, "stress_alt"))
+            sm = _num(a, "stress_mean", 0.0, "stress_mean")
         elif "stress_max" in a and "stress_min" in a:
-            smax = float(a["stress_max"])
-            smin = float(a["stress_min"])
+            smax = _num(a, "stress_max", label="stress_max")
+            smin = _num(a, "stress_min", label="stress_min")
             sa = abs(smax - smin) / 2.0
             sm = (smax + smin) / 2.0
         else:
@@ -4526,21 +4526,21 @@ def register(state):
                 "'stress_max'&'stress_min'")
         if sa <= 0:
             raise ValueError("fatigue: alternating stress must be > 0")
-        Su = float(a["ultimate"]) if "ultimate" in a else None
+        Su = _num(a, "ultimate", label="ultimate") if "ultimate" in a else None
         # a zero/negative ultimate strength divides by zero in the Goodman/Gerber
         # mean-stress correction; ultimate strength is strictly positive.
         if Su is not None and Su <= 0:
             raise ValueError("fatigue: ultimate strength (Su) must be > 0")
         if "endurance" in a:
-            Se = float(a["endurance"])
+            Se = _num(a, "endurance", label="endurance")
         elif Su is not None:
-            Se = float(a.get("se_factor", 0.5)) * Su
+            Se = _num(a, "se_factor", 0.5, "se_factor") * Su
         else:
             raise ValueError(
                 "fatigue needs 'endurance' (Se) or 'ultimate' (Su) to estimate it")
         if Se <= 0:
             raise ValueError("fatigue: endurance limit must be > 0")
-        Sy = float(a["yield"]) if "yield" in a else None
+        Sy = _num(a, "yield", label="yield") if "yield" in a else None
         if crit in ("goodman", "gerber") and Su is None:
             raise ValueError("fatigue: %s criterion needs 'ultimate' (Su)" % crit)
         if crit == "soderberg" and Sy is None:
@@ -4565,8 +4565,8 @@ def register(state):
             out["yield"] = _round(Sy)
             out["yield_safety"] = _round(Sy / smax, 4) if smax > 0 else None
         if "fatigue_coeff" in a and "fatigue_exp" in a:
-            sf = float(a["fatigue_coeff"])
-            b = float(a["fatigue_exp"])
+            sf = _num(a, "fatigue_coeff", label="fatigue_coeff")
+            b = _num(a, "fatigue_exp", label="fatigue_exp")
             if b >= 0 or sf <= 0:
                 raise ValueError(
                     "fatigue: Basquin needs fatigue_coeff>0 and fatigue_exp<0")
@@ -4686,19 +4686,28 @@ def register(state):
 
         args: links: [{nominal, plus, minus | tol, sign, name}], sigma(=3)
         """
-        links = a["links"]
+        links = a.get("links")
+        if not isinstance(links, (list, tuple)):
+            raise ValueError(
+                "tolerance_stack 'links' must be a list of "
+                "{nominal, plus, minus | tol} dicts (got %r)" % (links,))
         if not links:
             raise ValueError("tolerance_stack needs at least one link")
-        sigma = float(a.get("sigma", 3))
+        sigma = _num(a, "sigma", 3, "sigma")
         nom = wc_plus = wc_minus = var_plus = var_minus = 0.0
         detail = []
         for i, lk in enumerate(links):
-            sign = float(lk.get("sign", 1))
-            n = float(lk["nominal"])
+            if not isinstance(lk, dict):
+                raise ValueError(
+                    "tolerance_stack link %d must be a dict with a 'nominal' "
+                    "and 'tol' (or 'plus'/'minus'), got %r" % (i + 1, lk))
+            sign = _num(lk, "sign", 1, "link %d sign" % (i + 1))
+            n = _num(lk, "nominal", label="link %d nominal" % (i + 1))
             if "tol" in lk:
-                p = m = abs(float(lk["tol"]))
+                p = m = abs(_num(lk, "tol", label="link %d tol" % (i + 1)))
             else:
-                p, m = abs(float(lk["plus"])), abs(float(lk["minus"]))
+                p = abs(_num(lk, "plus", label="link %d plus" % (i + 1)))
+                m = abs(_num(lk, "minus", label="link %d minus" % (i + 1)))
             nom += sign * n
             # a -1 link flips which gap extreme each tolerance pushes toward.
             tp, tm = (p, m) if sign >= 0 else (m, p)
@@ -4798,7 +4807,7 @@ def register(state):
         if rv is None or tv is None:
             raise ValueError(
                 "pressure_vessel needs 'radius' (r) and 'thickness' (t)")
-        p = float(a["pressure"])
+        p = _num(a, "pressure", label="pressure")
         r = float(rv)
         t = float(tv)
         if t <= 0:
@@ -4821,7 +4830,7 @@ def register(state):
                "longitudinal_stress": _round(sl, 4),
                "von_mises": _round(vm, 4)}
         if "yield_strength" in a:
-            sy = float(a["yield_strength"])
+            sy = _num(a, "yield_strength", label="yield_strength")
             out["yield_strength"] = sy
             out["safety_factor"] = _round(sy / vm, 3) if vm > 0 else None
         return out
