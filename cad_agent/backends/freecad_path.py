@@ -128,7 +128,7 @@ def register(state):
     def _job():
         j = doc.getObject(state.cam.get("job", ""))
         if j is None:
-            raise RuntimeError("call path.job first")
+            raise ValueError("call path.job first")
         return j
 
     def _path_bbox(op):
@@ -196,7 +196,7 @@ def register(state):
         doc.recompute()
         n = len(op.Path.Commands) if op.Path else 0
         if n == 0:
-            raise RuntimeError("profile produced no path (bad face selection?)")
+            raise ValueError("profile produced no path (bad face selection?)")
         state.cam["ops"].append(op.Name)
         return {"op": "profile", "faces": names, "commands": n,
                 "path_bbox": _path_bbox(op)}
@@ -311,7 +311,7 @@ def register(state):
         """
         j = _job()
         if not state.cam.get("ops"):
-            raise RuntimeError("no operations to post; add path.profile/path.pocket first")
+            raise ValueError("no operations to post; add path.profile/path.pocket first")
         post = a.get("postprocessor") or state.cam.get("post", "grbl")
         pp = Proc.PostProcessorFactory.get_post_processor(j, post)
         out = pp.export()
