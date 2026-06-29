@@ -3580,13 +3580,27 @@ def register(state):
 
     def op_import_step(a):
         import Import
+        import os
+        path = a["path"]
+        # Distinguish "file is missing" from "file is unreadable/not STEP":
+        # FreeCAD reports both as the same opaque "Cannot read STEP file", which
+        # sends callers hunting a parse problem when they merely mistyped a path.
+        if not os.path.exists(path):
+            raise ValueError("import_step: no such file: %s" % path)
+        if not os.path.isfile(path):
+            raise ValueError("import_step: not a file: %s" % path)
         # only register objects this import actually creates, and only real
         # solids -- otherwise pre-existing bodies/sketches/datum planes (which
         # also carry a Shape but live in state.bodies, not state.shapes) get
         # mis-registered as solids, and so do the datum lines/planes inside an
         # imported PartDesign tree.
         before = {o.Name for o in doc.Objects}
-        Import.insert(a["path"], doc.Name)
+        try:
+            Import.insert(path, doc.Name)
+        except Exception as exc:
+            raise ValueError(
+                "import_step could not parse %s as a STEP/IGES/BREP file "
+                "(%s)" % (path, exc))
         doc.recompute()
         imported = []
         for o in doc.Objects:
