@@ -3704,6 +3704,91 @@ def register(state):
                 "critical_load": _round(p_cr, 3),
                 "critical_stress": _round(sigma_cr, 4) if sigma_cr else None}
 
+    # (support, load) -> (max-deflection coeff over E*I, max-moment coeff).
+    # delta_max = k_d * Q * L^n / (E I); M_max = k_m * Q * L^p. For a point load
+    # Q = P (n=3, p=1); for a UDL Q = w (load per length, n=4, p=2).
+    _BEAM_CASES = {
+        ("cantilever", "point"): (1.0 / 3.0, 1.0),
+        ("cantilever", "udl"): (1.0 / 8.0, 1.0 / 2.0),
+        ("simply_supported", "point"): (1.0 / 48.0, 1.0 / 4.0),
+        ("simply_supported", "udl"): (5.0 / 384.0, 1.0 / 8.0),
+    }
+
+    def op_beam_deflection(a):
+        """Max deflection and bending stress of the solid used as a beam.
+
+        Treats the solid as an Euler-Bernoulli beam spanning ``length`` along
+        ``axis`` and bending about its strong axis (largest section ``I``; pass
+        ``bending='min'`` for the weak axis). It reads the real cross-section
+        (shared ``_section_props``) for ``I`` and the extreme-fibre distance
+        ``c``, then applies the standard table for ``support`` x ``load``:
+
+          cantilever  + point P : d = P L^3/(3EI),  M = P L
+          cantilever  + udl   w : d = w L^4/(8EI),  M = w L^2/2
+          simply-supp + point P : d = P L^3/(48EI), M = P L/4
+          simply-supp + udl   w : d = 5 w L^4/(384EI), M = w L^2/8
+
+        and returns max deflection, max bending moment and max bending stress
+        ``sigma = M c / I``. ``load`` is the point force P (``load_type='point'``)
+        or the distributed intensity w per unit length (``load_type='udl'``).
+        Exact against the closed forms for a rectangular beam.
+
+        args: name, modulus E (required), load (required), axis (default +Z),
+              length L (default extent along axis), support
+              (cantilever | simply_supported, default cantilever),
+              load_type (point | udl, default point), bending (max | min)
+        """
+        sh = _get(a["name"]).Shape
+        if not sh.Solids:
+            raise ValueError("beam_deflection needs a solid")
+        if "modulus" not in a or "load" not in a:
+            raise ValueError(
+                "beam_deflection needs 'modulus' (E) and 'load' (point force P, "
+                "or distributed w per length when load_type='udl')")
+        E = float(a["modulus"])
+        Q = float(a["load"])
+        support = a.get("support", "cantilever")
+        load_type = a.get("load_type", "point")
+        key = (support, load_type)
+        if key not in _BEAM_CASES:
+            raise ValueError(
+                "beam_deflection: unsupported (support, load_type)=%r; pick "
+                "support in {cantilever, simply_supported}, load_type in "
+                "{point, udl}" % (key,))
+        k_d, k_m = _BEAM_CASES[key]
+        axis = _unit_v(_vec(a.get("axis", (0, 0, 1))))
+        corners = [V(x, y, z)
+                   for x in (sh.BoundBox.XMin, sh.BoundBox.XMax)
+                   for y in (sh.BoundBox.YMin, sh.BoundBox.YMax)
+                   for z in (sh.BoundBox.ZMin, sh.BoundBox.ZMax)]
+        proj = [p.dot(axis) for p in corners]
+        L = float(a["length"]) if "length" in a else max(proj) - min(proj)
+        if L <= 0:
+            raise ValueError("beam_deflection: beam length along axis is zero")
+        sp = _section_props(sh, axis, _center(sh), "beam_deflection")
+        # strong axis = larger I; its extreme fibre is along the perpendicular
+        # in-plane principal axis.
+        weak = a.get("bending") == "min"
+        bi = 0 if weak else 1                       # vals are ascending
+        i_b = float(sp["vals"][bi])
+        # extreme fibre is measured perpendicular to the neutral (bending) axis,
+        # i.e. along the other in-plane principal axis.
+        c = max(abs(p @ sp["axes"][1 - bi]) for p in sp["boundary"])
+        n = 3 if load_type == "point" else 4
+        p_exp = 1 if load_type == "point" else 2
+        d_max = k_d * Q * L ** n / (E * i_b)
+        m_max = k_m * Q * L ** p_exp
+        sigma = m_max * c / i_b if i_b > 0 else None
+        return {"name": a["name"], "support": support, "load_type": load_type,
+                "modulus": E, "load": Q,
+                "axis": [_round(axis.x), _round(axis.y), _round(axis.z)],
+                "length": _round(L, 4),
+                "bending_axis": "min" if weak else "max",
+                "I": _round(i_b, 3), "extreme_fiber": _round(c, 4),
+                "max_deflection": _round(d_max, 6),
+                "max_moment": _round(m_max, 4),
+                "max_bending_stress": _round(sigma, 4) if sigma else None}
+
     def op_hydrostatics(a):
         """Free-floating hydrostatics of a solid in a fluid (naval / buoyancy).
 
@@ -3969,5 +4054,6 @@ def register(state):
         "thermal_expansion": op_thermal_expansion,
         "pressure_vessel": op_pressure_vessel,
         "section_modulus": op_section_modulus, "buckling": op_buckling,
+        "beam_deflection": op_beam_deflection,
         "list": op_list, "delete": op_delete, "export": op_export, "import_step": op_import_step,
     }
