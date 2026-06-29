@@ -40,6 +40,47 @@ def _round(x, n=4):
     return round(float(x), n)
 
 
+def _fnum(d, key, default, label):
+    """Coerce ``d[key]`` to float with a guided error instead of a bare
+    ``float(d[key])`` 'could not convert string to float'."""
+    if key not in d or d[key] is None:
+        if default is None:
+            raise ValueError("%s is required" % label)
+        return float(default)
+    v = d[key]
+    if isinstance(v, bool) or not isinstance(v, (int, float, str)):
+        raise ValueError("%s must be a number (got %r)" % (label, v))
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        raise ValueError("%s must be a number (got %r)" % (label, v))
+
+
+def _fvec(seq, label):
+    """Coerce a 3-vector with a guided error instead of a raw
+    'Expected sequence of size 3' / 'could not convert'."""
+    if isinstance(seq, (str, bytes)) or not isinstance(seq, (list, tuple)) \
+            or len(seq) != 3:
+        raise ValueError(
+            "%s must be a list of 3 numbers [x, y, z] (got %r)" % (label, seq))
+    try:
+        return [float(seq[0]), float(seq[1]), float(seq[2])]
+    except (TypeError, ValueError):
+        raise ValueError(
+            "%s components must all be numbers (got %r)" % (label, seq))
+
+
+def _check_sel(sel):
+    """A non-dict face selector leaks 'str/int has no attribute lower/get' or
+    'string indices must be integers'; demand a real dict up front."""
+    if not isinstance(sel, dict):
+        raise ValueError(
+            "'select' must be a dict like {'axis':'z','side':'max'} / "
+            "{'index':[1]} / {'normal':[0,0,1]} / {'cyl_radius':r}; got %r"
+            % (sel,))
+    return sel
+
+
 def _parse_buckling_factors(workdir):
     """Read the buckling load factors from CalculiX's .dat file.
 
@@ -114,22 +155,44 @@ def register(state):
           {"index": n | [n,...]}             1-based face index/indices
           {"normal":[x,y,z]}                 faces whose outward normal ~ dir
         """
+        _check_sel(sel)
         faces = shape.Faces
+        nf = len(faces)
         if "index" in sel:
             idx = sel["index"]
-            idx = [idx] if isinstance(idx, (int, float)) else idx
-            return ["Face%d" % int(i) for i in idx]
+            idx = [idx] if isinstance(idx, (int, float)) and not isinstance(idx, bool) else idx
+            if isinstance(idx, (str, bytes)) or not isinstance(idx, (list, tuple)):
+                raise ValueError(
+                    "'index' must be an int or list of ints (got %r)" % (idx,))
+            out = []
+            for i in idx:
+                if isinstance(i, bool) or not isinstance(i, (int, float)) \
+                        or float(i) != int(i):
+                    raise ValueError(
+                        "'index' values must be whole face numbers (got %r)"
+                        % (idx,))
+                fi = int(i)
+                if fi < 1 or fi > nf:
+                    raise ValueError(
+                        "'index' face number %d out of range; the solid has %d "
+                        "faces (1..%d)" % (fi, nf, nf))
+                out.append("Face%d" % fi)
+            return out
         if "axis" in sel:
-            ax = {"x": 0, "y": 1, "z": 2}[sel["axis"].lower()]
-            side = sel.get("side", "min").lower()
+            axkey = sel["axis"]
+            if not isinstance(axkey, str) or axkey.lower() not in ("x", "y", "z"):
+                raise ValueError(
+                    "'axis' must be 'x', 'y' or 'z' (got %r)" % (axkey,))
+            ax = {"x": 0, "y": 1, "z": 2}[axkey.lower()]
+            side = str(sel.get("side", "min")).lower()
             vals = [f.CenterOfMass[ax] for f in faces]
             target = min(vals) if side == "min" else max(vals)
-            tol = sel.get("tol", 1e-4)
+            tol = _fnum(sel, "tol", 1e-4, "'tol'")
             return ["Face%d" % (i + 1) for i, v in enumerate(vals)
                     if abs(v - target) <= tol]
         if "cyl_radius" in sel:
-            r = float(sel["cyl_radius"])
-            tol = sel.get("tol", 1e-3)
+            r = _fnum(sel, "cyl_radius", None, "'cyl_radius'")
+            tol = _fnum(sel, "tol", 1e-3, "'tol'")
             out = []
             for i, f in enumerate(faces):
                 surf = f.Surface
@@ -137,13 +200,14 @@ def register(state):
                     out.append("Face%d" % (i + 1))
             return out
         if "normal" in sel:
-            d = V(*sel["normal"])
+            d = V(*_fvec(sel["normal"], "'normal'"))
             d = d.normalize() if d.Length > 1e-9 else d
+            min_dot = _fnum(sel, "min_dot", 0.95, "'min_dot'")
             out = []
             for i, f in enumerate(faces):
                 u0, u1, v0, v1 = f.ParameterRange
                 n = f.normalAt((u0 + u1) / 2.0, (v0 + v1) / 2.0)
-                if n.Length > 1e-9 and n.normalize().dot(d) >= sel.get("min_dot", 0.95):
+                if n.Length > 1e-9 and n.normalize().dot(d) >= min_dot:
                     out.append("Face%d" % (i + 1))
             return out
         raise ValueError("unknown face selector: %r" % sel)
@@ -207,12 +271,15 @@ def register(state):
         analysis.addObject(mat)
 
         bb = shape.BoundBox
-        size = a.get("mesh_size") or max(1.0, bb.DiagonalLength / 18.0)
+        size = _fnum(a, "mesh_size", max(1.0, bb.DiagonalLength / 18.0),
+                     "'mesh_size'") if a.get("mesh_size") is not None \
+            else max(1.0, bb.DiagonalLength / 18.0)
+        order = _fnum(a, "order", 2, "'order'")
         mesh = ObjectsFem.makeMeshGmsh(doc, "FEMMesh")
         mesh.Shape = obj
         mesh.CharacteristicLengthMax = float(size)
         mesh.CharacteristicLengthMin = float(size) / 4.0
-        mesh.ElementOrder = "2nd" if int(a.get("order", 2)) >= 2 else "1st"
+        mesh.ElementOrder = "2nd" if order >= 2 else "1st"
         analysis.addObject(mesh)
         doc.recompute()
 
@@ -261,9 +328,20 @@ def register(state):
         names = _select_faces(obj.Shape, a["select"])
         if not names:
             raise ValueError("selector matched no faces: %r" % a["select"])
-        axes = [str(x).lower() for x in a.get("fix", [])]
+        fix = a.get("fix", [])
+        if isinstance(fix, str):
+            fix = [fix]
+        if not isinstance(fix, (list, tuple)):
+            raise ValueError(
+                "fem.support 'fix' must be a list of axes like ['x','z'] "
+                "(got %r)" % (fix,))
+        axes = [str(x).lower() for x in fix]
         if not axes:
             raise ValueError("fem.support needs fix=[axes] to zero")
+        bad = [x for x in axes if x not in ("x", "y", "z")]
+        if bad:
+            raise ValueError(
+                "fem.support 'fix' axes must be 'x'/'y'/'z' (got %r)" % (fix,))
         c = ObjectsFem.makeConstraintDisplacement(doc, "Support")
         c.References = [(obj, n) for n in names]
         for ax in ("x", "y", "z"):
@@ -320,22 +398,25 @@ def register(state):
         names = _select_faces(obj.Shape, a["select"])
         if not names:
             raise ValueError("selector matched no faces: %r" % a["select"])
-        kind = a.get("kind", "force").lower()
+        kind = str(a.get("kind", "force")).lower()
+        value = _fnum(a, "value", None, "fem.load 'value'")
         if kind == "pressure":
             c = ObjectsFem.makeConstraintPressure(doc, "Pressure")
             c.References = [(obj, n) for n in names]
             # PropertyPressure stores base units (mN/mm^2); 1 MPa = 1 N/mm^2.
-            c.Pressure = App.Units.Quantity("%s MPa" % float(a["value"]))
+            c.Pressure = App.Units.Quantity("%s MPa" % value)
             c.Reversed = bool(a.get("reversed", False))
             analysis.addObject(c)
-            out = {"constraint": "pressure", "faces": names, "mpa": float(a["value"])}
+            out = {"constraint": "pressure", "faces": names, "mpa": value}
         else:
             c = ObjectsFem.makeConstraintForce(doc, "Force")
             c.References = [(obj, n) for n in names]
             # PropertyForce stores base units (mN); assign as a N quantity so the
             # solver sees Newtons, not milli-Newtons (a silent 1000x error).
-            c.Force = App.Units.Quantity("%s N" % float(a["value"]))
-            d = V(*(a.get("direction") or [0, 0, -1]))
+            c.Force = App.Units.Quantity("%s N" % value)
+            dvec = a.get("direction")
+            d = V(*_fvec(dvec, "fem.load 'direction'")) if dvec is not None \
+                else V(0, 0, -1)
             if d.Length < 1e-9:
                 d = V(0, 0, -1)
             sub, _ = _direction_ref(obj.Shape, d)
@@ -353,7 +434,7 @@ def register(state):
                 c.Reversed = True
                 doc.recompute()
                 dv = c.DirectionVector
-            out = {"constraint": "force", "faces": names, "newtons": float(a["value"]),
+            out = {"constraint": "force", "faces": names, "newtons": value,
                    "direction_ref": sub, "reversed": bool(c.Reversed),
                    "effective_dir": [_round(dv.x, 3), _round(dv.y, 3), _round(dv.z, 3)]}
         state.fem["constraints"].append(c.Name)
@@ -416,7 +497,10 @@ def register(state):
                 "mesh); refine the mesh or drop to 1st-order elements")
         max_vm = max(vm) if vm else 0.0
         max_disp = max(disp) if disp else 0.0
-        allow = float(a.get("allowable_mpa") or state.fem.get("yield") or 250.0)
+        allow = _fnum(a, "allowable_mpa",
+                      state.fem.get("yield") or 250.0, "'allowable_mpa'") \
+            if a.get("allowable_mpa") is not None \
+            else (state.fem.get("yield") or 250.0)
         sf = (allow / max_vm) if max_vm > 1e-9 else float("inf")
         return {"max_von_mises_mpa": _round(max_vm), "max_disp_mm": _round(max_disp, 6),
                 "allowable_mpa": _round(allow), "safety_factor": _round(sf, 3),
@@ -435,20 +519,21 @@ def register(state):
             ["Face%d" % (i + 1) for i in range(len(obj.Shape.Faces))]
         if not names:
             raise ValueError("selector matched no faces: %r" % sel)
-        ref = float(a.get("ref", 0.0))
+        ref = _fnum(a, "ref", 0.0, "fem.temperature 'ref'")
+        tval = _fnum(a, "value", None, "fem.temperature 'value'")
         init = ObjectsFem.makeConstraintInitialTemperature(doc, "Tref")
         init.initialTemperature = App.Units.Quantity("%s K" % ref)
         analysis.addObject(init)
         ct = ObjectsFem.makeConstraintTemperature(doc, "Temp")
         ct.References = [(obj, n) for n in names]
-        ct.Temperature = App.Units.Quantity("%s K" % float(a["value"]))
+        ct.Temperature = App.Units.Quantity("%s K" % tval)
         analysis.addObject(ct)
         state.fem["constraints"] += [init.Name, ct.Name]
-        state.fem["dT"] = float(a["value"]) - ref
+        state.fem["dT"] = tval - ref
         doc.recompute()
         return {"constraint": "temperature", "faces": names,
-                "value_k": float(a["value"]), "ref_k": ref,
-                "delta_k": float(a["value"]) - ref}
+                "value_k": tval, "ref_k": ref,
+                "delta_k": tval - ref}
 
     def thermal(a):
         """Run a thermomechanical steady-state analysis (CalculiX *COUPLED
@@ -476,7 +561,10 @@ def register(state):
                 "did not converge (often a distorted/nonpositive-Jacobian mesh); "
                 "refine the mesh or drop to 1st-order elements")
         max_vm = max(vm) if vm else 0.0
-        allow = float(a.get("allowable_mpa") or state.fem.get("yield") or 250.0)
+        allow = _fnum(a, "allowable_mpa",
+                      state.fem.get("yield") or 250.0, "'allowable_mpa'") \
+            if a.get("allowable_mpa") is not None \
+            else (state.fem.get("yield") or 250.0)
         sf = (allow / max_vm) if max_vm > 1e-9 else float("inf")
         return {"max_von_mises_mpa": _round(max_vm),
                 "max_disp_mm": _round(max(disp) if disp else 0.0, 6),
@@ -495,7 +583,7 @@ def register(state):
         args: modes=1 (number of factors to extract).
         """
         _need()
-        n = int(a.get("modes", 1))
+        n = int(_fnum(a, "modes", 1, "'modes'"))
         solver = doc.getObject(state.fem["solver"])
         solver.AnalysisType = "buckling"
         try:
@@ -521,14 +609,16 @@ def register(state):
         """
         analysis, obj = _need()
         if a.get("hz") is not None:
-            hz = float(a["hz"])
+            hz = _fnum(a, "hz", None, "fem.spin 'hz'")
         elif a.get("rpm") is not None:
-            hz = float(a["rpm"]) / 60.0
+            hz = _fnum(a, "rpm", None, "fem.spin 'rpm'") / 60.0
         else:
             raise ValueError("fem.spin needs rpm or hz")
-        axis = V(*(a.get("axis") or [0, 0, 1]))
+        axis = V(*_fvec(a["axis"], "fem.spin 'axis'")) if a.get("axis") \
+            else V(0, 0, 1)
         axis = axis.normalize() if axis.Length > 1e-9 else V(0, 0, 1)
-        base = V(*(a.get("base") or [0, 0, 0]))
+        base = V(*_fvec(a["base"], "fem.spin 'base'")) if a.get("base") \
+            else V(0, 0, 0)
         span = max(1.0, obj.Shape.BoundBox.DiagonalLength)
         old = doc.getObject("SpinAxis")
         if old is not None:
@@ -557,7 +647,7 @@ def register(state):
         returns ascending natural frequencies in Hz.
         """
         _need()
-        n = int(a.get("modes", 6))
+        n = int(_fnum(a, "modes", 6, "'modes'"))
         solver = doc.getObject(state.fem["solver"])
         solver.AnalysisType = "frequency"
         try:
@@ -601,7 +691,7 @@ def register(state):
         zs = [p[2] for p in pts]
         views = {"iso": (28, -60), "front": (0, -90), "top": (90, -90), "right": (0, 0)}
         elev, azim = views.get(a.get("view", "iso"), views["iso"])
-        px = int(a.get("size", 900))
+        px = int(_fnum(a, "size", 900, "'size'"))
         fig = plt.figure(figsize=(px / 100.0, px / 100.0), dpi=100)
         ax = fig.add_subplot(111, projection="3d")
         sc = ax.scatter(xs, ys, zs, c=vm, cmap="jet", s=14, depthshade=False)

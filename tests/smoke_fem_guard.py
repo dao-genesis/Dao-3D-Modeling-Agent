@@ -61,6 +61,36 @@ def main():
              sol["max_disp_mm"], sol["result_nodes"]))
     assert sol["max_von_mises_mpa"] > 1.0 and sol["result_nodes"] > 0, sol
     assert sol["safety_factor"] < float("inf") and sol["passed"], sol
+
+    # malformed face selectors / load values used to leak a bare
+    # 'str has no attribute lower', V(*seq) 'Expected sequence of size 3',
+    # a KeyError on a bad axis letter, or 'could not convert' from float().
+    def _bad(r, *needles):
+        err = r.error or ""
+        assert not r.ok, ("expected failure", r.data)
+        for raw in ("could not convert", "TypeError", "AttributeError",
+                    "KeyError", "invalid literal", "Expected sequence",
+                    "not enough values", "string indices", "has no attribute"):
+            assert raw not in err, (raw, err)
+        for nd in needles:
+            assert nd in err, (nd, err)
+
+    _bad(s.act("fem.fix", {"select": "x"}), "select")
+    _bad(s.act("fem.fix", {"select": {"axis": "w"}}), "axis")
+    _bad(s.act("fem.fix", {"select": {"index": [0]}}), "out of range")
+    _bad(s.act("fem.fix", {"select": {"index": 1.5}}), "whole face")
+    _bad(s.act("fem.fix", {"select": {"normal": [0, 0, "x"]}}), "normal")
+    _bad(s.act("fem.support", {"select": {"axis": "x", "side": "min"},
+                               "fix": "q"}), "x'/'y'/'z")
+    _bad(s.act("fem.load", {"select": {"axis": "x", "side": "max"},
+                            "value": "x"}), "value")
+    _bad(s.act("fem.load", {"select": {"axis": "x", "side": "max"},
+                            "value": 10, "direction": "x"}), "direction")
+    _bad(s.act("fem.temperature", {"select": {"axis": "x", "side": "min"},
+                                   "value": "x"}), "value")
+    _bad(s.act("fem.spin", {"hz": 10, "axis": "x"}), "axis")
+    _bad(s.act("fem.buckle", {"modes": "x"}), "modes")
+    print("  malformed fem.* selectors/values refused cleanly")
     s.registry.kernel.shutdown()
 
     # ---- 2. the false-pass guard ------------------------------------------- #
