@@ -64,6 +64,20 @@ def main():
     assert cam(s, "cycloidal", 360)["lift"] == cam(s, "cycloidal", 0)["lift"]
     # unknown law rejected
     assert not s.act("solid.cam", {"rise": 5, "law": "bogus", "angle": 10}).ok
+    # a zero rise/fall span over a non-zero lift used to silently mislabel the
+    # segment at full lift (infinite-velocity follower); it must fail loud.
+    zr = s.act("solid.cam", {"rise": 10, "angle": 15, "rise_angle": 0})
+    assert not zr.ok and "infinite-velocity" in (zr.error or ""), zr.error
+    zf = s.act("solid.cam", {"rise": 10, "angle": 200, "rise_angle": 90,
+                             "dwell_angle": 30, "fall_angle": 0})
+    assert not zf.ok and "infinite-velocity" in (zf.error or ""), zf.error
+    # segment spans must be non-negative and fit one revolution.
+    neg = s.act("solid.cam", {"rise": 10, "angle": 15, "rise_angle": -90})
+    assert not neg.ok and "non-negative" in (neg.error or ""), neg.error
+    over = s.act("solid.cam", {"rise": 10, "angle": 15, "rise_angle": 200,
+                               "dwell_angle": 120, "fall_angle": 120})
+    assert not over.ok and "360" in (over.error or ""), over.error
+    print("degenerate cam spans refused:", zr.error)
     print("CAM SMOKE OK", s.summary())
     s.registry.kernel.shutdown()
 
