@@ -157,6 +157,18 @@ def main():
             if not isinstance(data, dict):
                 data = {"value": data}
             emit({"id": rid, "ok": True, "data": data})
+        except KeyError as exc:
+            # A bare ``a["key"]`` access on a missing argument otherwise surfaces
+            # as a cryptic ``KeyError: 'name'``. When the key is a plain argument
+            # identifier, turn it into actionable guidance; descriptive KeyErrors
+            # (e.g. ``_get`` raising "no such solid: X") are passed through as-is.
+            key = exc.args[0] if exc.args else None
+            if isinstance(key, str) and key and all(c.isalnum() or c == "_" for c in key):
+                msg = "%s missing required argument '%s'" % (op, key)
+            else:
+                msg = str(key) if key is not None else str(exc)
+            emit({"id": rid, "ok": False, "error": "ValueError: %s" % msg,
+                  "trace": traceback.format_exc().splitlines()[-4:]})
         except Exception as exc:
             emit({"id": rid, "ok": False, "error": "%s: %s" % (type(exc).__name__, exc),
                   "trace": traceback.format_exc().splitlines()[-4:]})
