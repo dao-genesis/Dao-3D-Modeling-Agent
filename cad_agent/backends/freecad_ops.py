@@ -3901,6 +3901,11 @@ def register(state):
                 "buckling needs 'modulus': Young's modulus E (consistent units, "
                 "e.g. MPa with mm gives N)")
         E = float(a["modulus"])
+        # a zero/negative modulus silently reports a 0 (or non-physical) critical
+        # load; Young's modulus is strictly positive.
+        if E <= 0:
+            raise ValueError(
+                "buckling: modulus E must be positive (got %g)" % E)
         K = float(a.get("K", 1.0))
         axis = _unit_v(_vec(a.get("axis", (0, 0, 1))))
         corners = [V(x, y, z)
@@ -3972,6 +3977,10 @@ def register(state):
                 "beam_deflection needs 'modulus' (E) and 'load' (point force P, "
                 "or distributed w per length when load_type='udl')")
         E = float(a["modulus"])
+        # a zero modulus divides by zero in PL^3/(EI); E is strictly positive.
+        if E <= 0:
+            raise ValueError(
+                "beam_deflection: modulus E must be positive (got %g)" % E)
         Q = float(a["load"])
         support = a.get("support", "cantilever")
         load_type = a.get("load_type", "point")
@@ -4045,6 +4054,10 @@ def register(state):
                 "torsion needs 'torque' (T) and 'shear_modulus' (G)")
         T = float(a["torque"])
         G = float(a["shear_modulus"])
+        # a zero shear modulus divides by zero in TL/GJ; G is strictly positive.
+        if G <= 0:
+            raise ValueError(
+                "torsion: shear_modulus G must be positive (got %g)" % G)
         axis = _unit_v(_vec(a.get("axis", (0, 0, 1))))
         corners = [V(x, y, z)
                    for x in (sh.BoundBox.XMin, sh.BoundBox.XMax)
@@ -4117,6 +4130,12 @@ def register(state):
                 "mass per unit volume)")
         E = float(a["modulus"])
         rho = float(a["density"])
+        # a zero density divides by zero in sqrt(EI/(rho A)); both E and rho are
+        # strictly positive physical quantities.
+        if E <= 0 or rho <= 0:
+            raise ValueError(
+                "natural_frequency: modulus E and density rho must be positive "
+                "(got E=%g, rho=%g)" % (E, rho))
         support = a.get("support", "cantilever")
         if support not in _BEAM_MODES:
             raise ValueError(
@@ -4259,10 +4278,21 @@ def register(state):
         Re = 1.0 / invR
         E1 = float(a["modulus"])
         E2 = float(a.get("modulus2", E1))
+        # zero/negative moduli divide by zero in the effective-modulus harmonic
+        # mean; both contacting bodies' E are strictly positive.
+        if E1 <= 0 or E2 <= 0:
+            raise ValueError(
+                "contact_stress: modulus (E1) and modulus2 (E2) must be positive "
+                "(got E1=%g, E2=%g)" % (E1, E2))
         nu1 = float(a.get("poisson", 0.3))
         nu2 = float(a.get("poisson2", nu1))
         Estar = 1.0 / ((1.0 - nu1 ** 2) / E1 + (1.0 - nu2 ** 2) / E2)
         F = float(a["load"])
+        # a zero/negative load collapses the contact patch to a point and divides
+        # by zero in p_max; Hertz contact needs a real compressive load.
+        if F <= 0:
+            raise ValueError(
+                "contact_stress: load F must be positive (got %g)" % F)
         out = {"kind": kind, "R1": R1, "R2": R2,
                "effective_radius": _round(Re, 6),
                "effective_modulus": _round(Estar, 4),

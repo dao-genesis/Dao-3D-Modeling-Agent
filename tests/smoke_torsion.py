@@ -73,6 +73,11 @@ def main():
     assert not bad.ok and "shear_modulus" in (bad.error or ""), bad.error
     print("missing shear modulus refused: %s" % bad.error)
 
+    # a zero shear modulus used to leak a raw ZeroDivisionError from TL/GJ.
+    zg = s.act("solid.torsion", {"name": "shaft", "torque": T, "shear_modulus": 0})
+    assert not zg.ok and "positive" in (zg.error or "") and "ZeroDivision" not in (zg.error or ""), zg.error
+    print("zero shear modulus refused:", zg.error)
+
     print("TORSION SMOKE OK", s.summary())
     s.registry.kernel.shutdown()
 

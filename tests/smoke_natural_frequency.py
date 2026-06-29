@@ -65,6 +65,11 @@ def main():
     assert not bad.ok and "support" in (bad.error or ""), bad.error
     print("guards: missing density and unknown support refused")
 
+    # a zero density (or modulus) used to leak a raw ZeroDivisionError.
+    zr = s.act("solid.natural_frequency", {"name": "beam", "modulus": E, "density": 0})
+    assert not zr.ok and "positive" in (zr.error or "") and "ZeroDivision" not in (zr.error or ""), zr.error
+    print("zero density refused:", zr.error)
+
     print("NATURAL FREQUENCY SMOKE OK", s.summary())
     s.registry.kernel.shutdown()
 

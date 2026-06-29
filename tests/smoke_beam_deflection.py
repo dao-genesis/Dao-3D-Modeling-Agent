@@ -72,6 +72,11 @@ def main():
     assert not bad2.ok and "unsupported" in (bad2.error or "").lower(), bad2.error
     print("guards: missing modulus and bad support refused")
 
+    # a zero modulus used to leak a raw ZeroDivisionError from PL^3/(EI).
+    ze = s.act("solid.beam_deflection", {"name": "beam", "modulus": 0, "load": P})
+    assert not ze.ok and "positive" in (ze.error or "") and "ZeroDivision" not in (ze.error or ""), ze.error
+    print("zero modulus refused:", ze.error)
+
     print("BEAM DEFLECTION SMOKE OK", s.summary())
     s.registry.kernel.shutdown()
 
