@@ -54,6 +54,12 @@ def main():
     # invalid input is rejected loudly
     bad = s.act("solid.geartrain", {"meshes": [{"driver": 0, "driven": 10}]})
     assert not bad.ok and "positive" in (bad.error or ""), bad
+    # a non-dict mesh (e.g. 'meshes' a bare string) must be refused with
+    # guidance, not leak a raw "AttributeError: str ... has no attribute get".
+    nd = s.act("solid.geartrain", {"meshes": "20/40"})
+    assert not nd.ok and "must be a dict" in (nd.error or ""), nd.error
+    assert "AttributeError" not in (nd.error or ""), nd.error
+    print("non-dict mesh refused (no raw AttributeError): %s" % nd.error)
     print("GEARTRAIN SMOKE OK", s.summary())
     s.registry.kernel.shutdown()
 

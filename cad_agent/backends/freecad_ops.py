@@ -363,6 +363,13 @@ def _profile_face(spec):
     Supported: {"rect":[w,h], "centered":bool}, {"circle":r},
     {"polygon":[[x,y],...]}, {"slot":[length,width]}.
     """
+    # a non-dict spec (e.g. the bare string "rect") otherwise satisfies the
+    # `"rect" in spec` substring test and then leaks 'TypeError: string indices
+    # must be integers' on spec["rect"]; demand a real profile dict up front.
+    if not isinstance(spec, dict):
+        raise ValueError(
+            "profile must be a dict like {'rect':[w,h]} / {'circle':r} / "
+            "{'polygon':[[x,y],...]} / {'slot':[l,w]}; got %r" % (spec,))
     if "rect" in spec:
         w, h = spec["rect"]
         if spec.get("centered", True):
@@ -373,6 +380,11 @@ def _profile_face(spec):
         wire = Part.makePolygon(pts)
     elif "circle" in spec:
         r = float(spec["circle"])
+        # a non-positive circle radius leaks a bare 'OCCError: Radius value is
+        # negative'; refuse it with guidance like the other dimension guards.
+        if r <= 0:
+            raise ValueError(
+                "profile circle radius must be positive (got %g)" % r)
         wire = Part.Wire(Part.Circle(V(0, 0, 0), V(0, 0, 1), r).toShape())
     elif "polygon" in spec:
         pts = [V(float(p[0]), float(p[1]), 0) for p in spec["polygon"]]
@@ -3603,6 +3615,12 @@ def register(state):
             raise ValueError("gear train needs at least one mesh")
         e = 1.0
         for m in meshes:
+            # a non-dict mesh (e.g. when 'meshes' is a bare string) otherwise
+            # leaks 'AttributeError: str object has no attribute get'.
+            if not isinstance(m, dict):
+                raise ValueError(
+                    "each mesh must be a dict {driver, driven[, internal]} "
+                    "(teeth or pitch radii); got %r" % (m,))
             drv = float(m.get("driver", m.get("driver_radius")))
             dvn = float(m.get("driven", m.get("driven_radius")))
             if drv <= 0 or dvn <= 0:

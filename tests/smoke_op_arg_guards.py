@@ -63,6 +63,14 @@ def main():
     # number, not str' from Shape.rotate; it must fail loud with guidance.
     _bad(s.act("solid.rotate", {"name": "A", "axis": [0, 0, 1], "angle": "ninety"}),
          "angle")
+    # a bare-string profile satisfied the `"rect" in spec` substring test and
+    # leaked 'TypeError: string indices must be integers'; a negative circle
+    # radius leaked a raw OCCError. Both must be guided now.
+    _bad(s.act("solid.extrude", {"name": "Ps", "profile": "rect", "height": 5}),
+         "profile must be a dict")
+    neg = s.act("solid.extrude", {"name": "Pc", "profile": {"circle": -5}, "height": 5})
+    _bad(neg, "circle radius must be positive")
+    assert "OCCError" not in (neg.error or ""), neg.error
     print("missing/invalid build-op args all refused cleanly")
 
     # valid calls still work
