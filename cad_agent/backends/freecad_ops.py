@@ -3992,6 +3992,75 @@ def register(state):
             out["heat_flow"] = _round(dT / r_cond, 4)
         return out
 
+    def op_contact_stress(a):
+        """Hertzian contact stress between two elastic bodies (gear/bearing/cam).
+
+        Point contact (balls, crowned teeth) and line contact (rollers, spur
+        gears) from the effective radius and plane-strain modulus
+
+          1/Re = 1/R1 + 1/R2 ,  1/E* = (1-nu1^2)/E1 + (1-nu2^2)/E2
+
+        A flat mate is ``R2=inf`` (omit it); a concave seat is a negative radius.
+
+        Point:  a  = (3 F Re / (4 E*))^(1/3) ,  p_max = 3F/(2 pi a^2) ,
+                delta = a^2/Re                   (approach)
+        Line :  b  = sqrt(4 F Re / (pi L E*))  ,  p_max = 2F/(pi b L)
+
+        The peak pressure is 1.5x (point) / 4/pi x (line) the nominal mean over
+        the contact patch.
+
+        args: kind ('point'|'line', default 'point'), R1 (required), R2
+              (default inf/flat), modulus E1 (required), E2 (default E1),
+              poisson nu1 (default 0.3), poisson2 nu2 (default nu1),
+              load F (required), length L (line contact, required)
+        """
+        kind = a.get("kind", "point")
+        if kind not in ("point", "line"):
+            raise ValueError("contact_stress: kind must be 'point' or 'line'")
+        if "R1" not in a or "modulus" not in a or "load" not in a:
+            raise ValueError(
+                "contact_stress needs 'R1', 'modulus' (E1) and 'load' (F)")
+        R1 = float(a["R1"])
+        invR = (1.0 / R1 if R1 else 0.0)
+        if "R2" in a:
+            R2 = float(a["R2"])
+            invR += (1.0 / R2 if R2 else 0.0)
+        else:
+            R2 = None
+        if invR <= 0:
+            raise ValueError(
+                "contact_stress: effective radius is non-convex (1/Re <= 0)")
+        Re = 1.0 / invR
+        E1 = float(a["modulus"])
+        E2 = float(a.get("modulus2", E1))
+        nu1 = float(a.get("poisson", 0.3))
+        nu2 = float(a.get("poisson2", nu1))
+        Estar = 1.0 / ((1.0 - nu1 ** 2) / E1 + (1.0 - nu2 ** 2) / E2)
+        F = float(a["load"])
+        out = {"kind": kind, "R1": R1, "R2": R2,
+               "effective_radius": _round(Re, 6),
+               "effective_modulus": _round(Estar, 4),
+               "load": F}
+        if kind == "point":
+            rad = (3.0 * F * Re / (4.0 * Estar)) ** (1.0 / 3.0)
+            p_max = 3.0 * F / (2.0 * math.pi * rad ** 2)
+            out.update({"contact_radius": _round(rad, 6),
+                        "max_pressure": _round(p_max, 4),
+                        "mean_pressure": _round(F / (math.pi * rad ** 2), 4),
+                        "approach": _round(rad ** 2 / Re, 8)})
+        else:
+            if "length" not in a:
+                raise ValueError("contact_stress: line contact needs 'length' (L)")
+            L = float(a["length"])
+            if L <= 0:
+                raise ValueError("contact_stress: length must be > 0")
+            b = math.sqrt(4.0 * F * Re / (math.pi * L * Estar))
+            p_max = 2.0 * F / (math.pi * b * L)
+            out.update({"length": L, "half_width": _round(b, 6),
+                        "max_pressure": _round(p_max, 4),
+                        "mean_pressure": _round(F / (2.0 * b * L), 4)})
+        return out
+
     def op_hydrostatics(a):
         """Free-floating hydrostatics of a solid in a fluid (naval / buoyancy).
 
@@ -4260,5 +4329,6 @@ def register(state):
         "beam_deflection": op_beam_deflection, "torsion": op_torsion,
         "natural_frequency": op_natural_frequency,
         "thermal_resistance": op_thermal_resistance,
+        "contact_stress": op_contact_stress,
         "list": op_list, "delete": op_delete, "export": op_export, "import_step": op_import_step,
     }
