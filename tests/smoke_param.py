@@ -319,6 +319,29 @@ def main():
     print("enclosure faces:", cm.data["faces"], "vol:", round(cm.data["volume"], 1),
           "| transform-chain rejected:", chained.error.split(";")[0])
 
+    # dressups/transforms on an EMPTY body (no tip feature yet) must guide,
+    # not leak "'NoneType' object has no attribute 'Shape'/'Visibility'".
+    def _bad(res, *needles):
+        assert not res.ok, ("expected failure", res.data)
+        e = res.error or ""
+        for raw in ("could not convert", "TypeError", "AttributeError",
+                    "KeyError", "invalid literal", "NoneType"):
+            assert raw not in e, (raw, e)
+        for n in needles:
+            assert n in e, (n, e)
+    assert s.act("param.body", {"name": "Empty"}).ok
+    _bad(s.act("param.fillet", {"body": "Empty", "radius": 1}), "no feature")
+    _bad(s.act("param.chamfer", {"body": "Empty", "size": 1}), "no feature")
+    _bad(s.act("param.mirror", {"body": "Empty", "plane": "XY"}),
+         "no feature")
+    # gear lofts coerce module/teeth with bare float()/int(): a non-numeric
+    # value must guide, not leak 'could not convert'/'invalid literal'.
+    _bad(s.act("param.helical", {"body": "Empty", "module": "x", "teeth": 12}),
+         "module")
+    _bad(s.act("param.bevel", {"body": "Empty", "module": 2, "teeth": "x"}),
+         "teeth")
+    print("param empty-body and gear-arg guards ok")
+
     print("PARAM SMOKE OK", s.summary())
     k.shutdown()
 

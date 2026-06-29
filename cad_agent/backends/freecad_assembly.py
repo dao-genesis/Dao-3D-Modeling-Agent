@@ -18,6 +18,48 @@ def _round(x, n=4):
     return round(float(x), n)
 
 
+_MISSING = object()
+
+
+def _num(a, key, default=_MISSING, label=None):
+    """Coerce ``a[key]`` to float with a guided error -- a bare
+    ``float(a.get(key, d))`` leaks the cryptic 'could not convert string to
+    float'."""
+    name = label or key
+    if key not in a or a[key] is None:
+        if default is _MISSING:
+            raise ValueError("missing required numeric argument %r" % name)
+        return float(default)
+    v = a[key]
+    if isinstance(v, bool) or not isinstance(v, (int, float, str)):
+        raise ValueError("%s must be a number (got %r)" % (name, v))
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        raise ValueError("%s must be a number (got %r)" % (name, v))
+
+
+def _vec3(seq, label):
+    """Coerce a 3-element sequence to floats with a guided error -- a bare
+    ``[float(x) for x in seq]`` leaks 'could not convert' when ``seq`` is a
+    string or holds a non-numeric element."""
+    if isinstance(seq, (str, bytes)) or not isinstance(seq, (list, tuple)):
+        raise ValueError(
+            "%s must be a 3-number list [x, y, z] (got %r)" % (label, seq))
+    if len(seq) != 3:
+        raise ValueError(
+            "%s must have 3 components [x, y, z] (got %r)" % (label, seq))
+    out = []
+    for x in seq:
+        if isinstance(x, bool) or not isinstance(x, (int, float, str)):
+            raise ValueError("%s components must be numbers (got %r)" % (label, seq))
+        try:
+            out.append(float(x))
+        except (TypeError, ValueError):
+            raise ValueError("%s components must be numbers (got %r)" % (label, seq))
+    return out
+
+
 def register(state):
     doc = state.doc
 
@@ -103,9 +145,9 @@ def register(state):
         this spins a part that is already positioned -- e.g. phasing one gear of a
         pair so its teeth mesh into the mating gear's spaces."""
         link = _comp(a["name"])
-        axis = V(*[float(x) for x in a.get("axis", (0, 0, 1))])
-        angle = float(a["angle"])
-        at = V(*[float(x) for x in a.get("at", (0, 0, 0))])
+        axis = V(*_vec3(a.get("axis", (0, 0, 1)), "axis"))
+        angle = _num(a, "angle", label="angle")
+        at = V(*_vec3(a.get("at", (0, 0, 0)), "at"))
         center = App.Placement(at, ROT())
         spin = App.Placement(V(0, 0, 0), ROT(axis, angle))
         about = center.multiply(spin).multiply(center.inverse())
@@ -122,10 +164,13 @@ def register(state):
         """Place component ``b`` offset from ``a`` along an axis (axis mate)."""
         sa = _global_shape(a["a"]).BoundBox
         link_b = _comp(a["b"])
-        axis = a.get("axis", "x").lower()
-        offset = float(a.get("offset", 0))
+        axis = str(a.get("axis", "x")).lower()
+        offset = _num(a, "offset", 0, "offset")
         ca = V((sa.XMin + sa.XMax) / 2, (sa.YMin + sa.YMax) / 2, (sa.ZMin + sa.ZMax) / 2)
-        delta = {"x": V(offset, 0, 0), "y": V(0, offset, 0), "z": V(0, 0, offset)}[axis]
+        deltas = {"x": V(offset, 0, 0), "y": V(0, offset, 0), "z": V(0, 0, offset)}
+        if axis not in deltas:
+            raise ValueError("align 'axis' must be 'x'/'y'/'z' (got %r)" % (axis,))
+        delta = deltas[axis]
         link_b.Placement = App.Placement(ca + delta, link_b.Placement.Rotation)
         doc.recompute()
         return {"component": a["b"], "placement": list(link_b.Placement.Base)}
@@ -208,14 +253,19 @@ def register(state):
             elif seat == "top":
                 d = hi - pmax
             else:
-                d = float(seat) - pmin
+                try:
+                    d = float(seat) - pmin
+                except (TypeError, ValueError):
+                    raise ValueError(
+                        "seat must be 'bottom'/'top' or a number (got %r)"
+                        % (seat,))
             sd = [0.0, 0.0, 0.0]
             sd[idx] = d
             p = link.Placement
             p.Base = p.Base + V(*sd)
             link.Placement = p
             doc.recompute()
-        offset = float(a.get("offset", 0))
+        offset = _num(a, "offset", 0, "offset")
         if offset:
             # relative slide along the (shared) hole axis -- lets two coaxial
             # parts interleave, e.g. the knuckles of a hinge.
@@ -234,7 +284,7 @@ def register(state):
         bb = _global_shape(a["base"]).BoundBox
         top_link = _comp(a["top"])
         tb = _global_shape(a["top"]).BoundBox
-        gap = float(a.get("gap", 0))
+        gap = _num(a, "gap", 0, "gap")
         # shift top so its ZMin sits on base ZMax (+gap), centered in XY on base
         dx = (bb.XMin + bb.XMax) / 2 - (tb.XMin + tb.XMax) / 2
         dy = (bb.YMin + bb.YMax) / 2 - (tb.YMin + tb.YMax) / 2
@@ -275,7 +325,7 @@ def register(state):
                 "narrow_phase": narrow, "clashes": clashes, "clash_count": len(clashes)}
 
     def op_bom(a):
-        density = float(a.get("density", 1.0))
+        density = _num(a, "density", 1.0, "density")
         by_src = {}
         total_mass = 0.0
         for name, rec in state.components.items():
