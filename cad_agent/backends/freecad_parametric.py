@@ -110,6 +110,50 @@ def _origin_axis(body, axis):
     raise RuntimeError("origin axis not found: %s" % axis)
 
 
+_MISSING = object()
+
+
+def _num(a, key, default=_MISSING, label=None):
+    """Fetch ``a[key]`` and coerce to float with guided errors.
+
+    A bare ``float(a.get(key))`` leaks Python's raw ``ValueError: could not
+    convert string to float: 'x'`` / ``TypeError`` for a non-numeric value --
+    unactionable. Refuse with the op-facing key name instead.
+    """
+    name = label or key
+    if key not in a or a[key] is None:
+        if default is _MISSING:
+            raise ValueError("missing required numeric argument %r" % name)
+        return float(default)
+    v = a[key]
+    if isinstance(v, bool) or not isinstance(v, (int, float, str)):
+        raise ValueError("%s must be a number (got %r)" % (name, v))
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        raise ValueError("%s must be a number (got %r)" % (name, v))
+
+
+def _check_profile(profile):
+    """A non-dict profile (e.g. the bare string "rect") otherwise satisfies the
+    ``"rect" in profile`` substring test and then leaks 'TypeError: string
+    indices must be integers' on ``profile["rect"]``. Demand a real dict."""
+    if not isinstance(profile, dict):
+        raise ValueError(
+            "profile must be a dict like {'rect':[w,h]} / {'circle':r} / "
+            "{'polygon':[[x,y],...]}; got %r" % (profile,))
+    return profile
+
+
+def _check_feature_name(feat):
+    """newObject's name must be a string; a non-string (e.g. an int) leaks
+    'TypeError: argument 2 must be str, not int'."""
+    if not isinstance(feat, str):
+        raise ValueError(
+            "'feature' name must be a string (got %r)" % (feat,))
+    return feat
+
+
 def _metrics(shape):
     bb = shape.BoundBox
     out = {"valid": bool(shape.isValid()), "volume": _round(shape.Volume),
@@ -158,6 +202,7 @@ def register(state):
         all starting at z=0. Returns the sketch; registers named dims when
         ``params``.
         """
+        _check_profile(profile)
         sk = body.newObject("Sketcher::SketchObject", sketch_name)
         sk.AttachmentSupport = [(_origin_plane(body, plane), "")]
         sk.MapMode = "FlatFace"
@@ -358,15 +403,22 @@ def register(state):
     # ---- additive / subtractive features --------------------------------- #
     def _feature(a, kind):
         body = _body(a["body"])
-        feat = a.get("feature", kind.title())
+        feat = _check_feature_name(a.get("feature", kind.title()))
+        # Validate every argument BEFORE creating any kernel object: otherwise a
+        # late failure (e.g. non-numeric length) leaves a half-built sketch +
+        # feature attached as the body tip, corrupting later ops.
+        _check_profile(a["profile"])
+        offset = _num(a, "offset", 0, "offset")
+        length = _num(a, "length", 10, "length") if kind in ("Pad", "Pocket") else None
+        angle = _num(a, "angle", 360, "angle") if kind in ("Revolution", "Groove") else None
         sk = _profile_sketch(body, a.get("plane", "XY"), a["profile"], feat, feat + "_sk",
-                             bodyname=a["body"], offset=float(a.get("offset", 0)))
+                             bodyname=a["body"], offset=offset)
         sk.Visibility = False
         f = body.newObject("PartDesign::%s" % kind, feat)
         _reg_feature(a["body"], feat, f)
         f.Profile = sk
         if kind in ("Pad", "Pocket"):
-            f.Length = float(a.get("length", 10))
+            f.Length = length
             if a.get("through"):
                 f.Type = "ThroughAll"
             if a.get("midplane"):
@@ -378,7 +430,7 @@ def register(state):
             f.Reversed = bool(a.get("reversed", reversed_default))
             _reg_param(feat, "length", f, "prop", "Length", a["body"])
         elif kind in ("Revolution", "Groove"):
-            f.Angle = float(a.get("angle", 360))
+            f.Angle = angle
             # revolve about sketch vertical axis by default
             f.ReferenceAxis = (sk, ["V_Axis"])
             _reg_param(feat, "angle", f, "prop", "Angle", a["body"])
@@ -402,9 +454,23 @@ def register(state):
 
     def op_loft(a):
         body = _body(a["body"])
-        feat = a.get("feature", "Loft")
+        feat = _check_feature_name(a.get("feature", "Loft"))
+        sections = a.get("sections")
+        # sections must be a list of {profile, offset} dicts; a bare string or
+        # other non-list otherwise leaks 'AttributeError: str has no get'.
+        if isinstance(sections, (str, bytes)) or not isinstance(sections, (list, tuple)):
+            raise ValueError(
+                "loft 'sections' must be a list of {'profile':..., 'offset':...} "
+                "dicts; got %r" % (sections,))
+        if not all(isinstance(sec, dict) for sec in sections):
+            raise ValueError(
+                "each loft section must be a dict {'profile':..., 'offset':...}; "
+                "got %r" % (sections,))
+        if len(sections) < 2:
+            raise ValueError(
+                "loft needs at least 2 sections (got %d)" % len(sections))
         sketches = []
-        for i, sec in enumerate(a["sections"]):
+        for i, sec in enumerate(sections):
             sk = _profile_sketch(body, sec.get("plane", "XY"), sec["profile"],
                                  "%s_s%d" % (feat, i), "%s_s%d_sk" % (feat, i),
                                  params=(i == 0), bodyname=a["body"])
@@ -570,19 +636,41 @@ def register(state):
         body = _body(a["body"])
         feat = a.get("feature", kind)
         tip = body.Tip
+        _check_feature_name(feat)
         edges = a.get("edges")
+        ne = len(tip.Shape.Edges)
         if edges is None:
-            refs = ["Edge%d" % (i + 1) for i in range(len(tip.Shape.Edges))]
+            refs = ["Edge%d" % (i + 1) for i in range(ne)]
         else:
+            # 'edges' must be integer indices; a bare string (e.g. "all") or
+            # floats otherwise leak 'TypeError: can only concatenate str ...'
+            # / a raw TypeError when built into the Edge ref strings.
+            if isinstance(edges, (str, bytes)) or not isinstance(edges, (list, tuple)):
+                raise ValueError(
+                    "edges must be a list of integer indices (e.g. [0, 3]); omit "
+                    "'edges' to dress all edges. got %r" % (edges,))
+            if any(isinstance(i, bool) or not isinstance(i, int) for i in edges):
+                raise ValueError(
+                    "edges must be integer indices (e.g. [0, 3]); omit 'edges' "
+                    "to dress all edges. got %r" % (edges,))
+            bad = [i for i in edges if i < 0 or i >= ne]
+            if bad:
+                raise ValueError(
+                    "edge indices %s out of range (body tip has %d edges 0..%d)"
+                    % (bad, ne, ne - 1))
             refs = ["Edge%d" % (i + 1) for i in edges]
+        # coerce the numeric size BEFORE creating the feature so a bad value
+        # cannot leave a half-built dressup attached as the body tip.
+        amount = _num(a, "radius", label="fillet radius") if kind == "Fillet" \
+            else _num(a, "size", label="chamfer size")
         f = body.newObject("PartDesign::%s" % kind, feat)
         _reg_feature(a["body"], feat, f)
         f.Base = (tip, refs)
         if kind == "Fillet":
-            f.Radius = float(a["radius"])
+            f.Radius = amount
             _reg_param(feat, "radius", f, "prop", "Radius", a["body"])
         else:
-            f.Size = float(a["size"])
+            f.Size = amount
             _reg_param(feat, "size", f, "prop", "Size", a["body"])
         doc.recompute()
         if f.Shape.isNull() or not f.Shape.isValid():
@@ -670,7 +758,7 @@ def register(state):
 
     def op_pattern_polar(a):
         body = _body(a["body"])
-        feat = a.get("feature", "PolarPattern")
+        feat = _check_feature_name(a.get("feature", "PolarPattern"))
         originals = _originals(body, a)
         f = body.newObject("PartDesign::PolarPattern", feat)
         _reg_feature(a["body"], feat, f)
@@ -694,7 +782,7 @@ def register(state):
 
     def op_pattern_linear(a):
         body = _body(a["body"])
-        feat = a.get("feature", "LinearPattern")
+        feat = _check_feature_name(a.get("feature", "LinearPattern"))
         originals = _originals(body, a)
         f = body.newObject("PartDesign::LinearPattern", feat)
         _reg_feature(a["body"], feat, f)
@@ -716,7 +804,7 @@ def register(state):
 
     def op_pattern_mirror(a):
         body = _body(a["body"])
-        feat = a.get("feature", "Mirrored")
+        feat = _check_feature_name(a.get("feature", "Mirrored"))
         originals = _originals(body, a)
         f = body.newObject("PartDesign::Mirrored", feat)
         _reg_feature(a["body"], feat, f)
@@ -808,6 +896,13 @@ def register(state):
 
     def op_measure(a):
         body = _body(a["body"])
+        # an empty body (no feature yet) has Tip=None; reading None.Shape would
+        # leak a bare AttributeError. A broken tip leaks an OCCError on a null
+        # shape. Point the caller at building a feature first.
+        if body.Tip is None or body.Tip.Shape.isNull():
+            raise ValueError(
+                "body %r has no valid solid to measure yet -- add a feature "
+                "(e.g. param.pad) first" % a["body"])
         return _metrics(body.Tip.Shape)
 
     return {

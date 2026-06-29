@@ -389,10 +389,21 @@ def register(state):
 
     def op_export(a):
         import Import
+        path = a.get("path")
+        # Import.export's path must be a filesystem string; a non-string (e.g.
+        # an int) otherwise leaks 'TypeError: argument 2 must be str, ...'.
+        if not isinstance(path, str) or not path:
+            raise ValueError(
+                "asm.export 'path' must be a non-empty file path string (got %r)"
+                % (path,))
         objs = [doc.getObject(r["link"]) for r in state.components.values()]
-        Import.export(objs, a["path"])
+        if not objs:
+            raise ValueError(
+                "asm.export: assembly has no components to export -- add parts "
+                "with asm.add first")
+        Import.export(objs, path)
         import os
-        return {"path": a["path"], "bytes": os.path.getsize(a["path"]) if os.path.exists(a["path"]) else 0}
+        return {"path": path, "bytes": os.path.getsize(path) if os.path.exists(path) else 0}
 
     return {
         "asm.create": op_create, "asm.add": op_add, "asm.place": op_place, "asm.move": op_move,

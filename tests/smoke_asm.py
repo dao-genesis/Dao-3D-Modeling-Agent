@@ -64,6 +64,13 @@ def main():
     print("export bytes:", r.data["bytes"])
     assert r.data["bytes"] > 0
 
+    # a non-string export path used to leak 'TypeError: argument 2 must be
+    # str ...' from Import.export; it must be refused with guidance.
+    ep = s.act("asm.export", {"path": 123})
+    assert not ep.ok and "path" in (ep.error or "") and "string" in (ep.error or ""), ep.error
+    assert "TypeError" not in (ep.error or ""), ep.error
+    print("non-string asm.export path refused (no raw TypeError): %s" % ep.error)
+
     print("ASM SMOKE OK", s.summary())
     k.shutdown()
 

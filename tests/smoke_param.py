@@ -34,6 +34,32 @@ def main():
     print("after pocket volume", r.data["volume"])
     assert abs(r.data["volume"] - (60 * 40 * 8 - math.pi * 64 * 8)) < 1.0
 
+    # --- malformed-input guards (no_raw_leak): practice exposed that these
+    #     leaked raw TypeError/AttributeError/ValueError("could not convert ...")
+    #     instead of guided messages. ------------------------------------------
+    def _guided(r, token):
+        err = r.error or ""
+        assert not r.ok, "expected failure, got %r" % (r.data,)
+        for raw in ("TypeError", "AttributeError", "OCCError", "KeyError",
+                    "could not convert", "string indices"):
+            assert raw not in err, "leaked raw %s: %r" % (raw, err)
+        assert token in err, "error %r lacks %r" % (err, token)
+
+    _guided(s.act("param.pad", {"body": "P", "feature": "Bad", "profile": "rect",
+                                "length": 5}), "profile must be a dict")
+    _guided(s.act("param.pad", {"body": "P", "feature": "Bad",
+                                "profile": {"rect": [10, 10]}, "length": "x"}), "length")
+    _guided(s.act("param.fillet", {"body": "P", "edges": "all", "radius": 1}),
+            "integer indices")
+    _guided(s.act("param.fillet", {"body": "P", "radius": "x"}), "radius")
+    _guided(s.act("param.chamfer", {"body": "P", "size": "x"}), "size")
+    _guided(s.act("param.loft", {"body": "P", "sections": "x"}), "sections")
+    _guided(s.act("param.mirror", {"body": "P", "feature": 123}), "must be a string")
+    # measuring a body with no feature yet must guide, not leak a null-shape OCCError.
+    assert s.act("param.body", {"name": "Empty"}).ok
+    _guided(s.act("param.measure", {"body": "Empty"}), "no valid solid")
+    print("param.* malformed-input guards all refused cleanly")
+
     # 3) diagnose — should be fully healthy (DoF 0, no conflicts)
     d = s.act("param.diagnose", {})
     print("diagnose all_healthy", d.data["all_healthy"], "total_dof", d.data["total_dof"])
