@@ -56,7 +56,8 @@ SUITES = ["tests.smoke_kernel", "tests.smoke_param", "tests.smoke_asm",
           "tests.smoke_thermal_resistance", "tests.smoke_contact_stress",
           "tests.smoke_mechanism_guards", "tests.smoke_export_selector",
           "tests.smoke_primitive_guards", "tests.smoke_fatigue",
-          "tests.smoke_boolean_fillet_guards", "tests.smoke_op_arg_guards"]
+          "tests.smoke_boolean_fillet_guards", "tests.smoke_op_arg_guards",
+          "tests.smoke_no_raw_leak"]
 
 
 def main() -> int:
