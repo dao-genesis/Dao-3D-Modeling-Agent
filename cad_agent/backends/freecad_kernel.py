@@ -121,6 +121,11 @@ def _build_handlers(state):
         handlers.update(freecad_surface.register(state))
     except Exception as exc:  # Surface/Draft/Points coverage is optional
         sys.stderr.write("surface load failed: %r\n" % (exc,))
+    try:
+        import freecad_resource
+        handlers.update(freecad_resource.register(state))
+    except Exception as exc:  # network resource search is optional
+        sys.stderr.write("resource load failed: %r\n" % (exc,))
     return handlers
 
 
