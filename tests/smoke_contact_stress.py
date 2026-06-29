@@ -71,6 +71,13 @@ def main():
     assert not conc.ok and "convex" in (conc.error or ""), conc.error
     print("guards: missing modulus / line length / non-convex pairing refused")
 
+    # zero modulus / zero load used to leak a raw ZeroDivisionError.
+    zm = s.act("solid.contact_stress", {"R1": 10.0, "modulus": 0, "load": 100.0})
+    assert not zm.ok and "positive" in (zm.error or "") and "ZeroDivision" not in (zm.error or ""), zm.error
+    zl = s.act("solid.contact_stress", {"R1": 10.0, "modulus": 200000.0, "load": 0})
+    assert not zl.ok and "positive" in (zl.error or "") and "ZeroDivision" not in (zl.error or ""), zl.error
+    print("zero modulus/load refused:", zm.error, "|", zl.error)
+
     print("CONTACT STRESS SMOKE OK", s.summary())
     s.registry.kernel.shutdown()
 

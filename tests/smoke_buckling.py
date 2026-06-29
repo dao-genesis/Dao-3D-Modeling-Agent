@@ -68,6 +68,12 @@ def main():
     assert not bad.ok and "modulus" in (bad.error or "").lower(), bad.error
     print("missing modulus refused: %s" % bad.error)
 
+    # a zero/negative modulus used to silently report a 0 critical load.
+    for m in (0, -210000):
+        z = s.act("solid.buckling", {"name": "col", "modulus": m})
+        assert not z.ok and "positive" in (z.error or ""), z.error
+    print("non-positive modulus refused")
+
     print("BUCKLING SMOKE OK", s.summary())
     s.registry.kernel.shutdown()
 
