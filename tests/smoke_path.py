@@ -52,6 +52,19 @@ def main():
     print("gcode: %d lines  G0=%d  G1=%d  -> %s"
           % (rg.data["lines"], rg.data["rapids_g0"], rg.data["feeds_g1"], out))
 
+    # out-of-order use guides, never leaks a raw RuntimeError: path.profile/
+    # drill/gcode before path.job used to surface as "RuntimeError: call
+    # path.job first"; the type name must not leak.
+    q = new_session("cam_seq")
+    for op in ("path.profile", "path.drill", "path.gcode"):
+        r = q.act(op, {})
+        err = r.error or ""
+        assert not r.ok, (op, r.data)
+        assert "RuntimeError" not in err, (op, err)
+        assert "path.job first" in err, (op, err)
+    q.registry.kernel.shutdown()
+    print("out-of-order path.* guided cleanly (no raw RuntimeError)")
+
     print("PATH SMOKE OK", s.summary())
     s.registry.kernel.shutdown()
 

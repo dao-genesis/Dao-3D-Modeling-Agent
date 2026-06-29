@@ -77,6 +77,19 @@ def main():
     assert (not bad.ok) or bad.data["result_nodes"] > 0, bad.data
     g.registry.kernel.shutdown()
 
+    # ---- 3. out-of-order use guides, never leaks a raw RuntimeError -------- #
+    #     fem.fix/load/modal before fem.setup used to surface as
+    #     "RuntimeError: call fem.setup first"; the type name must not leak.
+    q = new_session("fem_seq")
+    for op in ("fem.fix", "fem.load", "fem.modal"):
+        r = q.act(op, {"select": {"axis": "x", "side": "min"}})
+        err = r.error or ""
+        assert not r.ok, (op, r.data)
+        assert "RuntimeError" not in err, (op, err)
+        assert "fem.setup first" in err, (op, err)
+    q.registry.kernel.shutdown()
+    print("  out-of-order fem.* guided cleanly (no raw RuntimeError)")
+
     print("FEM GUARD SMOKE OK")
 
 

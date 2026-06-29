@@ -233,7 +233,7 @@ def register(state):
 
     def _need():
         if not state.fem.get("analysis"):
-            raise RuntimeError("call fem.setup first")
+            raise ValueError("call fem.setup first")
         return (doc.getObject(state.fem["analysis"]), doc.getObject(state.fem["target"]))
 
     def fix(a):
@@ -584,12 +584,12 @@ def register(state):
                 if o.isDerivedFrom("Fem::FemResultObject") and list(o.vonMises or []):
                     result = o
         if result is None:
-            raise RuntimeError("no solved result to contour; call fem.solve first")
+            raise ValueError("no solved result to contour; call fem.solve first")
         vm = list(result.vonMises or [])
         nn = list(result.NodeNumbers or [])
         nodes = result.Mesh.FemMesh.Nodes
         if not vm or not nn:
-            raise RuntimeError("result carries no von-Mises field")
+            raise ValueError("result carries no von-Mises field")
         pts = [(nodes[i].x, nodes[i].y, nodes[i].z) for i in nn]
 
         import matplotlib
