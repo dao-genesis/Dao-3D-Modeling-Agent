@@ -666,6 +666,18 @@ def register(state):
         ne = len(shape.Edges)
         if not idxs:
             return shape.Edges
+        # 'edges' must be a list of integer indices; a bare string (e.g. "all")
+        # or floats otherwise leak a raw TypeError ("'<' not supported between
+        # instances of 'str' and 'int'") deep inside the range check. Reject it
+        # with actionable guidance and point at the omit-for-all-edges default.
+        if isinstance(idxs, (str, bytes)) or not isinstance(idxs, (list, tuple)):
+            raise ValueError(
+                "edges must be a list of integer indices (e.g. [0, 3, 5]); omit "
+                "'edges' to select all edges. got %r" % (idxs,))
+        if any(isinstance(i, bool) or not isinstance(i, int) for i in idxs):
+            raise ValueError(
+                "edges must be integer indices (e.g. [0, 3, 5]); omit 'edges' "
+                "to select all edges. got %r" % (idxs,))
         bad = [i for i in idxs if i < -ne or i >= ne]
         if bad:
             raise ValueError("edge indices %s out of range (shape has %d edges 0..%d)"
