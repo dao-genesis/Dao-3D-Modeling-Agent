@@ -363,6 +363,13 @@ def _profile_face(spec):
     Supported: {"rect":[w,h], "centered":bool}, {"circle":r},
     {"polygon":[[x,y],...]}, {"slot":[length,width]}.
     """
+    # a non-dict spec (e.g. the bare string "rect") otherwise satisfies the
+    # `"rect" in spec` substring test and then leaks 'TypeError: string indices
+    # must be integers' on spec["rect"]; demand a real profile dict up front.
+    if not isinstance(spec, dict):
+        raise ValueError(
+            "profile must be a dict like {'rect':[w,h]} / {'circle':r} / "
+            "{'polygon':[[x,y],...]} / {'slot':[l,w]}; got %r" % (spec,))
     if "rect" in spec:
         w, h = spec["rect"]
         if spec.get("centered", True):
@@ -373,6 +380,11 @@ def _profile_face(spec):
         wire = Part.makePolygon(pts)
     elif "circle" in spec:
         r = float(spec["circle"])
+        # a non-positive circle radius leaks a bare 'OCCError: Radius value is
+        # negative'; refuse it with guidance like the other dimension guards.
+        if r <= 0:
+            raise ValueError(
+                "profile circle radius must be positive (got %g)" % r)
         wire = Part.Wire(Part.Circle(V(0, 0, 0), V(0, 0, 1), r).toShape())
     elif "polygon" in spec:
         pts = [V(float(p[0]), float(p[1]), 0) for p in spec["polygon"]]
@@ -597,8 +609,18 @@ def register(state):
         if axis.Length < 1e-9:
             raise ValueError(
                 "rotate needs a non-zero 'axis' to spin about (got [0,0,0])")
+        # coerce the angle to float up front; passing a non-numeric angle
+        # straight into Shape.rotate leaks a bare 'TypeError: must be real
+        # number, not str' instead of the clean ValueError the other transforms
+        # raise for bad numerics.
+        try:
+            angle = float(a.get("angle", 90))
+        except (TypeError, ValueError):
+            raise ValueError(
+                "rotate 'angle' must be a number in degrees (got %r)"
+                % (a.get("angle"),))
         s = obj.Shape.copy()
-        s.rotate(_vec(a.get("center")), axis, a.get("angle", 90))
+        s.rotate(_vec(a.get("center")), axis, angle)
         _put(a.get("out", a["name"]), s)
         return _metrics(s)
 
@@ -666,6 +688,18 @@ def register(state):
         ne = len(shape.Edges)
         if not idxs:
             return shape.Edges
+        # 'edges' must be a list of integer indices; a bare string (e.g. "all")
+        # or floats otherwise leak a raw TypeError ("'<' not supported between
+        # instances of 'str' and 'int'") deep inside the range check. Reject it
+        # with actionable guidance and point at the omit-for-all-edges default.
+        if isinstance(idxs, (str, bytes)) or not isinstance(idxs, (list, tuple)):
+            raise ValueError(
+                "edges must be a list of integer indices (e.g. [0, 3, 5]); omit "
+                "'edges' to select all edges. got %r" % (idxs,))
+        if any(isinstance(i, bool) or not isinstance(i, int) for i in idxs):
+            raise ValueError(
+                "edges must be integer indices (e.g. [0, 3, 5]); omit 'edges' "
+                "to select all edges. got %r" % (idxs,))
         bad = [i for i in idxs if i < -ne or i >= ne]
         if bad:
             raise ValueError("edge indices %s out of range (shape has %d edges 0..%d)"
@@ -3581,6 +3615,12 @@ def register(state):
             raise ValueError("gear train needs at least one mesh")
         e = 1.0
         for m in meshes:
+            # a non-dict mesh (e.g. when 'meshes' is a bare string) otherwise
+            # leaks 'AttributeError: str object has no attribute get'.
+            if not isinstance(m, dict):
+                raise ValueError(
+                    "each mesh must be a dict {driver, driven[, internal]} "
+                    "(teeth or pitch radii); got %r" % (m,))
             drv = float(m.get("driver", m.get("driver_radius")))
             dvn = float(m.get("driven", m.get("driven_radius")))
             if drv <= 0 or dvn <= 0:

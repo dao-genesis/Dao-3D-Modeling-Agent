@@ -51,6 +51,15 @@ def main():
     _bad(s.act("solid.chamfer", {"name": "A"}), "size")
     _bad(s.act("solid.chamfer", {"name": "A", "size": -1}), "positive")
     _bad(s.act("solid.chamfer", {"name": "A", "size": 999}), "too large")
+    # a non-integer 'edges' spec (e.g. the string "all", or floats) must fail
+    # with guidance, not leak a raw TypeError from deep in the range check.
+    bad_all = s.act("solid.fillet", {"name": "A", "radius": 1, "edges": "all"})
+    _bad(bad_all, "list of integer indices")
+    assert "TypeError" not in (bad_all.error or ""), bad_all.error
+    _bad(s.act("solid.chamfer", {"name": "A", "size": 1, "edges": "all"}),
+         "list of integer indices")
+    _bad(s.act("solid.fillet", {"name": "A", "radius": 1, "edges": [0, 1.5]}),
+         "integer indices")
     print("bad boolean/fillet/chamfer inputs all refused cleanly")
 
     # valid operations still work
