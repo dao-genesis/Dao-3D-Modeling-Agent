@@ -559,6 +559,9 @@ def register(state):
 
     # ---- booleans --------------------------------------------------------- #
     def _boolean(kind, a):
+        if "a" not in a or "b" not in a:
+            raise ValueError(
+                "%s needs two operands 'a' and 'b' (solid names)" % kind)
         base = _get(a["a"]).Shape
         tool = _get(a["b"]).Shape
         if kind == "union":
@@ -601,16 +604,38 @@ def register(state):
         return [shape.Edges[i] for i in idxs]
 
     def op_fillet(a):
+        if "name" not in a or "radius" not in a:
+            raise ValueError("fillet needs 'name' (solid) and 'radius'")
         obj = _get(a["name"])
+        r = float(a["radius"])
+        if r <= 0:
+            raise ValueError("fillet radius must be positive (got %g)" % r)
         edges = _pick_edges(obj.Shape, a.get("edges"))
-        s = obj.Shape.makeFillet(float(a["radius"]), edges)
+        try:
+            s = obj.Shape.makeFillet(r, edges)
+        except Exception as e:
+            # OCC throws a bare StdFail_NotDone when the radius is too large for
+            # the adjacent faces; turn it into actionable guidance.
+            raise ValueError(
+                "fillet could not be built: radius %g is too large for the "
+                "selected edge(s) (OCC: %s)" % (r, e))
         _put(a.get("out", a["name"]), s)
         return _metrics(s)
 
     def op_chamfer(a):
+        if "name" not in a or "size" not in a:
+            raise ValueError("chamfer needs 'name' (solid) and 'size'")
         obj = _get(a["name"])
+        d = float(a["size"])
+        if d <= 0:
+            raise ValueError("chamfer size must be positive (got %g)" % d)
         edges = _pick_edges(obj.Shape, a.get("edges"))
-        s = obj.Shape.makeChamfer(float(a["size"]), edges)
+        try:
+            s = obj.Shape.makeChamfer(d, edges)
+        except Exception as e:
+            raise ValueError(
+                "chamfer could not be built: size %g is too large for the "
+                "selected edge(s) (OCC: %s)" % (d, e))
         _put(a.get("out", a["name"]), s)
         return _metrics(s)
 
