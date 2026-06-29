@@ -36,6 +36,7 @@ _SOLID_OPS = {
     "recognize", "reverse", "coaxial", "fourbar", "geartrain", "gearmesh",
     "rackpinion", "cam", "planetary", "geneva", "cam_profile", "spatial_mobility",
     "projected_area", "hydrostatics", "tolerance_stack", "clearance",
+    "thermal_expansion", "pressure_vessel",
     "list", "delete", "export", "import_step",
 }
 
