@@ -3439,6 +3439,20 @@ def register(state):
         bd = float(a.get("dwell_angle", 90.0))
         bf = float(a.get("fall_angle", br))
         base = float(a.get("base_radius", 0.0))
+        # negative segment spans are meaningless; the four spans must fit one turn.
+        if br < 0 or bd < 0 or bf < 0:
+            raise ValueError(
+                "cam segment angles (rise/dwell/fall) must be non-negative")
+        if br + bd + bf > 360.0 + 1e-9:
+            raise ValueError(
+                "cam rise+dwell+fall angles exceed 360 deg (got %g); they must fit "
+                "one revolution" % (br + bd + bf))
+        # a non-zero lift over a zero-duration rise/fall is an infinite-velocity
+        # (impossible) cam; without this it silently mislabels the segment.
+        if S != 0 and (br <= 0 or bf <= 0):
+            raise ValueError(
+                "cam needs positive 'rise_angle' and 'fall_angle' for a non-zero "
+                "rise (a zero span is an infinite-velocity follower)")
         th = float(a["angle"]) % 360.0
 
         def lift_frac(u):
