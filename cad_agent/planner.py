@@ -423,6 +423,11 @@ class Planner:
                         note="recipe bolted_stack%s" % (
                             " (n_spacers=%d)" % params["n_spacers"]
                             if "n_spacers" in params else ""))
+        if (re.search(r"\b(?:parametric|param)\s+plate\b", t)
+                or re.search(r"参数化?板|特征(?:树)?板", raw)):
+            return Plan(steps=[{"tool": "recipe",
+                                "args": {"name": "parametric_plate", "params": {}}}],
+                        note="recipe parametric_plate")
         if (re.search(r"\b(?:flanged|mounting)\s+bracket\b", t)
                 or re.search(r"\bbracket\b", t)
                 or re.search(r"法兰支架|安装支架|支架", raw)):
