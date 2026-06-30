@@ -205,6 +205,90 @@ def _expression_edges(
     return sorted(edges)
 
 
+# FreeCAD's ``Sketcher::ConstraintType`` enum (Mod/Sketcher/App/Constraint.h),
+# stable across the 1.0.x line. The integer is what ``<Constrain Type=.../>``
+# persists; the name is what the GUI's constraint toolbar speaks.
+_CONSTRAINT_TYPES = {
+    0: "None", 1: "Coincident", 2: "Horizontal", 3: "Vertical", 4: "Parallel",
+    5: "Tangent", 6: "Distance", 7: "DistanceX", 8: "DistanceY", 9: "Angle",
+    10: "Perpendicular", 11: "Radius", 12: "Equal", 13: "PointOnObject",
+    14: "Symmetric", 15: "InternalAlignment", 16: "SnellsLaw", 17: "Block",
+    18: "Diameter", 19: "Weight",
+}
+# The subset that carries a driving dimension (a length / angle / radius the
+# user dials): a value change here re-shapes geometry, unlike a geometric
+# constraint (coincident / horizontal) which only removes a degree of freedom.
+_DIMENSIONAL_TYPES = {6, 7, 8, 9, 11, 16, 18, 19}
+
+
+def _sketch_constraints(data_el: Optional[ET.Element]
+                        ) -> "Dict[str, Dict[str, Any]]":
+    """sketch name -> its solver constraint list, read kernel-free.
+
+    A Sketcher document's *real* parametric content is its constraint graph: the
+    ``Sketcher::PropertyConstraintList`` records each ``<Constrain>`` with a
+    ``Type`` (coincident / horizontal / distance / ...), an optional ``Name``,
+    its driving ``Value`` and whether it is ``IsDriving`` / ``IsActive``. The
+    GUI authors these one toolbar click at a time; surfaced structurally here
+    they become a first-class view of how a sketch is pinned down -- the second
+    parametric graph (alongside ``ExpressionEngine``) the file actually holds.
+
+    Per sketch: ``constraints`` (each ``{type, type_name, name, value, driving,
+    active}``), ``count``, and ``dimensions`` -- the *named driving dimensional*
+    constraints as ``{name: value}`` (the user-facing knobs, e.g.
+    ``{"width": 40.0, "height": 25.0}``).
+    """
+    out: Dict[str, Dict[str, Any]] = {}
+    if data_el is None:
+        return out
+    for obj in data_el.findall("Object"):
+        name = obj.get("name")
+        if name is None:
+            continue
+        clist = None
+        for props_el in obj.findall("Properties"):
+            for prop in props_el.findall("Property"):
+                if prop.get("type") == "Sketcher::PropertyConstraintList":
+                    clist = prop.find("ConstraintList")
+                    break
+            if clist is not None:
+                break
+        if clist is None:
+            continue
+        cons: List[Dict[str, Any]] = []
+        dims: Dict[str, float] = {}
+        for c in clist.findall("Constrain"):
+            ctype = _maybe_float(c.get("Type"))
+            ctype = int(ctype) if isinstance(ctype, (int, float)) else None
+            cname = c.get("Name") or ""
+            value = _maybe_float(c.get("Value"))
+            driving = c.get("IsDriving") != "0"
+            cons.append({
+                "type": ctype,
+                "type_name": _CONSTRAINT_TYPES.get(ctype, "Type%s" % ctype),
+                "name": cname,
+                "value": value,
+                "driving": driving,
+                "active": c.get("IsActive") != "0",
+            })
+            if (cname and driving and ctype in _DIMENSIONAL_TYPES
+                    and isinstance(value, (int, float))
+                    and not isinstance(value, bool)):
+                dims[cname] = value
+        out[name] = {"constraints": cons, "count": len(cons), "dimensions": dims}
+    return out
+
+
+def _sketch_dimensions(sketches: "Dict[str, Dict[str, Any]]") -> Dict[str, Any]:
+    """Flatten every sketch's named driving dimensions to ``sketch.name ->
+    value`` -- the document's user-facing dimensional knobs in one map."""
+    out: Dict[str, Any] = {}
+    for sk, info in sketches.items():
+        for nm, val in info["dimensions"].items():
+            out["%s.%s" % (sk, nm)] = val
+    return out
+
+
 def _label_map(props: Dict[str, Dict[str, Any]]) -> Dict[str, str]:
     """User-facing Label -> object name, for resolving ``<<Label>>`` refs."""
     out: Dict[str, str] = {}
@@ -254,6 +338,8 @@ def inspect_document(path: str) -> Dict[str, Any]:
         expressions = _object_expressions(data_el)
         obj_names = {o["name"] for o in objects if o["name"]}
         expr_edges = _expression_edges(expressions, obj_names, _label_map(props))
+        sketches = _sketch_constraints(data_el)
+        sketch_dims = _sketch_dimensions(sketches)
         breps = []
         for n in names:
             if not n.lower().endswith(_BREP_EXT):
@@ -278,6 +364,9 @@ def inspect_document(path: str) -> Dict[str, Any]:
             "expressions": expressions,
             "expression_count": sum(len(v) for v in expressions.values()),
             "expression_edges": expr_edges,
+            "sketches": sketches,
+            "sketch_constraint_count": sum(s["count"] for s in sketches.values()),
+            "sketch_dimensions": sketch_dims,
             "brep_files": breps,
             "brep_bytes": sum(b["bytes"] for b in breps),
             "has_gui": GUI_XML in names,
@@ -370,9 +459,19 @@ def diff(path_a: str, path_b: str) -> Dict[str, Any]:
         if fa != fb:
             expr_changes[key] = {"from": fa, "to": fb}
 
+    # sketch dimensions: a named driving constraint (width / radius / angle)
+    # re-dialled is a parametric edit invisible at the property level (the
+    # constraint list collapses to one opaque blob). Surface it per sketch.name.
+    a_dim, b_dim = a["sketch_dimensions"], b["sketch_dimensions"]
+    dim_changes: Dict[str, Dict[str, Any]] = {}
+    for key in sorted(set(a_dim) | set(b_dim)):
+        va, vb = a_dim.get(key), b_dim.get(key)
+        if va != vb:
+            dim_changes[key] = {"from": va, "to": vb}
+
     identical = not (added or removed or retyped or edges_added
                      or edges_removed or prop_changes or brep_changes
-                     or expr_changes)
+                     or expr_changes or dim_changes)
     return {
         "identical": identical,
         "objects_added": added,
@@ -382,6 +481,7 @@ def diff(path_a: str, path_b: str) -> Dict[str, Any]:
         "edges_removed": edges_removed,
         "property_changes": prop_changes,
         "expression_changes": expr_changes,
+        "dimension_changes": dim_changes,
         "brep_changes": brep_changes,
     }
 

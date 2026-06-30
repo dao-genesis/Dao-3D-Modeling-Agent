@@ -251,6 +251,49 @@ def main():
     print("docformat: %d expression(s), edges=%s -- parametric wiring from file"
           % (ix["expression_count"], ix["expression_edges"]))
 
+    # ---- the second parametric graph: Sketcher constraints (kernel-free) -- #
+    # the fusion doc's pad profile is a fully-constrained sketch; its constraint
+    # list -- the solver graph the GUI authors click by click -- is read here
+    # straight from the file, with its named driving dimensions surfaced as the
+    # user-facing knobs (width / height).
+    sinfo = docformat.inspect_document(path)
+    assert sinfo["sketch_constraint_count"] > 0, sinfo
+    assert sinfo["sketch_dimensions"], sinfo["sketches"]
+    sk_name, sk = next(iter(sinfo["sketches"].items()))
+    tnames = {c["type_name"] for c in sk["constraints"]}
+    # the rectangle resolves to the canonical solver mix, every type id mapped.
+    assert {"Coincident", "DistanceX", "DistanceY"} <= tnames, tnames
+    assert not any(t.startswith("Type") for t in tnames), tnames
+    assert sk["dimensions"].get("width") == 40, sk["dimensions"]
+    # kernel cross-check: the live sketch holds exactly the constraints the file
+    # parser recovered -- the constraint graph is one truth across both layers.
+    rp = App.openDocument(path)
+    try:
+        assert len(rp.getObject(sk_name).Constraints) == sk["count"], sk["count"]
+    finally:
+        App.closeDocument(rp.Name)
+    print("docformat: %d sketch constraint(s), dims=%s -- solver graph from file "
+          "== kernel" % (sinfo["sketch_constraint_count"], sinfo["sketch_dimensions"]))
+
+    # a re-dialled named dimension surfaces in diff.dimension_changes -- a
+    # parametric edit the collapsed constraint-list blob diff can't otherwise see.
+    def _padded(tag, width):
+        sess = new_session("dim" + tag)
+        assert sess.act("param.body", {"name": "Bd"}).ok
+        assert sess.act("param.pad", {"body": "Bd", "feature": "Pl",
+                                      "profile": {"rect": [width, 30]},
+                                      "length": 5}).ok
+        out = os.path.join(OUT, "dim_%s.FCStd" % tag)
+        assert sess.act("doc.save", {"path": out}).ok
+        return out
+    dim_a, dim_b = _padded("a", 40), _padded("b", 55)
+    dd = docformat.diff(dim_a, dim_b)
+    assert not dd["identical"], dd
+    dk = next(k for k in dd["dimension_changes"] if k.endswith(".width"))
+    assert dd["dimension_changes"][dk] == {"from": 40, "to": 55}, dd["dimension_changes"]
+    assert docformat.diff(dim_a, dim_a)["dimension_changes"] == {}, "self-diff"
+    print("docformat.diff: re-dialled sketch dimension named in dimension_changes")
+
     # ---- two-layer fusion: the live kernel agrees with the file ---------- #
     # ss.bindings reads the same ExpressionEngine wiring from the *running*
     # document; it must match what the file-level parser recovered -- the two
