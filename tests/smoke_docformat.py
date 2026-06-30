@@ -585,6 +585,41 @@ def main():
     print("docformat.synthesize: authored Part::Compound of 2 disjoint cubes -> "
           "kernel groups vol %g (sum, no CSG; links round-trip)" % gvol)
 
+    # ---- linear_pattern: author an N-copy array from one spec ------------- #
+    # the file layer's leverage: one parametric description -> a whole array a
+    # human would stamp out by repeating a GUI place-copy. Five disjoint cubes
+    # spaced 20 apart, grouped into a Compound; kernel volume = 5 * 1000.
+    pat_specs = docformat.linear_pattern(
+        {"type": "Part::Box", "name": "Cell",
+         "properties": {"Length": 10, "Width": 10, "Height": 10}},
+        count=5, offset=[20, 0, 0], group="Part::Compound")
+    assert [s["name"] for s in pat_specs] == [
+        "Cell_0", "Cell_1", "Cell_2", "Cell_3", "Cell_4", "Cell_all"], pat_specs
+    # each copy is translated i*offset from the base position.
+    assert pat_specs[3]["placement"]["position"] == [60, 0, 0], pat_specs[3]
+    pat_p = os.path.join(OUT, "synth_pattern.FCStd")
+    docformat.synthesize(pat_p, pat_specs)
+    pat_ix = docformat.inspect_document(pat_p)
+    assert pat_ix["type_counts"].get("Part::Box") == 5, pat_ix["type_counts"]
+    assert len(pat_ix["dependencies"]["Cell_all"]) == 5, pat_ix["dependencies"]
+    patd = App.openDocument(pat_p)
+    try:
+        for o in patd.Objects:
+            o.touch()
+        patd.recompute(None, True)
+        avol = patd.getObject("Cell_all").Shape.Volume
+    finally:
+        App.closeDocument(patd.Name)
+    assert abs(avol - 5 * 1000) < 1e-3, avol
+    # group=None yields just the copies (no grouping object).
+    assert len(docformat.linear_pattern(
+        {"type": "Part::Box", "name": "C",
+         "properties": {"Length": 1, "Width": 1, "Height": 1}},
+        count=3, offset=[2, 0, 0])) == 3
+    print("docformat.linear_pattern: one spec -> 5-cube array grouped to vol %g "
+          "(superhuman authoring: a whole pattern from one parametric line)"
+          % avol)
+
     # ---- summarize: decompile a file back to a synthesize spec (round-trip) - #
     # author a document spanning every type the authoring layer writes -- a
     # parametric primitive, a placed/rotated primitive, a 2-way boolean, an
