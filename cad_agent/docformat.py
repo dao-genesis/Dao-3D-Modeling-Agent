@@ -23,6 +23,7 @@ prove a scripted build round-trips through the file format unchanged.
 """
 from __future__ import annotations
 
+import copy
 import hashlib
 import math
 import os
@@ -1330,3 +1331,60 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
         zo.writestr(DOCUMENT_XML, payload)
     return {"out": path, "objects": [s["name"] for s in objects],
             "object_count": len(objects)}
+
+
+def linear_pattern(
+    base: "Dict[str, Any]",
+    count: int,
+    offset: "List[float]",
+    group: "Optional[str]" = None,
+) -> "List[Dict[str, Any]]":
+    """Expand a base primitive spec into ``count`` translated copies, returning
+    a ``synthesize`` spec list (feed it straight to :func:`synthesize`).
+
+    Copy ``i`` (0-based) is the base translated by ``i * offset`` from its own
+    position, named ``"<base name>_<i>"``. With ``group`` set to a link-list
+    type (``Part::Compound`` to merely bundle them, or ``Part::MultiFuse`` /
+    ``Part::MultiCommon`` to fold their CSG) a final object over all copies is
+    appended, named ``"<base name>_all"``.
+
+    The file layer's leverage made concrete: a human stamps out an array by
+    repeating a GUI place-copy step ``count`` times; here the whole pattern is
+    computed and written from one parametric description -- authoring at a scale
+    and precision the manual flow cannot match. 道法自然.
+    """
+    if not isinstance(base, dict) or base.get("type") not in _PRIMITIVES:
+        raise ValueError(
+            "linear_pattern: 'base' must be a primitive spec (type in %s)"
+            % ", ".join(sorted(_PRIMITIVES)))
+    bname = base.get("name")
+    if not isinstance(bname, str) or not bname.strip():
+        raise ValueError("linear_pattern: base needs a non-empty name")
+    if not isinstance(count, int) or isinstance(count, bool) or count < 1:
+        raise ValueError("linear_pattern: 'count' must be an int >= 1")
+    if (not isinstance(offset, (list, tuple)) or len(offset) != 3
+            or not all(isinstance(c, (int, float)) and not isinstance(c, bool)
+                       for c in offset)):
+        raise ValueError("linear_pattern: 'offset' must be [dx, dy, dz] numbers")
+    if group is not None and group not in _LINKLIST_TYPES:
+        raise ValueError(
+            "linear_pattern: 'group' must be one of %s (or None)"
+            % ", ".join(sorted(_LINKLIST_TYPES)))
+    base_pos = ((base.get("placement") or {}).get("position")) or [0.0, 0.0, 0.0]
+    if len(base_pos) != 3:
+        raise ValueError("linear_pattern: base placement position must be [x,y,z]")
+    specs: List[Dict[str, Any]] = []
+    names: List[str] = []
+    for i in range(count):
+        copy_spec = copy.deepcopy(base)
+        cname = "%s_%d" % (bname, i)
+        copy_spec["name"] = cname
+        placement = dict(copy_spec.get("placement") or {})
+        placement["position"] = [base_pos[j] + i * offset[j] for j in range(3)]
+        copy_spec["placement"] = placement
+        specs.append(copy_spec)
+        names.append(cname)
+    if group is not None:
+        key = _LINKLIST_TYPES[group][0]
+        specs.append({"type": group, "name": "%s_all" % bname, key: names})
+    return specs
