@@ -214,10 +214,15 @@ def _doc_handlers(state):
                 a.get("name"), a.get("length"), a.get("radius"),
                 center=a.get("center"),
                 construction=a.get("construction", False))
+        elif shape == "ellipse":
+            obj = df.ellipse(
+                a.get("name"), a.get("major_radius"), a.get("minor_radius"),
+                center=a.get("center"), angle=a.get("angle", 0.0),
+                construction=a.get("construction", False))
         else:
             raise ValueError(
-                "doc.profile 'shape' must be 'regular_polygon' or 'slot' "
-                "(got %r)" % (shape,))
+                "doc.profile 'shape' must be 'regular_polygon', 'slot' or "
+                "'ellipse' (got %r)" % (shape,))
         result = {"shape": shape, "object": obj}
         path = a.get("path")
         if path is not None:
