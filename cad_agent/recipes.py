@@ -190,9 +190,48 @@ def bolted_stack(n_spacers: int = 3, plate_size: float = 60.0, plate_h: float = 
                                         "bolt": round(v_bolt, 4), "nut": round(v_nut, 4)}})
 
 
+# --------------------------------------------------------------------------- #
+# recipe: parametric plate (a PartDesign FEATURE TREE, not booleans) -- the
+# same mounting plate built as a parametric body so it lives as an editable
+# pad+pocket history, exercising a different workbench from the solid.* recipes
+# --------------------------------------------------------------------------- #
+def parametric_plate(length: float = 80.0, width: float = 50.0, thickness: float = 10.0,
+                     bore_r: float = 4.0, hole_r: float = 3.0, hole_inset: float = 8.0,
+                     name: str = "Plate") -> Recipe:
+    """A rectangular plate with a central bore and four corner holes, built as a
+    PartDesign body (pad the slab, pocket each hole ``through``) instead of by
+    boolean cuts -- the result is an editable feature tree. The sketch rectangle
+    is centred on the origin, so holes sit at +/-(half - inset)."""
+    L, W, T = _pos(length, "length"), _pos(width, "width"), _pos(thickness, "thickness")
+    cr, hr = _pos(bore_r, "bore_r"), _pos(hole_r, "hole_r")
+    hi = _pos(hole_inset, "hole_inset")
+    if not isinstance(name, str) or not name:
+        raise ValueError("name must be a non-empty string (got %r)" % (name,))
+    if 2 * hi >= min(L, W):
+        raise ValueError("hole_inset (%g) too large for plate %gx%g" % (hi, L, W))
+    hx, hy = L / 2.0 - hi, W / 2.0 - hi
+    steps: List[Step] = [
+        {"tool": "param.body", "args": {"name": name}},
+        {"tool": "param.pad", "args": {"body": name, "feature": "Slab",
+                                       "profile": {"rect": [L, W]}, "length": T}},
+        {"tool": "param.pocket", "args": {"body": name, "feature": "Bore",
+                                          "profile": {"circle": cr, "at": [0, 0]},
+                                          "through": True}},
+    ]
+    for i, (sx, sy) in enumerate(((hx, hy), (-hx, hy), (hx, -hy), (-hx, -hy)), 1):
+        steps.append({"tool": "param.pocket",
+                      "args": {"body": name, "feature": "H%d" % i,
+                               "profile": {"circle": hr, "at": [sx, sy]}, "through": True}})
+    volume = L * W * T - math.pi * cr * cr * T - 4 * math.pi * hr * hr * T
+    return Recipe(name="parametric_plate", steps=steps,
+                  meta={"part": name, "volume": round(volume, 4),
+                        "bbox_size": [L, W, T]})
+
+
 RECIPES: Dict[str, Callable[..., Recipe]] = {
     "flanged_bracket": flanged_bracket,
     "bolted_stack": bolted_stack,
+    "parametric_plate": parametric_plate,
 }
 
 

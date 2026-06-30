@@ -50,6 +50,8 @@ def main():
     assert pb.steps[0]["args"]["params"].get("n_spacers") == 3, pb.steps
     pbr = pl.plan("make a mounting bracket")
     assert pbr.steps[0]["args"]["name"] == "flanged_bracket", pbr.steps
+    ppl = pl.plan("build a parametric plate")
+    assert ppl.steps[0]["args"]["name"] == "parametric_plate", ppl.steps
     # the recipe router must not poach ordinary modelling/measuring intents.
     assert pl.plan("box 20x10x5").steps[0]["tool"] == "solid.box"
     assert pl.plan("measure plate").steps[0]["tool"] == "solid.measure"
@@ -114,6 +116,14 @@ def main():
     assert rv.ok and rv.data["verified"], rv.data
     assert not rv.data["mismatches"] and rv.data["failed"] == 0, rv.data
     s4.registry.kernel.shutdown()
+
+    # ---- a PartDesign feature-tree plate, at fresh dims, self-verified ---- #
+    s5 = new_session("recipes5")
+    rp = s5.make("parametric_plate", verify=True, length=90, width=60, thickness=8,
+                 bore_r=5, hole_r=3.5, hole_inset=10)
+    assert rp.ok and rp.data["failed"] == 0, rp.data
+    assert rp.data["verified"] and not rp.data["mismatches"], rp.data
+    s5.registry.kernel.shutdown()
 
     print("recipe library: bolted_stack(n=5,custom) vol %.2f bbox %s clash-free; "
           "flanged_bracket(100x60) vol %.2f -- recipes generalise" % (
