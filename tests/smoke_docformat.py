@@ -936,6 +936,47 @@ def main():
     print("docformat slot: obround length 20 radius 5 from one description -> "
           "closed wire area %g (line+arc mixed profile)" % slot_area)
 
+    # ---- ellipse: a single curved edge closing a loop, one description --- #
+    # a tilted ellipse the human places by centre + two dragged axes under
+    # tangency constraints -- here both radii and the tilt come from one
+    # (major, minor, angle) description as a single Part::GeomEllipse edge. The
+    # enclosed area is pi*M*m = pi*10*5 = 157.08, tilt-invariant.
+    ellg = docformat.ellipse("Ell", 10, 5, center=[1, 2], angle=25)
+    assert len(ellg["geometry"]) == 1, ellg
+    ell_p = os.path.join(OUT, "synth_ellipse.FCStd")
+    docformat.synthesize(ell_p, [ellg])
+    ell_rt = os.path.join(OUT, "synth_ellipse_rt.FCStd")
+    docformat.synthesize(ell_rt, docformat.summarize(ell_p))
+    assert docformat.fingerprint(ell_p) == docformat.fingerprint(ell_rt)
+    eld = App.openDocument(ell_p)
+    try:
+        for o in eld.Objects:
+            o.touch()
+        eld.recompute(None, True)
+        ell_w = eld.getObject("Ell").Shape.Wires[0]
+        ell_closed = ell_w.isClosed()
+        ell_area = Part.Face(ell_w).Area
+    finally:
+        App.closeDocument(eld.Name)
+    assert ell_closed, "ellipse wire must close"
+    assert abs(ell_area - (math.pi * 10 * 5)) < 1e-6, ell_area
+    for kwargs, token in (
+            (dict(name="E", major_radius=-1, minor_radius=5),
+             "'major_radius' must be a positive"),
+            (dict(name="E", major_radius=10, minor_radius=0),
+             "'minor_radius' must be a positive"),
+            (dict(name="E", major_radius=3, minor_radius=5),
+             "'major_radius' must be >= 'minor_radius'"),
+            (dict(name="", major_radius=10, minor_radius=5), "non-empty name")):
+        try:
+            docformat.ellipse(**kwargs)
+        except ValueError as exc:
+            assert token in str(exc), (token, exc)
+        else:
+            raise AssertionError("expected ValueError for %r" % kwargs)
+    print("docformat ellipse: 10x5 tilted 25deg from one description -> "
+          "closed wire area %g (single curved edge)" % ell_area)
+
     # ---- Part::Extrusion: sweep a sketch profile into a solid ------------ #
     # the join between the sketch layer and the solid layer: author a 10x5
     # rectangle sketch + an extrusion that sweeps it 7 along +Z. The kernel
@@ -1226,10 +1267,27 @@ def main():
     finally:
         App.closeDocument(sld2.Name)
     assert abs(slot2_area - (2 * 30 * 6 + math.pi * 36)) < 1e-6, slot2_area
+    # the op also generates a tilted ellipse (a single curved edge) to a file.
+    op_ell = os.path.join(OUT, "op_ellipse.FCStd")
+    ef = s.act("doc.profile", {
+        "shape": "ellipse", "name": "Ell", "major_radius": 12,
+        "minor_radius": 7, "angle": 40, "path": op_ell})
+    assert ef.ok and ef.data["out"] == op_ell, ef
+    assert len(ef.data["object"]["geometry"]) == 1, ef.data
+    eld2 = App.openDocument(op_ell)
+    try:
+        for o in eld2.Objects:
+            o.touch()
+        eld2.recompute(None, True)
+        ell2_area = Part.Face(eld2.getObject("Ell").Shape.Wires[0]).Area
+    finally:
+        App.closeDocument(eld2.Name)
+    assert abs(ell2_area - (math.pi * 12 * 7)) < 1e-6, ell2_area
     assert not s.act("doc.profile", {"shape": "blob", "name": "X"}).ok
-    print("doc.profile: pentagon radius 8 (area %g) + slot 30x6 (area %g) "
-          "generated+synthesized from one description each (profile generation "
-          "as an agent op)" % (pent_area, slot2_area))
+    print("doc.profile: pentagon radius 8 (area %g) + slot 30x6 (area %g) + "
+          "ellipse 12x7 (area %g) generated+synthesized from one description "
+          "each (profile generation as an agent op)"
+          % (pent_area, slot2_area, ell2_area))
 
     # ---- two-layer fusion: the live kernel agrees with the file ---------- #
     # ss.bindings reads the same ExpressionEngine wiring from the *running*

@@ -317,6 +317,7 @@ def _sketch_geometry(data_el: Optional[ET.Element]
             seg = g.find("LineSegment")
             circ = g.find("Circle")
             arc = g.find("ArcOfCircle")
+            ell = g.find("Ellipse")
             if gtype == "Part::GeomLineSegment" and seg is not None:
                 entry["line"] = True
                 entry["start"] = [float(seg.get("StartX", 0)),
@@ -335,6 +336,13 @@ def _sketch_geometry(data_el: Optional[ET.Element]
                 entry["radius"] = float(arc.get("Radius", 0))
                 entry["start_angle"] = float(arc.get("StartAngle", 0))
                 entry["end_angle"] = float(arc.get("EndAngle", 0))
+            elif gtype == "Part::GeomEllipse" and ell is not None:
+                entry["ellipse"] = True
+                entry["center"] = [float(ell.get("CenterX", 0)),
+                                   float(ell.get("CenterY", 0))]
+                entry["major_radius"] = float(ell.get("MajorRadius", 0))
+                entry["minor_radius"] = float(ell.get("MinorRadius", 0))
+                entry["angle"] = float(ell.get("AngleXU", 0))
             cons = g.find("Construction")
             entry["construction"] = (cons is not None
                                       and cons.get("value") == "1")
@@ -641,6 +649,12 @@ def summarize(path: str) -> "List[Dict[str, Any]]":
                     seg = {"center": list(g["center"]), "radius": g["radius"],
                            "start_angle": g["start_angle"],
                            "end_angle": g["end_angle"]}
+                elif g.get("ellipse"):
+                    seg = {"center": list(g["center"]),
+                           "major_radius": g["major_radius"],
+                           "minor_radius": g["minor_radius"]}
+                    if g.get("angle"):
+                        seg["angle"] = g["angle"]
                 else:
                     continue
                 if g.get("construction"):
@@ -1236,13 +1250,16 @@ def _sketch_segment_kind(seg: "Dict[str, Any]") -> "Optional[str]":
 
     The form is discriminated by which keys are present: a ``line`` has
     ``start``/``end`` endpoints; an ``arc`` adds ``start_angle``/``end_angle`` to
-    a ``center``/``radius``; a ``circle`` is the bare ``center``/``radius``.
+    a ``center``/``radius``; an ``ellipse`` carries ``major_radius`` /
+    ``minor_radius``; a ``circle`` is the bare ``center``/``radius``.
     Returns ``None`` if no form matches so callers can raise a guided error.
     """
     if "start" in seg or "end" in seg:
         return "line"
     if "start_angle" in seg or "end_angle" in seg:
         return "arc"
+    if "major_radius" in seg or "minor_radius" in seg:
+        return "ellipse"
     if "center" in seg or "radius" in seg:
         return "circle"
     return None
@@ -1258,10 +1275,13 @@ def _geometry_element(parent: ET.Element, segments: "List[Dict[str, Any]]") -> N
     kernel rebuilds the wire on recompute and a closed loop becomes a face the
     upstream pad/extrusion/revolution consumes:
 
-    * line   -- ``{"start": [x, y], "end": [x, y]}`` -> ``Part::GeomLineSegment``
-    * circle -- ``{"center": [x, y], "radius": r}`` -> ``Part::GeomCircle``
-    * arc    -- ``{"center": [x, y], "radius": r, "start_angle": a,
+    * line    -- ``{"start": [x, y], "end": [x, y]}`` -> ``Part::GeomLineSegment``
+    * circle  -- ``{"center": [x, y], "radius": r}`` -> ``Part::GeomCircle``
+    * arc     -- ``{"center": [x, y], "radius": r, "start_angle": a,
       "end_angle": b}`` (radians) -> ``Part::GeomArcOfCircle``
+    * ellipse -- ``{"center": [x, y], "major_radius": M, "minor_radius": m,
+      "angle": t}`` (``angle`` is the major-axis tilt from +X in radians,
+      default 0) -> ``Part::GeomEllipse``
     """
     prop = ET.SubElement(parent, "Property",
                          {"name": "Geometry",
@@ -1272,7 +1292,8 @@ def _geometry_element(parent: ET.Element, segments: "List[Dict[str, Any]]") -> N
         kind = _sketch_segment_kind(seg)
         gtype = {"line": "Part::GeomLineSegment",
                  "circle": "Part::GeomCircle",
-                 "arc": "Part::GeomArcOfCircle"}[kind]
+                 "arc": "Part::GeomArcOfCircle",
+                 "ellipse": "Part::GeomEllipse"}[kind]
         g = ET.SubElement(glist, "Geometry",
                           {"type": gtype, "id": str(i), "migrated": "1"})
         exts = ET.SubElement(g, "GeoExtensions", {"count": "1"})
@@ -1288,6 +1309,16 @@ def _geometry_element(parent: ET.Element, segments: "List[Dict[str, Any]]") -> N
                            "StartY": "%.16f" % float(sy), "StartZ": "%.16f" % 0.0,
                            "EndX": "%.16f" % float(ex),
                            "EndY": "%.16f" % float(ey), "EndZ": "%.16f" % 0.0})
+        elif kind == "ellipse":
+            cx, cy = seg["center"]
+            ET.SubElement(g, "Ellipse",
+                          {"CenterX": "%.16f" % float(cx),
+                           "CenterY": "%.16f" % float(cy), "CenterZ": "%.16f" % 0.0,
+                           "NormalX": "%.16f" % 0.0, "NormalY": "%.16f" % 0.0,
+                           "NormalZ": "%.16f" % 1.0,
+                           "MajorRadius": "%.16f" % float(seg["major_radius"]),
+                           "MinorRadius": "%.16f" % float(seg["minor_radius"]),
+                           "AngleXU": "%.16f" % float(seg.get("angle", 0.0))})
         else:
             cx, cy = seg["center"]
             attrs = {"CenterX": "%.16f" % float(cx),
@@ -1582,8 +1613,9 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                 if kind is None:
                     raise ValueError(
                         "synthesize: sketch %s segment #%d must be a line "
-                        "(start/end), circle (center/radius) or arc "
-                        "(center/radius/start_angle/end_angle)" % (name, j))
+                        "(start/end), circle (center/radius), arc "
+                        "(center/radius/start_angle/end_angle) or ellipse "
+                        "(center/major_radius/minor_radius)" % (name, j))
                 if kind == "line":
                     _pt2(seg.get("start"), j, "start")
                     _pt2(seg.get("end"), j, "end")
@@ -1591,6 +1623,20 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                         raise ValueError(
                             "synthesize: sketch %s segment #%d is degenerate "
                             "(start == end)" % (name, j))
+                elif kind == "ellipse":
+                    _pt2(seg.get("center"), j, "center")
+                    _num(seg.get("major_radius"), j, "major_radius")
+                    _num(seg.get("minor_radius"), j, "minor_radius")
+                    if seg["minor_radius"] <= 0:
+                        raise ValueError(
+                            "synthesize: sketch %s segment #%d 'minor_radius' "
+                            "must be positive" % (name, j))
+                    if seg["major_radius"] < seg["minor_radius"]:
+                        raise ValueError(
+                            "synthesize: sketch %s segment #%d 'major_radius' "
+                            "must be >= 'minor_radius'" % (name, j))
+                    if "angle" in seg:
+                        _num(seg.get("angle"), j, "angle")
                 else:
                     _pt2(seg.get("center"), j, "center")
                     _num(seg.get("radius"), j, "radius")
@@ -2032,6 +2078,54 @@ def slot(
         for seg in geometry:
             seg["construction"] = True
     return {"type": _SKETCH_TYPE, "name": name, "geometry": geometry}
+
+
+def ellipse(
+    name: str,
+    major_radius: float,
+    minor_radius: float,
+    center: "Optional[List[float]]" = None,
+    angle: float = 0.0,
+    construction: bool = False,
+) -> "Dict[str, Any]":
+    """Generate a closed ellipse as a single-edge sketch spec.
+
+    The ellipse is centred at ``center`` (default origin) in the XY plane with
+    its major axis of ``major_radius`` tilted ``angle`` degrees from +X and its
+    minor axis of ``minor_radius`` perpendicular. One ``Part::GeomEllipse`` edge
+    closes the loop, so the profile extrudes / revolves straight from file; the
+    enclosed area is ``pi * major_radius * minor_radius``. A human places the
+    centre and drags two axes under tangency constraints -- here both radii and
+    the tilt come from one description, written exactly. 道法自然.
+    """
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("ellipse: needs a non-empty name")
+    if (isinstance(major_radius, bool)
+            or not isinstance(major_radius, (int, float)) or major_radius <= 0):
+        raise ValueError("ellipse: 'major_radius' must be a positive number")
+    if (isinstance(minor_radius, bool)
+            or not isinstance(minor_radius, (int, float)) or minor_radius <= 0):
+        raise ValueError("ellipse: 'minor_radius' must be a positive number")
+    if major_radius < minor_radius:
+        raise ValueError("ellipse: 'major_radius' must be >= 'minor_radius'")
+    if center is None:
+        center = [0.0, 0.0]
+    if (not isinstance(center, (list, tuple)) or len(center) != 2
+            or not all(isinstance(c, (int, float)) and not isinstance(c, bool)
+                       for c in center)):
+        raise ValueError("ellipse: 'center' must be [x, y] numbers")
+    if isinstance(angle, bool) or not isinstance(angle, (int, float)):
+        raise ValueError("ellipse: 'angle' must be a number (degrees)")
+    if not isinstance(construction, bool):
+        raise ValueError("ellipse: 'construction' must be a bool")
+    seg: Dict[str, Any] = {"center": [float(center[0]), float(center[1])],
+                           "major_radius": float(major_radius),
+                           "minor_radius": float(minor_radius)}
+    if angle:
+        seg["angle"] = math.radians(float(angle))
+    if construction:
+        seg["construction"] = True
+    return {"type": _SKETCH_TYPE, "name": name, "geometry": [seg]}
 
 
 def _rodrigues(v: "List[float]", axis: "List[float]", angle_deg: float) -> "List[float]":
