@@ -554,6 +554,37 @@ def main():
     print("docformat.synthesize: authored Part::MultiFuse over 3 cubes -> kernel "
           "folds union vol %g in one recompute (N-ary CSG from file)" % uvol)
 
+    # ---- synthesize Part::Compound: group disjoint shapes, no CSG ---------- #
+    # two non-overlapping 10-cubes grouped into one Compound; no union/carve --
+    # the shapes coexist, so the compound volume is the plain sum 2000. Authored
+    # via the same link-list path as the N-ary booleans, under 'links'.
+    cp_p = os.path.join(OUT, "synth_compound.FCStd")
+    docformat.synthesize(cp_p, [
+        {"type": "Part::Box", "name": "L",
+         "properties": {"Length": 10, "Width": 10, "Height": 10}},
+        {"type": "Part::Box", "name": "R",
+         "properties": {"Length": 10, "Width": 10, "Height": 10},
+         "placement": {"position": [20, 0, 0]}},
+        {"type": "Part::Compound", "name": "Grp", "links": ["L", "R"]},
+    ])
+    cp_ix = docformat.inspect_document(cp_p)
+    assert set(cp_ix["dependencies"]["Grp"]) == {"L", "R"}, cp_ix[
+        "dependencies"]["Grp"]
+    # summarize round-trips the compound back to a 'links' spec.
+    cp_spec = next(s for s in docformat.summarize(cp_p) if s["name"] == "Grp")
+    assert cp_spec["links"] == ["L", "R"], cp_spec
+    cpd = App.openDocument(cp_p)
+    try:
+        for o in cpd.Objects:
+            o.touch()
+        cpd.recompute(None, True)
+        gvol = cpd.getObject("Grp").Shape.Volume
+    finally:
+        App.closeDocument(cpd.Name)
+    assert abs(gvol - 2000) < 1e-3, gvol
+    print("docformat.synthesize: authored Part::Compound of 2 disjoint cubes -> "
+          "kernel groups vol %g (sum, no CSG; links round-trip)" % gvol)
+
     # ---- summarize: decompile a file back to a synthesize spec (round-trip) - #
     # author a document spanning every type the authoring layer writes -- a
     # parametric primitive, a placed/rotated primitive, a 2-way boolean, an
