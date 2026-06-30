@@ -130,6 +130,9 @@ def main():
     rv = s4.make("bolted_stack", verify=True, n_spacers=2)
     assert rv.ok and rv.data["verified"], rv.data
     assert not rv.data["mismatches"] and rv.data["failed"] == 0, rv.data
+    # a verified build is now backed by BOTH the live kernel and an independent
+    # file-level parse: the .FCStd's object graph matched doc.info.
+    assert rv.data["file_layer_ok"], rv.data
     s4.registry.kernel.shutdown()
 
     # ---- a PartDesign feature-tree plate, at fresh dims, self-verified ---- #

@@ -147,11 +147,59 @@ class AgentSession:
                                "failed": failed}
         if verify and failed == 0:
             ver = self._verify_recipe(rec.meta, tol)
-            out["verified"] = ver["verified"]
-            out["mismatches"] = ver["mismatches"]
-            if not ver["verified"]:
-                out["failed"] = failed + len(ver["mismatches"])
+            mism = dict(ver["mismatches"])
+            # cross-check at the persistence layer: the file the kernel just
+            # wrote must carry the same object graph the kernel reports live, so
+            # a verified build is backed by *both* the live kernel and an
+            # independent file-level parse -- the two layers verify each other.
+            fl = self._verify_file_layer()
+            out["file_layer_ok"] = fl["ok"]
+            if fl["mismatch"]:
+                mism["file_layer"] = fl["mismatch"]
+            out["verified"] = not mism
+            out["mismatches"] = mism
+            if mism:
+                out["failed"] = failed + len(mism)
         return ToolResult.success(**out)
+
+    def _verify_file_layer(self) -> Dict[str, Any]:
+        """Independently confirm, at the persistence layer, that the ``.FCStd``
+        the kernel just wrote carries the same object graph the kernel reports
+        live. Saves to a throwaway file, parses it kernel-free via
+        :mod:`cad_agent.docformat`, and compares the object name/``TypeId`` sets
+        against ``doc.info`` -- file layer and API layer cross-checking."""
+        import os
+        import tempfile
+        from . import docformat
+        info = self.act("doc.info", {})
+        if not info.ok:
+            return {"ok": False, "mismatch": {"doc.info": info.error}}
+        live = {o["name"]: o["type"] for o in info.data["objects"]}
+        fd, path = tempfile.mkstemp(suffix=".FCStd")
+        os.close(fd)
+        try:
+            sv = self.act("doc.save", {"path": path})
+            if not sv.ok:
+                return {"ok": False, "mismatch": {"doc.save": sv.error}}
+            fileinfo = docformat.inspect_document(path)
+        finally:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        on_file = {o["name"]: o["type"] for o in fileinfo["objects"]}
+        mism: Dict[str, Any] = {}
+        missing = sorted(set(live) - set(on_file))
+        extra = sorted(set(on_file) - set(live))
+        if missing:
+            mism["missing_in_file"] = missing
+        if extra:
+            mism["missing_in_kernel"] = extra
+        retyped = {n: {"kernel": live[n], "file": on_file[n]}
+                   for n in (set(live) & set(on_file)) if live[n] != on_file[n]}
+        if retyped:
+            mism["type_mismatch"] = retyped
+        return {"ok": not mism, "mismatch": mism or None}
 
     def _verify_recipe(self, meta: Dict[str, Any], tol: float) -> Dict[str, Any]:
         """Perceive the just-built result and compare it to a recipe's closed-form
