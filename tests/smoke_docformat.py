@@ -496,6 +496,11 @@ def main():
     assert sht_ix["type_counts"].get("Spreadsheet::Sheet") == 1, sht_ix
     # binding to the table is a dependency edge Panel -> Params.
     assert "Params" in sht_ix["dependencies"]["Panel"], sht_ix["dependencies"]
+    # the file layer reads the control table back (the author->read dual): the
+    # aliases and their cell contents recovered with no kernel.
+    assert sht_ix["spreadsheet_cell_count"] == 2, sht_ix["spreadsheet_cell_count"]
+    f_aliases = sht_ix["spreadsheets"]["Params"]["aliases"]
+    assert f_aliases == {"width": "7", "height": "=width + 3"}, f_aliases
     shd = App.openDocument(sht_p)
     try:
         for o in shd.Objects:
@@ -503,12 +508,20 @@ def main():
         shd.recompute(None, True)
         panel = shd.getObject("Panel")
         pw, ph, pvol = float(panel.Width), float(panel.Height), panel.Shape.Volume
+        sheet = shd.getObject("Params")
+        # two layers, one truth: every alias the file parser found resolves in
+        # the running kernel to the value its cell content implies.
+        k_width, k_height = float(sheet.width), float(sheet.height)
     finally:
         App.closeDocument(shd.Name)
     assert abs(pw - 7) < 1e-6 and abs(ph - 10) < 1e-6, (pw, ph)   # w=7, h=w+3
     assert abs(pvol - 1 * 7 * 10) < 1e-6, pvol
-    print("docformat.synthesize: authored control table Params(w=7,h=w+3) -> "
-          "kernel drives Panel to %gx%g (file-first master model)" % (pw, ph))
+    assert abs(k_width - 7) < 1e-6 and abs(k_height - 10) < 1e-6, (k_width,
+                                                                   k_height)
+    print("docformat: authored control table Params(width=7,height=width+3) -> "
+          "file reads aliases %s, kernel resolves to %g/%g, drives Panel %gx%g "
+          "(author==read, two layers one truth)"
+          % (sorted(f_aliases), k_width, k_height, pw, ph))
 
     # guarded: empty spec, unknown primitive, duplicate name, undefined property,
     # a boolean whose operand does not resolve, a degenerate rotation axis, and
