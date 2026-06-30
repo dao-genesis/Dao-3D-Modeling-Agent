@@ -13,6 +13,7 @@ kernel, saves it, then reads it back *without the kernel* via
   parser reported -- a real round-trip; and
 * malformed inputs are guided, never leaking a raw zip/XML error.
 """
+import math
 import os
 import sys
 
@@ -363,6 +364,59 @@ def main():
         assert solid["topology"][k] == v, (k, solid["topology"][k], v)
     print("docformat: BREP topology %s -- the geometry root from file == kernel"
           % {k: v for k, v in solid["topology"].items() if v})
+
+    # ---- synthesize: author a whole model from nothing (no kernel) -------- #
+    # the most upstream act -- a model written as a file, the way code is. A box
+    # and a placed cylinder are authored straight into Document.xml with no BREP;
+    # the kernel generates the geometry on its first forced recompute, proving a
+    # hand-written file *is* a model.
+    syn_p = os.path.join(OUT, "synth.FCStd")
+    sres = docformat.synthesize(syn_p, [
+        {"type": "Part::Box", "name": "Blk",
+         "properties": {"Length": 12, "Width": 7, "Height": 4}},
+        {"type": "Part::Cylinder", "name": "Cyl",
+         "properties": {"Radius": 5, "Height": 10},
+         "placement": {"position": [30, 0, 0]}},
+    ])
+    assert sres["object_count"] == 2, sres
+    # the file layer reads back exactly what was authored -- no kernel involved.
+    syn_ix = docformat.inspect_document(syn_p)
+    assert syn_ix["type_counts"] == {"Part::Box": 1, "Part::Cylinder": 1}, syn_ix
+    assert syn_ix["brep_files"] == [], "authored file carries no geometry"
+    # the kernel realises the geometry from the authored scalars alone.
+    sd = App.openDocument(syn_p)
+    try:
+        for o in sd.Objects:
+            o.touch()
+        sd.recompute(None, True)
+        blk, cyl = sd.getObject("Blk"), sd.getObject("Cyl")
+        box_vol, cyl_vol = blk.Shape.Volume, cyl.Shape.Volume
+        cyl_x = cyl.Placement.Base.x
+    finally:
+        App.closeDocument(sd.Name)
+    assert abs(box_vol - 12 * 7 * 4) < 1e-6, box_vol
+    assert abs(cyl_vol - math.pi * 25 * 10) < 1.0, cyl_vol
+    assert abs(cyl_x - 30) < 1e-6, cyl_x
+    print("docformat.synthesize: hand-authored file -> kernel builds box %.0f + "
+          "cylinder %.0f (a written file is a model)" % (box_vol, cyl_vol))
+
+    # guarded: empty spec, unknown primitive, duplicate name, undefined property.
+    _sy = docformat.synthesize
+    bad = os.path.join(OUT, "synth_bad.FCStd")
+    for spec, token in (
+            ([], "non-empty list"),
+            ([{"type": "Part::Widget", "name": "X"}], "unknown primitive"),
+            ([{"type": "Part::Box", "name": "D"},
+              {"type": "Part::Box", "name": "D"}], "duplicate"),
+            ([{"type": "Part::Box", "name": "B",
+               "properties": {"Radius": 3}}], "no propert")):
+        try:
+            _sy(bad, spec)
+        except ValueError as exc:
+            assert token in str(exc), (token, exc)
+        else:
+            raise AssertionError("expected ValueError for %r" % token)
+    print("docformat.synthesize: malformed specs guided")
 
     # ---- two-layer fusion: the live kernel agrees with the file ---------- #
     # ss.bindings reads the same ExpressionEngine wiring from the *running*
