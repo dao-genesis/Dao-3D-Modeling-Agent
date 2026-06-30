@@ -332,6 +332,38 @@ def main():
             raise AssertionError("expected ValueError for %r" % token)
     print("docformat.set_dimension: malformed edits guided")
 
+    # ---- the geometry root: BREP topology census (kernel-free) ----------- #
+    # every shape persists to an OpenCASCADE .brp -- the geometric root the API
+    # only wraps. inspect_document counts it straight from the file; the census
+    # must equal the kernel's own Shape.Solids / Faces / Edges / Vertexes.
+    gb = new_session("brep")
+    assert gb.act("solid.box", {"name": "Bx", "length": 10, "width": 8,
+                                "height": 6}).ok
+    box_p = os.path.join(OUT, "brep_box.FCStd")
+    assert gb.act("doc.save", {"path": box_p}).ok
+    bi = docformat.inspect_document(box_p)
+    solid = next(b for b in bi["brep_files"] if b["topology"]["solids"] == 1)
+    assert solid["version"] == "V1", solid
+    assert solid["topology"] == {"vertices": 8, "edges": 12, "wires": 6,
+                                 "faces": 6, "shells": 1, "solids": 1,
+                                 "compsolids": 0, "compounds": 0}, solid["topology"]
+    # the geometry tables the shape references are surfaced too (a box: 6 planes).
+    assert solid["sections"].get("surfaces") == 6, solid["sections"]
+    assert bi["topology_totals"]["solids"] >= 1, bi["topology_totals"]
+    # kernel cross-check: the file census == the live shape's own topology.
+    bd = App.openDocument(box_p)
+    try:
+        sh = bd.getObject("Bx").Shape
+        kernel_topo = {"vertices": len(sh.Vertexes), "edges": len(sh.Edges),
+                       "wires": len(sh.Wires), "faces": len(sh.Faces),
+                       "shells": len(sh.Shells), "solids": len(sh.Solids)}
+    finally:
+        App.closeDocument(bd.Name)
+    for k, v in kernel_topo.items():
+        assert solid["topology"][k] == v, (k, solid["topology"][k], v)
+    print("docformat: BREP topology %s -- the geometry root from file == kernel"
+          % {k: v for k, v in solid["topology"].items() if v})
+
     # ---- two-layer fusion: the live kernel agrees with the file ---------- #
     # ss.bindings reads the same ExpressionEngine wiring from the *running*
     # document; it must match what the file-level parser recovered -- the two

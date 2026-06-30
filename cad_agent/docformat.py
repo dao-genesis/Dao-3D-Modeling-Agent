@@ -289,6 +289,49 @@ def _sketch_dimensions(sketches: "Dict[str, Dict[str, Any]]") -> Dict[str, Any]:
     return out
 
 
+# OpenCASCADE BREP ASCII shape records open with a two-letter type code on its
+# own line, inside the ``TShapes`` section. This is the topology root the API
+# only ever wraps -- counted straight from the file it needs no kernel.
+_BREP_SHAPE_CODES = {
+    "Ve": "vertices", "Ed": "edges", "Wi": "wires", "Fa": "faces",
+    "Sh": "shells", "So": "solids", "CS": "compsolids", "Co": "compounds",
+}
+_BREP_CODE_RE = re.compile(r"^(Ve|Ed|Wi|Fa|Sh|So|CS|Co)\s*$", re.M)
+# The geometry tables a shape references (one count each, in the file header).
+_BREP_SECTIONS = ("Locations", "Curve2ds", "Curves", "Polygon3D",
+                  "PolygonOnTriangulations", "Surfaces", "Triangulations")
+
+
+def _brep_summary(raw: bytes) -> "Dict[str, Any]":
+    """Parse an OpenCASCADE ``.brp`` into a kernel-free topology + geometry
+    summary: the shape-type census (how many vertices / edges / wires / faces /
+    shells / solids the boundary representation holds) and the counts of the
+    geometry tables it references (surfaces, curves, locations, ...).
+
+    The ``.brp`` is the geometric root every FreeCAD shape ultimately persists
+    to; the scripting API only ever wraps it. Counting it here lets the system
+    reason about *what geometry a document actually contains* -- and the census
+    matches the kernel's own ``Shape.Solids`` / ``Faces`` / ``Edges`` /
+    ``Vertexes`` exactly, so the file layer and the kernel agree on geometry too.
+    """
+    text = raw.decode("latin-1", "replace")
+    version = None
+    m = re.search(r"CASCADE Topology (V\d+)", text)
+    if m:
+        version = m.group(1)
+    sections: Dict[str, int] = {}
+    for sec in _BREP_SECTIONS:
+        sm = re.search(r"^%s\s+(\d+)" % sec, text, re.M)
+        if sm:
+            sections[sec.lower()] = int(sm.group(1))
+    topo = {name: 0 for name in _BREP_SHAPE_CODES.values()}
+    ti = text.find("TShapes")
+    if ti != -1:
+        for code in _BREP_CODE_RE.findall(text[ti:]):
+            topo[_BREP_SHAPE_CODES[code]] += 1
+    return {"version": version, "topology": topo, "sections": sections}
+
+
 def _label_map(props: Dict[str, Dict[str, Any]]) -> Dict[str, str]:
     """User-facing Label -> object name, for resolving ``<<Label>>`` refs."""
     out: Dict[str, str] = {}
@@ -341,12 +384,19 @@ def inspect_document(path: str) -> Dict[str, Any]:
         sketches = _sketch_constraints(data_el)
         sketch_dims = _sketch_dimensions(sketches)
         breps = []
+        topo_totals = {name: 0 for name in _BREP_SHAPE_CODES.values()}
         for n in names:
             if not n.lower().endswith(_BREP_EXT):
                 continue
             data = z.read(n)
+            summary = _brep_summary(data)
             breps.append({"file": n, "bytes": len(data),
-                          "sha1": hashlib.sha1(data).hexdigest()[:16]})
+                          "sha1": hashlib.sha1(data).hexdigest()[:16],
+                          "version": summary["version"],
+                          "topology": summary["topology"],
+                          "sections": summary["sections"]})
+            for k, v in summary["topology"].items():
+                topo_totals[k] += v
         type_counts: Dict[str, int] = {}
         for o in objects:
             t = o["type"] or "?"
@@ -369,6 +419,7 @@ def inspect_document(path: str) -> Dict[str, Any]:
             "sketch_dimensions": sketch_dims,
             "brep_files": breps,
             "brep_bytes": sum(b["bytes"] for b in breps),
+            "topology_totals": topo_totals,
             "has_gui": GUI_XML in names,
             "entries": sorted(names),
         }
