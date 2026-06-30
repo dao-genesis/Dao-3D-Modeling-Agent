@@ -809,3 +809,141 @@ def set_dimension(path: str, sketch: str, name: str, value: float,
             zo.writestr(n, entries[n])
     return {"sketch": sketch, "name": name, "old": old,
             "new": _maybe_float(con.get("Value")), "out": out}
+
+
+# The Part primitives whose ``execute()`` regenerates a Shape purely from scalar
+# properties -- so a document holding only these can be authored from nothing
+# (no BREP) and the kernel builds the geometry on its first forced recompute.
+# Each maps a property name to its FreeCAD type; defaults are FreeCAD's own.
+_PRIMITIVES: "Dict[str, Dict[str, str]]" = {
+    "Part::Box": {"Length": "App::PropertyLength", "Width": "App::PropertyLength",
+                  "Height": "App::PropertyLength"},
+    "Part::Cylinder": {"Radius": "App::PropertyLength",
+                       "Height": "App::PropertyLength",
+                       "Angle": "App::PropertyAngle"},
+    "Part::Sphere": {"Radius": "App::PropertyLength",
+                     "Angle1": "App::PropertyAngle",
+                     "Angle2": "App::PropertyAngle",
+                     "Angle3": "App::PropertyAngle"},
+    "Part::Cone": {"Radius1": "App::PropertyLength",
+                   "Radius2": "App::PropertyLength",
+                   "Height": "App::PropertyLength", "Angle": "App::PropertyAngle"},
+    "Part::Torus": {"Radius1": "App::PropertyLength",
+                    "Radius2": "App::PropertyLength",
+                    "Angle1": "App::PropertyAngle", "Angle2": "App::PropertyAngle",
+                    "Angle3": "App::PropertyAngle"},
+}
+# Scalar FreeCAD property types serialise as a single ``<Float>`` child.
+_FLOAT_PROP_TYPES = {"App::PropertyLength", "App::PropertyAngle",
+                     "App::PropertyFloat", "App::PropertyDistance"}
+
+
+def _placement_element(parent: ET.Element, position: "List[float]") -> None:
+    """Append a translation-only ``Placement`` property (identity rotation)."""
+    prop = ET.SubElement(parent, "Property",
+                         {"name": "Placement", "type": "App::PropertyPlacement"})
+    px, py, pz = (float(c) for c in position)
+    ET.SubElement(prop, "PropertyPlacement", {
+        "Px": "%.16f" % px, "Py": "%.16f" % py, "Pz": "%.16f" % pz,
+        "Q0": "0.0000000000000000", "Q1": "0.0000000000000000",
+        "Q2": "0.0000000000000000", "Q3": "1.0000000000000000",
+        "A": "0.0000000000000000", "Ox": "0.0000000000000000",
+        "Oy": "0.0000000000000000", "Oz": "1.0000000000000000"})
+
+
+def synthesize(path: str, objects: "List[Dict[str, Any]]",
+               schema_version: str = "4",
+               program_version: str = "1.0.2") -> Dict[str, Any]:
+    """Author a complete ``.FCStd`` from a spec, with **no kernel** -- the most
+    upstream act of all: a model written as a file, the way code is written.
+
+    ``inspect_document`` / ``set_expression`` / ``set_dimension`` read and edit
+    an existing document; this *creates* one from nothing. Each entry in
+    ``objects`` is ``{"type": <Part primitive>, "name": str, "properties":
+    {prop: value}, "placement": {"position": [x,y,z]}?}``. Only the Part
+    primitives in ``_PRIMITIVES`` are accepted -- their ``execute()`` rebuilds
+    the Shape from these scalars, so the file needs no BREP: the kernel
+    generates the geometry on its first ``recompute(force=True)`` (after a
+    ``touch()``, since a freshly loaded object reports up-to-date).
+
+    Writes a single ``Document.xml`` (no geometry files) and returns
+    ``{out, objects: [names], object_count}``. Raises ``ValueError`` for an
+    empty spec, an unknown primitive type, a duplicate / missing name, or a
+    property the primitive does not define.
+    """
+    if not isinstance(path, str) or not path.strip():
+        raise ValueError("synthesize: path must be a non-empty string")
+    if not isinstance(objects, list) or not objects:
+        raise ValueError("synthesize: objects must be a non-empty list")
+
+    root = ET.Element("Document", {"SchemaVersion": schema_version,
+                                   "ProgramVersion": program_version,
+                                   "FileVersion": "1"})
+    ET.SubElement(root, "Properties", {"Count": "0"})
+    objs_el = ET.SubElement(root, "Objects",
+                            {"Count": str(len(objects)),
+                             "Dependencies": str(len(objects))})
+    data_el = ET.SubElement(root, "ObjectData", {"Count": str(len(objects))})
+
+    seen: set = set()
+    for idx, spec in enumerate(objects, start=1):
+        if not isinstance(spec, dict):
+            raise ValueError("synthesize: object #%d must be a dict" % idx)
+        otype = spec.get("type")
+        if otype not in _PRIMITIVES:
+            raise ValueError(
+                "synthesize: object #%d has unknown primitive type %r "
+                "(supported: %s)"
+                % (idx, otype, ", ".join(sorted(_PRIMITIVES))))
+        name = spec.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("synthesize: object #%d needs a non-empty name" % idx)
+        if name in seen:
+            raise ValueError("synthesize: duplicate object name %r" % name)
+        seen.add(name)
+        schema = _PRIMITIVES[otype]
+        props = spec.get("properties") or {}
+        if not isinstance(props, dict):
+            raise ValueError("synthesize: %r properties must be a dict" % name)
+        unknown = sorted(set(props) - set(schema))
+        if unknown:
+            raise ValueError(
+                "synthesize: %s (%s) has no propert%s %s (defines: %s)"
+                % (name, otype, "y" if len(unknown) == 1 else "ies",
+                   ", ".join(unknown), ", ".join(sorted(schema))))
+
+        ET.SubElement(objs_el, "ObjectDeps", {"Name": name, "Count": "0"})
+        ET.SubElement(objs_el, "Object",
+                      {"type": otype, "name": name, "id": str(idx)})
+
+        od = ET.SubElement(data_el, "Object", {"name": name})
+        placement = spec.get("placement") or {}
+        position = placement.get("position") if isinstance(placement, dict) else None
+        prop_items = [(p, schema[p], v) for p, v in props.items()]
+        props_el = ET.SubElement(
+            od, "Properties",
+            {"Count": str(len(prop_items) + (1 if position else 0)),
+             "TransientCount": "0"})
+        for pname, ptype, value in prop_items:
+            pe = ET.SubElement(props_el, "Property",
+                               {"name": pname, "type": ptype})
+            if ptype in _FLOAT_PROP_TYPES:
+                if isinstance(value, bool) or not isinstance(value, (int, float)):
+                    raise ValueError(
+                        "synthesize: %s.%s must be a number, got %r"
+                        % (name, pname, value))
+                ET.SubElement(pe, "Float", {"value": "%.16f" % float(value)})
+            else:
+                ET.SubElement(pe, "String", {"value": str(value)})
+        if position:
+            if len(position) != 3:
+                raise ValueError(
+                    "synthesize: %s placement position must be [x,y,z]" % name)
+            _placement_element(props_el, position)
+
+    payload = (b"<?xml version='1.0' encoding='utf-8'?>\n"
+               + ET.tostring(root, encoding="utf-8"))
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zo:
+        zo.writestr(DOCUMENT_XML, payload)
+    return {"out": path, "objects": [s["name"] for s in objects],
+            "object_count": len(objects)}
