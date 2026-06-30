@@ -39,6 +39,19 @@ def _num(a, key, default=_MISSING, label=None):
         raise ValueError("%s must be a number (got %r)" % (name, v))
 
 
+def _solid_props(shp):
+    """(volume, center-of-mass, inertia-matrix) for each rigid solid in a
+    shape. A boolean result is frequently a ``Compound`` (``removeSplitter``
+    wraps even a single solid in one), and a Compound does NOT expose
+    ``CenterOfMass`` / ``MatrixOfInertia`` -- so descend to the solids, each a
+    genuine rigid body with reliable mass properties. A shell/face-only shape
+    (no solids) falls back to the shape itself."""
+    solids = shp.Solids
+    if not solids:
+        return [(shp.Volume, shp.CenterOfMass, shp.MatrixOfInertia)]
+    return [(s.Volume, s.CenterOfMass, s.MatrixOfInertia) for s in solids]
+
+
 def _vec3(seq, label):
     """Coerce a 3-element sequence to floats with a guided error -- a bare
     ``[float(x) for x in seq]`` leaks 'could not convert' when ``seq`` is a
@@ -357,22 +370,22 @@ def register(state):
         tot_v = cx = cy = cz = 0.0
         tot_m = mx = my = mz = 0.0
         for n in names:
-            sh = shapes[n]
-            v = sh.Volume
-            com = sh.CenterOfMass
-            tot_v += v
-            cx += v * com.x
-            cy += v * com.y
-            cz += v * com.z
             rho = dens.get(n)
             if rho is None:
                 rho = dens.get(doc.getObject(state.components[n]["src"]).Label, default_rho)
-            if rho is not None:
-                m = float(rho) * v
-                tot_m += m
-                mx += m * com.x
-                my += m * com.y
-                mz += m * com.z
+            # descend to rigid solids: a boolean-result Compound has no
+            # CenterOfMass of its own, so roll the centroid up per solid.
+            for v, com, _mat in _solid_props(shapes[n]):
+                tot_v += v
+                cx += v * com.x
+                cy += v * com.y
+                cz += v * com.z
+                if rho is not None:
+                    m = float(rho) * v
+                    tot_m += m
+                    mx += m * com.x
+                    my += m * com.y
+                    mz += m * com.z
         out = {"components": len(names), "volume": _round(comp.Volume),
                "bbox_size": [_round(bb.XLength), _round(bb.YLength), _round(bb.ZLength)]}
         if tot_v > 0:
@@ -398,24 +411,25 @@ def register(state):
             d = d.normalize() if d.Length > 1e-9 else V(0, 0, 1)
             inertia = 0.0
             for n in names:
-                sh = shapes[n]
-                v = sh.Volume
-                com = sh.CenterOfMass
                 rho = dens.get(n)
                 if rho is None:
                     rho = dens.get(doc.getObject(state.components[n]["src"]).Label, default_rho)
                 rho = 1.0 if rho is None else float(rho)
-                mat = sh.MatrixOfInertia
-                j_dir = (d.x * d.x * mat.A11 + d.y * d.y * mat.A22 + d.z * d.z * mat.A33
-                         + 2 * d.x * d.y * mat.A12 + 2 * d.x * d.z * mat.A13
-                         + 2 * d.y * d.z * mat.A23)
-                # perpendicular distance from the component CoM to the axis line
-                # (d is a unit vector): d_perp^2 = |r|^2 - (r.d)^2. Computed
-                # analytically so the shared axis vector is never mutated.
-                r = com.sub(p)
-                proj = r.dot(d)
-                perp2 = r.Length * r.Length - proj * proj
-                inertia += rho * j_dir + (rho * v) * perp2
+                # each rigid solid contributes its own CoM-tensor projection +
+                # parallel-axis term about the shared axis; summing per solid
+                # is exact and survives a Compound (no MatrixOfInertia of its
+                # own) component.
+                for v, com, mat in _solid_props(shapes[n]):
+                    j_dir = (d.x * d.x * mat.A11 + d.y * d.y * mat.A22 + d.z * d.z * mat.A33
+                             + 2 * d.x * d.y * mat.A12 + 2 * d.x * d.z * mat.A13
+                             + 2 * d.y * d.z * mat.A23)
+                    # perpendicular distance from the solid CoM to the axis line
+                    # (d is a unit vector): d_perp^2 = |r|^2 - (r.d)^2. Computed
+                    # analytically so the shared axis vector is never mutated.
+                    r = com.sub(p)
+                    proj = r.dot(d)
+                    perp2 = r.Length * r.Length - proj * proj
+                    inertia += rho * j_dir + (rho * v) * perp2
             out["inertia_axis"] = _round(inertia)
         return out
 
