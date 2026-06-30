@@ -166,10 +166,42 @@ def _doc_handlers(state):
         return {"out": out, "objects": realized,
                 "object_count": len(realized)}
 
+    def pattern(a):
+        # expand a base spec into a linear/polar array, kernel-free -- the file
+        # layer computing a whole pattern from one parametric description, what a
+        # human stamps out by repeating a GUI place/rotate-copy. Optionally
+        # synthesizes the expanded specs straight to 'path'.
+        mode = a.get("mode")
+        base = a.get("base")
+        count = a.get("count")
+        group = a.get("group")
+        df = _docformat()
+        if mode == "linear":
+            objs = df.linear_pattern(base, count, a.get("offset"), group=group)
+        elif mode == "polar":
+            objs = df.polar_pattern(
+                base, count, a.get("axis"),
+                total_angle=a.get("total_angle", 360.0),
+                center=a.get("center"), group=group)
+        else:
+            raise ValueError(
+                "doc.pattern 'mode' must be 'linear' or 'polar' (got %r)"
+                % (mode,))
+        result = {"mode": mode, "objects": objs, "object_count": len(objs)}
+        path = a.get("path")
+        if path is not None:
+            if not isinstance(path, str) or not path:
+                raise ValueError(
+                    "doc.pattern 'path' must be a non-empty .FCStd file path "
+                    "when given (got %r)" % (path,))
+            df.synthesize(path, objs)
+            result["out"] = path
+        return result
+
     return {"doc.save": save, "doc.info": info, "doc.inspect": inspect,
             "doc.diff": diff, "doc.edit": edit,
             "doc.synthesize": synthesize, "doc.summarize": summarize,
-            "doc.realize": realize}
+            "doc.realize": realize, "doc.pattern": pattern}
 
 
 def _build_handlers(state):

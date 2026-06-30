@@ -764,6 +764,42 @@ def main():
           "%.1f, decompiled+re-authored to identical fingerprint (file-first "
           "authoring as agent ops, author<->read closes)" % vols["AB"])
 
+    # ---- doc.pattern: array generation as an agent op -------------------- #
+    # the agent expands one base spec into a whole array via the op and
+    # synthesizes it straight to a file -- linear (3-cube row) and polar (a
+    # 6-tooth ring), both grouped into a Compound the kernel groups by volume.
+    op_lin = os.path.join(OUT, "op_lin_pattern.FCStd")
+    pl = s.act("doc.pattern", {
+        "mode": "linear", "path": op_lin,
+        "base": {"type": "Part::Box", "name": "U",
+                 "properties": {"Length": 10, "Width": 10, "Height": 10}},
+        "count": 3, "offset": [20, 0, 0], "group": "Part::Compound"})
+    assert pl.ok and pl.data["object_count"] == 4, pl
+    assert pl.data["out"] == op_lin, pl.data
+    op_pol = os.path.join(OUT, "op_pol_pattern.FCStd")
+    pp = s.act("doc.pattern", {
+        "mode": "polar", "path": op_pol,
+        "base": {"type": "Part::Box", "name": "T",
+                 "properties": {"Length": 5, "Width": 5, "Height": 5},
+                 "placement": {"position": [40, 0, 0]}},
+        "count": 6, "axis": [0, 0, 1], "total_angle": 360,
+        "group": "Part::Compound"})
+    assert pp.ok and pp.data["object_count"] == 7, pp
+    for pth, n, unit in ((op_lin, 3, 1000), (op_pol, 6, 125)):
+        pd = App.openDocument(pth)
+        try:
+            for o in pd.Objects:
+                o.touch()
+            pd.recompute(None, True)
+            gv = pd.getObject(pd.Objects[-1].Name).Shape.Volume
+        finally:
+            App.closeDocument(pd.Name)
+        assert abs(gv - n * unit) < 1e-3, (pth, gv)
+    # doc.pattern guards an unknown mode rather than leaking a TypeError.
+    assert not s.act("doc.pattern", {"mode": "spiral", "base": {}, "count": 2}).ok
+    print("doc.pattern: linear 3-cube row + polar 6-tooth ring authored from one "
+          "base spec each (array generation as an agent op, file-layer leverage)")
+
     # ---- two-layer fusion: the live kernel agrees with the file ---------- #
     # ss.bindings reads the same ExpressionEngine wiring from the *running*
     # document; it must match what the file-level parser recovered -- the two
