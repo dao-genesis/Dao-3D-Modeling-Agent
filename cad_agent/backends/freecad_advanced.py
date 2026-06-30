@@ -219,10 +219,38 @@ def register(state):
                 "section_length": _round(total_len), "section_area": _round(area), "bbox_size": bb}
 
     def op_distance(a):
-        sa = _shape(a["a"])
-        sb = _shape(a["b"])
+        sa = _named_shape(a.get("a"), "analyze.distance 'a'")
+        sb = _named_shape(a.get("b"), "analyze.distance 'b'")
         info = sa.distToShape(sb)
-        return {"min_distance": _round(info[0])}
+        out = {"min_distance": _round(info[0])}
+        # distToShape returns the closest point pair; expose it so callers can
+        # place a fastener / measure a gap, not merely learn it exists.
+        try:
+            (pa, pb) = info[1][0]
+            out["point_a"] = [_round(pa.x), _round(pa.y), _round(pa.z)]
+            out["point_b"] = [_round(pb.x), _round(pb.y), _round(pb.z)]
+        except Exception:  # noqa: BLE001 -- keep min_distance even if absent
+            pass
+        return out
+
+    def op_bbox(a):
+        """Axis-aligned bounding box of a registered shape.
+
+        World-aligned (AABB), distinct from ``solid.obb``'s tight oriented box:
+        this is the box used to lay out / pack / clear a part against the global
+        axes. args: name (shape/solid). Returns min/max corners, size [dx,dy,dz],
+        center, diagonal and the enclosing box volume.
+        """
+        shape = _named_shape(a.get("name", a.get("source")), "analyze.bbox 'name'")
+        b = shape.BoundBox
+        size = [_round(b.XLength), _round(b.YLength), _round(b.ZLength)]
+        return {
+            "min": [_round(b.XMin), _round(b.YMin), _round(b.ZMin)],
+            "max": [_round(b.XMax), _round(b.YMax), _round(b.ZMax)],
+            "size": size, "diagonal": _round(b.DiagonalLength),
+            "center": [_round(b.Center.x), _round(b.Center.y), _round(b.Center.z)],
+            "box_volume": _round(b.XLength * b.YLength * b.ZLength),
+        }
 
     # ---- mesh analysis --------------------------------------------------- #
     def op_mesh_analyze(a):
@@ -646,6 +674,7 @@ def register(state):
     return {
         "ss.create": op_ss_create, "ss.bind": op_ss_bind, "ss.set": op_ss_set, "ss.table": op_ss_table,
         "analyze.section": op_section, "analyze.distance": op_distance,
+        "analyze.bbox": op_bbox,
         "mesh.analyze": op_mesh_analyze, "mesh.export": op_mesh_export,
         "mesh.boolean": op_mesh_boolean, "mesh.to_shape": op_mesh_to_shape,
         "mesh.repair": op_mesh_repair, "mesh.decimate": op_mesh_decimate,
