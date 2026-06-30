@@ -457,8 +457,31 @@ def main():
     print("docformat.synthesize: authored CSG Cut(Base-Tool) -> kernel carves "
           "vol %.1f (file-first constructive solid geometry)" % cut_vol)
 
+    # ---- synthesize rotation: an oriented primitive authored from nothing - #
+    # a 10x2x2 bar rotated 90 deg about Z; FreeCAD persists a rotation twice
+    # (quaternion + axis-angle) and honours the axis-angle, so synthesize must
+    # author both -- the kernel then orients the bar, swapping its X/Y extents.
+    rot_p = os.path.join(OUT, "synth_rot.FCStd")
+    docformat.synthesize(rot_p, [
+        {"type": "Part::Box", "name": "Bar",
+         "properties": {"Length": 10, "Width": 2, "Height": 2},
+         "placement": {"position": [0, 0, 0], "axis": [0, 0, 1], "angle": 90}},
+    ])
+    rd = App.openDocument(rot_p)
+    try:
+        for o in rd.Objects:
+            o.touch()
+        rd.recompute(None, True)
+        bb = rd.getObject("Bar").Shape.BoundBox
+        ext = (round(bb.XLength, 3), round(bb.YLength, 3), round(bb.ZLength, 3))
+    finally:
+        App.closeDocument(rd.Name)
+    assert ext == (2.0, 10.0, 2.0), ext       # X/Y swapped by the 90 deg turn
+    print("docformat.synthesize: authored 90deg rotation -> kernel orients bar "
+          "to bbox %s (file-first orientation)" % (ext,))
+
     # guarded: empty spec, unknown primitive, duplicate name, undefined property,
-    # and a boolean whose operand does not resolve.
+    # a boolean whose operand does not resolve, and a degenerate rotation axis.
     _sy = docformat.synthesize
     bad = os.path.join(OUT, "synth_bad.FCStd")
     for spec, token in (
@@ -469,7 +492,10 @@ def main():
             ([{"type": "Part::Box", "name": "B",
                "properties": {"Radius": 3}}], "no propert"),
             ([{"type": "Part::Cut", "name": "C", "base": "P", "tool": "Q"}],
-             "not a defined object")):
+             "not a defined object"),
+            ([{"type": "Part::Box", "name": "R",
+               "properties": {"Length": 1, "Width": 1, "Height": 1},
+               "placement": {"axis": [0, 0, 0], "angle": 45}}], "axis")):
         try:
             _sy(bad, spec)
         except ValueError as exc:

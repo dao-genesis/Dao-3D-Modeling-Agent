@@ -24,6 +24,7 @@ prove a scripted build round-trips through the file format unchanged.
 from __future__ import annotations
 
 import hashlib
+import math
 import os
 import re
 import xml.etree.ElementTree as ET
@@ -844,17 +845,34 @@ _FLOAT_PROP_TYPES = {"App::PropertyLength", "App::PropertyAngle",
 _BOOLEANS = {"Part::Cut", "Part::Fuse", "Part::Common"}
 
 
-def _placement_element(parent: ET.Element, position: "List[float]") -> None:
-    """Append a translation-only ``Placement`` property (identity rotation)."""
+def _placement_element(parent: ET.Element, position: "List[float]",
+                       axis: "Optional[List[float]]" = None,
+                       angle: float = 0.0) -> None:
+    """Append a ``Placement`` property: a translation plus an optional rotation
+    of ``angle`` degrees about ``axis``.
+
+    FreeCAD persists a placement's rotation **twice** -- as a quaternion
+    (``Q0..Q3``) and as axis-angle (``A`` in radians, ``Ox/Oy/Oz``) -- and the
+    loader honours the axis-angle pair, so both must be authored consistently or
+    the rotation is silently dropped (``A=0`` ignores any quaternion written).
+    """
+    px, py, pz = (float(c) for c in position)
+    ax, ay, az = (float(c) for c in (axis or (0.0, 0.0, 1.0)))
+    norm = math.sqrt(ax * ax + ay * ay + az * az)
+    if norm <= 1e-12:
+        raise ValueError("placement: rotation axis must be non-zero")
+    ax, ay, az = ax / norm, ay / norm, az / norm
+    theta = math.radians(float(angle))
+    half = theta / 2.0
+    s = math.sin(half)
     prop = ET.SubElement(parent, "Property",
                          {"name": "Placement", "type": "App::PropertyPlacement"})
-    px, py, pz = (float(c) for c in position)
     ET.SubElement(prop, "PropertyPlacement", {
         "Px": "%.16f" % px, "Py": "%.16f" % py, "Pz": "%.16f" % pz,
-        "Q0": "0.0000000000000000", "Q1": "0.0000000000000000",
-        "Q2": "0.0000000000000000", "Q3": "1.0000000000000000",
-        "A": "0.0000000000000000", "Ox": "0.0000000000000000",
-        "Oy": "0.0000000000000000", "Oz": "1.0000000000000000"})
+        "Q0": "%.16f" % (ax * s), "Q1": "%.16f" % (ay * s),
+        "Q2": "%.16f" % (az * s), "Q3": "%.16f" % math.cos(half),
+        "A": "%.16f" % theta, "Ox": "%.16f" % ax,
+        "Oy": "%.16f" % ay, "Oz": "%.16f" % az})
 
 
 def synthesize(path: str, objects: "List[Dict[str, Any]]",
@@ -866,8 +884,10 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
     ``inspect_document`` / ``set_expression`` / ``set_dimension`` read and edit
     an existing document; this *creates* one from nothing. Each entry in
     ``objects`` is ``{"type": <Part primitive>, "name": str, "properties":
-    {prop: value}, "placement": {"position": [x,y,z]}?, "expressions": {path:
-    formula}?}``. ``expressions`` author an ``ExpressionEngine`` per object --
+    {prop: value}, "placement": {"position": [x,y,z]?, "axis": [x,y,z]?,
+    "angle": degrees?}?, "expressions": {path: formula}?}`` -- ``placement``
+    authors a translation and an optional rotation of ``angle`` degrees about
+    ``axis``. ``expressions`` author an ``ExpressionEngine`` per object --
     so a *parametric* model can be written from nothing, e.g. one primitive's
     dimension bound to ``"Other.Radius * 2"``; the cross-object references are
     resolved into dependency edges in ``ObjectDeps``.
@@ -983,10 +1003,15 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
 
         od = ET.SubElement(data_el, "Object", {"name": name})
         placement = spec.get("placement") or {}
-        position = placement.get("position") if isinstance(placement, dict) else None
+        if not isinstance(placement, dict):
+            raise ValueError("synthesize: %s placement must be a dict" % name)
+        position = placement.get("position")
+        axis = placement.get("axis")
+        angle = placement.get("angle", 0.0)
+        has_placement = bool(position or axis or angle)
         prop_items = ([] if is_bool
                       else [(p, _PRIMITIVES[otype][p], v) for p, v in props.items()])
-        prop_count = (len(prop_items) + (1 if position else 0)
+        prop_count = (len(prop_items) + (1 if has_placement else 0)
                       + (1 if exprs else 0) + (2 if is_bool else 0))
         props_el = ET.SubElement(
             od, "Properties", {"Count": str(prop_count), "TransientCount": "0"})
@@ -1016,11 +1041,19 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                 ET.SubElement(pe, "Float", {"value": "%.16f" % float(value)})
             else:
                 ET.SubElement(pe, "String", {"value": str(value)})
-        if position:
+        if has_placement:
+            position = position or [0.0, 0.0, 0.0]
             if len(position) != 3:
                 raise ValueError(
                     "synthesize: %s placement position must be [x,y,z]" % name)
-            _placement_element(props_el, position)
+            if axis is not None and len(axis) != 3:
+                raise ValueError(
+                    "synthesize: %s placement axis must be [x,y,z]" % name)
+            if not isinstance(angle, (int, float)) or isinstance(angle, bool):
+                raise ValueError(
+                    "synthesize: %s placement angle must be a number (degrees)"
+                    % name)
+            _placement_element(props_el, position, axis, angle)
 
     payload = (b"<?xml version='1.0' encoding='utf-8'?>\n"
                + ET.tostring(root, encoding="utf-8"))
