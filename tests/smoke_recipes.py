@@ -39,8 +39,18 @@ def main():
     except ValueError as exc:
         assert "unknown recipe" in str(exc), exc
 
+    # ---- the catalogue describes itself (introspected, no second list) --- #
+    cat = recipes.catalog()
+    assert set(cat) == set(recipes.RECIPES), cat
+    assert cat["bolted_stack"]["params"]["n_spacers"] == 3, cat
+    assert "n_spacers" in cat["bolted_stack"]["params"]
+    assert cat["flanged_bracket"]["summary"], cat            # one-line doc captured
+
     # ---- NL routes to a recipe (the wisdom reachable from plain text) ---- #
     pl = Planner()
+    pcat = pl.plan("what can you build")
+    assert pcat.steps[0]["tool"] == "recipe.catalog", pcat
+    assert pl.plan("配方列表").steps[0]["tool"] == "recipe.catalog"
     pn = pl.plan("build a bolted stack with 5 spacers")
     assert pn.steps and pn.steps[0]["tool"] == "recipe", pn
     assert pn.steps[0]["args"] == {"name": "bolted_stack",
@@ -108,6 +118,11 @@ def main():
     assert rstep["executed"] == rstep["planned"] and rstep["executed"] > 0, rstep
     bom3 = s3.act("asm.bom", {})
     assert bom3.data["component_count"] == 5, bom3.data        # 2 + base/bolt/nut
+    # "what can you build" surfaces the catalogue through the same build() path.
+    cb = s3.build("what can you build")
+    cstep = cb.data["transcript"][0]["steps"][0]
+    assert cstep["tool"] == "recipe.catalog" and cstep["ok"], cstep
+    assert set(cstep["recipes"]) == set(recipes.RECIPES), cstep
     s3.registry.kernel.shutdown()
 
     # ---- assembly recipe self-verifies against its own closed-form meta --- #

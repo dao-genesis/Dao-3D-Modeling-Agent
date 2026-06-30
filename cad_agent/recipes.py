@@ -23,6 +23,7 @@ Design rules (mirroring the backend op discipline):
 """
 from __future__ import annotations
 
+import inspect
 import math
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List
@@ -243,3 +244,19 @@ def generate(name: str, **params: Any) -> Recipe:
         raise ValueError("unknown recipe %r (available: %s)"
                          % (name, ", ".join(sorted(RECIPES))))
     return fn(**params)
+
+
+def catalog() -> Dict[str, Dict[str, Any]]:
+    """Describe every recipe -- its tunable parameters, defaults and one-line
+    summary -- by introspecting the generators. The distilled wisdom thus
+    *describes itself*: an agent (or a user asking 'what can you build?') reads
+    the catalogue instead of the source, so new recipes are discoverable the
+    moment they are registered, with no second list to keep in sync."""
+    out: Dict[str, Dict[str, Any]] = {}
+    for name, fn in RECIPES.items():
+        sig = inspect.signature(fn)
+        params = {p.name: (None if p.default is inspect.Parameter.empty else p.default)
+                  for p in sig.parameters.values()}
+        doc = (fn.__doc__ or "").strip().splitlines()
+        out[name] = {"params": params, "summary": doc[0] if doc else ""}
+    return out

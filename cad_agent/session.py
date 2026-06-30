@@ -72,6 +72,13 @@ class AgentSession:
                 continue
             for step in plan.steps:
                 tool = step["tool"]
+                if tool == "recipe.catalog":
+                    from . import recipes
+                    cat = recipes.catalog()
+                    entry["steps"].append({"tool": "recipe.catalog", "ok": True,
+                                           "catalog": cat, "recipes": sorted(cat)})
+                    executed += 1
+                    continue
                 if tool == "recipe":
                     ra = step.get("args", {})
                     rr = self.make(ra.get("name", ""), **(ra.get("params") or {}))

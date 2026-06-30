@@ -408,6 +408,11 @@ class Planner:
         pulling out the few parameters a brief usually carries (a spacer count,
         a plate size) and leaving the rest at the recipe's defaults. Emits a
         ``recipe`` pseudo-step that :meth:`AgentSession.build` expands."""
+        if (re.search(r"what.*\b(?:can|do).*\bbuild\b|list\s+recipes?|"
+                      r"\brecipe\s+catalog(?:ue)?\b", t)
+                or re.search(r"能(?:建|做|造)什么|配方(?:列表|目录)", raw)):
+            return Plan(steps=[{"tool": "recipe.catalog", "args": {}}],
+                        note="list the recipe catalogue")
         if (re.search(r"\b(?:bolt(?:ed)?|spacer|washer)\s+stack\b", t)
                 or re.search(r"螺栓.{0,2}堆叠|垫片.{0,2}堆叠|螺栓垫片", raw)):
             params: Dict[str, Any] = {}
