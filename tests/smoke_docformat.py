@@ -802,6 +802,61 @@ def main():
           "file -> closed wire area %g, round-trips identically (逆流到最上游)"
           % sk_area)
 
+    # ---- Sketcher: curved geometry (circle + arc) ------------------------ #
+    # deepen the most-upstream surface beyond polygons: a full Part::GeomCircle
+    # is a closed profile on its own (a disk the pad turns into a cylinder), and
+    # a Part::GeomArcOfCircle closes against a chord into a half-disk. Author a
+    # circle radius 5 + an arc-bounded half-disk radius 3; the kernel rebuilds
+    # both faces (areas pi*25 and pi*9/2) and the specs round-trip identically.
+    cs_p = os.path.join(OUT, "synth_sketch_curves.FCStd")
+    docformat.synthesize(cs_p, [
+        {"type": "Sketcher::SketchObject", "name": "Disk",
+         "geometry": [{"center": [0, 0], "radius": 5}]},
+        {"type": "Sketcher::SketchObject", "name": "Half", "geometry": [
+            {"center": [0, 0], "radius": 3,
+             "start_angle": 0, "end_angle": math.pi},
+            {"start": [-3, 0], "end": [3, 0]},
+        ]},
+    ])
+    cs_specs = {s["name"]: s for s in docformat.summarize(cs_p)}
+    assert cs_specs["Disk"]["geometry"] == [{"center": [0.0, 0.0],
+                                             "radius": 5.0}], cs_specs["Disk"]
+    half_arc = cs_specs["Half"]["geometry"][0]
+    assert half_arc["radius"] == 3.0 and "start_angle" in half_arc, half_arc
+    cs_rt = os.path.join(OUT, "synth_sketch_curves_rt.FCStd")
+    docformat.synthesize(cs_rt, docformat.summarize(cs_p))
+    assert docformat.fingerprint(cs_p) == docformat.fingerprint(cs_rt)
+    cd = App.openDocument(cs_p)
+    try:
+        for o in cd.Objects:
+            o.touch()
+        cd.recompute(None, True)
+        disk_w = Part.Wire(Part.__sortEdges__(cd.getObject("Disk").Shape.Edges))
+        half_w = Part.Wire(Part.__sortEdges__(cd.getObject("Half").Shape.Edges))
+        disk_area = Part.Face(disk_w).Area
+        half_area = Part.Face(half_w).Area
+    finally:
+        App.closeDocument(cd.Name)
+    assert abs(disk_area - math.pi * 25) < 1e-6, disk_area
+    assert abs(half_area - math.pi * 9 / 2) < 1e-6, half_area
+    for bad, token in (
+            ([{"type": "Sketcher::SketchObject", "name": "S", "geometry": [
+                {"center": [0, 0], "radius": 0}]}], "'radius' must be positive"),
+            ([{"type": "Sketcher::SketchObject", "name": "S", "geometry": [
+                {"center": [0, 0], "radius": 3, "start_angle": 1,
+                 "end_angle": 1}]}], "arc is degenerate"),
+            ([{"type": "Sketcher::SketchObject", "name": "S", "geometry": [
+                {"foo": 1}]}], "must be a line")):
+        try:
+            docformat.synthesize(os.path.join(OUT, "bad_curve.FCStd"), bad)
+        except ValueError as exc:
+            assert token in str(exc), (token, exc)
+        else:
+            raise AssertionError("expected ValueError for %r" % token)
+    print("docformat Sketcher curves: circle disk area %g (pi*25) + arc half-disk"
+          " area %g (pi*9/2) authored from file, round-trip identical"
+          % (disk_area, half_area))
+
     # ---- Part::Extrusion: sweep a sketch profile into a solid ------------ #
     # the join between the sketch layer and the solid layer: author a 10x5
     # rectangle sketch + an extrusion that sweeps it 7 along +Z. The kernel
