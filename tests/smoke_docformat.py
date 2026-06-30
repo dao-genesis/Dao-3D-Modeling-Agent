@@ -126,6 +126,57 @@ def main():
     assert "Spreadsheet" in cd["property_changes"], cd
     print("docformat.diff: spreadsheet cell edit caught on shared object")
 
+    # ---- edit_property: the act half -- author the file, kernel honours it - #
+    # build a parametric pad (Length is a plain scalar in Document.xml), save,
+    # then change its Length purely by file surgery -- no kernel touched.
+    e = new_session("edit")
+    assert e.act("param.body", {"name": "Body"}).ok
+    assert e.act("param.pad", {"body": "Body", "feature": "Pad",
+                               "profile": {"rect": [40, 30]}, "length": 5}).ok
+    v0 = e.act("param.measure", {"body": "Body"}).data["volume"]
+    src = os.path.join(OUT, "edit_src.FCStd")
+    assert e.act("doc.save", {"path": src}).ok
+    dst = os.path.join(OUT, "edit_dst.FCStd")
+    r = docformat.edit_property(src, "Pad", "Length", 15, out=dst)
+    assert float(r["old"]) == 5.0 and float(r["new"]) == 15.0, r
+    # the file-level view confirms the new value without any kernel.
+    assert docformat.inspect_document(dst)["properties"]["Pad"]["Length"][
+        "value"] == 15, docformat.inspect_document(dst)["properties"]["Pad"]
+    ed = docformat.diff(src, dst)
+    assert ed["property_changes"]["Pad"]["Length"] == {"from": 5, "to": 15}, ed
+    assert ed["objects_added"] == [] and ed["objects_removed"] == [], ed
+    # now prove the *kernel* honours the file edit: reopen, force recompute, and
+    # the body's volume reflects the file-authored Length (40*30*15 = 18000).
+    import FreeCAD as App
+    doc2 = App.openDocument(dst)
+    try:
+        pad = doc2.getObject("Pad")
+        pad.touch()
+        doc2.recompute(None, True)
+        body = next(o for o in doc2.Objects
+                    if o.TypeId.startswith("PartDesign::Body"))
+        vol = body.Shape.Volume
+    finally:
+        App.closeDocument(doc2.Name)
+    assert abs(vol - 40 * 30 * 15) < 1.0, (vol, v0)
+    print("docformat.edit_property: file-authored Length 5->15 -> kernel volume "
+          "%.0f->%.0f (file edit drives geometry)" % (v0, vol))
+
+    # guarded file-level edits.
+    _ep = docformat.edit_property
+    for call, token in (
+        (lambda: _ep(src, "Nope", "Length", 1), "no object"),
+        (lambda: _ep(src, "Pad", "Nope", 1), "no property"),
+        (lambda: _ep(src, "Pad", "Placement", 1), "not a simple scalar"),
+    ):
+        try:
+            call()
+        except ValueError as exc:
+            assert token in str(exc), (token, str(exc))
+        else:
+            raise AssertionError("expected ValueError for %r" % token)
+    print("docformat.edit_property: malformed edits guided")
+
     # ---- guided failures (no raw BadZipFile / KeyError leak) ------------- #
     def _guided(call, token):
         try:

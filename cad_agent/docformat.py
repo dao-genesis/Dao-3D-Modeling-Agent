@@ -277,3 +277,94 @@ def diff(path_a: str, path_b: str) -> Dict[str, Any]:
         "property_changes": prop_changes,
         "brep_changes": brep_changes,
     }
+
+
+def _format_value(value: Any, old: Optional[str]) -> str:
+    """Serialise ``value`` to match the style of the ``old`` persisted value
+    (float-with-decimals vs int vs bool)."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        f = float(value)
+        if old is not None and ("." in old or "e" in old.lower()):
+            return repr(f)
+        return str(int(f)) if f.is_integer() else repr(f)
+    return str(value)
+
+
+def edit_property(path: str, obj: str, prop: str, value: Any,
+                  out: Optional[str] = None) -> Dict[str, Any]:
+    """Edit a scalar property's value directly in the ``.FCStd`` -- the *act*
+    half, kernel-free.
+
+    The persisted document is the root both the GUI and scripts ultimately write
+    to. This mutates a value at that layer (the relevant ``<Property>`` in
+    ``Document.xml``) and repackages the zip with every other entry byte-for-byte
+    intact. The kernel honours the change on reopen + (forced) recompute -- so a
+    file-level authoring edit drives the very geometry the GUI would produce.
+
+    Only simple scalar properties (a child carrying a ``value=`` attribute --
+    ``App::PropertyLength`` / ``Float`` / ``Integer`` / ``Bool`` / ``String``)
+    are editable here; links, placements and container properties are not.
+    Writes to ``out`` (default: overwrite ``path``) and returns
+    ``{object, property, old, new, out}``. Raises ``ValueError`` for a missing
+    file / object / property or a non-scalar property.
+    """
+    if not isinstance(path, str) or not path.strip():
+        raise ValueError("edit_property: path must be a non-empty string")
+    if not os.path.exists(path):
+        raise ValueError("edit_property: no such file: %s" % path)
+    for label, v in (("obj", obj), ("prop", prop)):
+        if not isinstance(v, str) or not v.strip():
+            raise ValueError("edit_property: %s must be a non-empty string" % label)
+    try:
+        z = zipfile.ZipFile(path)
+    except zipfile.BadZipFile:
+        raise ValueError(
+            "edit_property: %s is not a .FCStd (zip) document" % path)
+    with z:
+        names = z.namelist()
+        if DOCUMENT_XML not in names:
+            raise ValueError(
+                "edit_property: %s has no %s -- not a FreeCAD document"
+                % (path, DOCUMENT_XML))
+        entries = {n: z.read(n) for n in names}
+    try:
+        root = ET.fromstring(entries[DOCUMENT_XML])
+    except ET.ParseError as exc:
+        raise ValueError("edit_property: corrupt %s (%s)" % (DOCUMENT_XML, exc))
+    data_el = root.find("ObjectData")
+    objects = ([] if data_el is None
+               else [o for o in data_el.findall("Object")])
+    target = next((o for o in objects if o.get("name") == obj), None)
+    if target is None:
+        avail = sorted(o.get("name") for o in objects if o.get("name"))
+        raise ValueError("edit_property: no object %r in %s (have: %s)"
+                         % (obj, path, ", ".join(avail[:20]) or "none"))
+    prop_el = None
+    prop_names: List[str] = []
+    for props_el in target.findall("Properties"):
+        for pr in props_el.findall("Property"):
+            prop_names.append(pr.get("name"))
+            if pr.get("name") == prop:
+                prop_el = pr
+    if prop_el is None:
+        raise ValueError("edit_property: object %r has no property %r (have: %s)"
+                         % (obj, prop, ", ".join(sorted(n for n in prop_names
+                                                        if n)[:20]) or "none"))
+    child = next((c for c in prop_el if "value" in c.attrib), None)
+    if child is None:
+        raise ValueError(
+            "edit_property: property %r of %r is type %r -- not a simple scalar "
+            "(links / placements / container properties can't be edited here)"
+            % (prop, obj, prop_el.get("type")))
+    old = child.get("value")
+    child.set("value", _format_value(value, old))
+    entries[DOCUMENT_XML] = (b"<?xml version='1.0' encoding='utf-8'?>\n"
+                             + ET.tostring(root, encoding="utf-8"))
+    out = out or path
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zo:
+        for n in names:
+            zo.writestr(n, entries[n])
+    return {"object": obj, "property": prop, "old": old,
+            "new": child.get("value"), "out": out}
