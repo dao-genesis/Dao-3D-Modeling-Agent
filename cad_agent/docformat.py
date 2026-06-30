@@ -315,15 +315,29 @@ def _sketch_geometry(data_el: Optional[ET.Element]
             gtype = g.get("type")
             entry: Dict[str, Any] = {"type": gtype}
             seg = g.find("LineSegment")
+            circ = g.find("Circle")
+            arc = g.find("ArcOfCircle")
             if gtype == "Part::GeomLineSegment" and seg is not None:
                 entry["line"] = True
                 entry["start"] = [float(seg.get("StartX", 0)),
                                   float(seg.get("StartY", 0))]
                 entry["end"] = [float(seg.get("EndX", 0)),
                                 float(seg.get("EndY", 0))]
-                cons = g.find("Construction")
-                entry["construction"] = (cons is not None
-                                          and cons.get("value") == "1")
+            elif gtype == "Part::GeomCircle" and circ is not None:
+                entry["circle"] = True
+                entry["center"] = [float(circ.get("CenterX", 0)),
+                                   float(circ.get("CenterY", 0))]
+                entry["radius"] = float(circ.get("Radius", 0))
+            elif gtype == "Part::GeomArcOfCircle" and arc is not None:
+                entry["arc"] = True
+                entry["center"] = [float(arc.get("CenterX", 0)),
+                                   float(arc.get("CenterY", 0))]
+                entry["radius"] = float(arc.get("Radius", 0))
+                entry["start_angle"] = float(arc.get("StartAngle", 0))
+                entry["end_angle"] = float(arc.get("EndAngle", 0))
+            cons = g.find("Construction")
+            entry["construction"] = (cons is not None
+                                      and cons.get("value") == "1")
             geoms.append(entry)
         out[name] = geoms
     return out
@@ -617,10 +631,18 @@ def summarize(path: str) -> "List[Dict[str, Any]]":
         elif otype == _SKETCH_TYPE:
             segs: List[Dict[str, Any]] = []
             for g in geom_all.get(name, []):
-                if not g.get("line"):
+                if g.get("line"):
+                    seg: Dict[str, Any] = {"start": list(g["start"]),
+                                           "end": list(g["end"])}
+                elif g.get("circle"):
+                    seg = {"center": list(g["center"]),
+                           "radius": g["radius"]}
+                elif g.get("arc"):
+                    seg = {"center": list(g["center"]), "radius": g["radius"],
+                           "start_angle": g["start_angle"],
+                           "end_angle": g["end_angle"]}
+                else:
                     continue
-                seg: Dict[str, Any] = {"start": list(g["start"]),
-                                       "end": list(g["end"])}
                 if g.get("construction"):
                     seg["construction"] = True
                 segs.append(seg)
@@ -1209,15 +1231,37 @@ def _cells_element(parent: ET.Element, cells: "Dict[str, Any]") -> None:
                        "alias": alias})
 
 
-def _geometry_element(parent: ET.Element, segments: "List[Dict[str, Any]]") -> None:
-    """Append a ``Part::PropertyGeometryList`` of line segments -- a sketch's
-    edges authored from file.
+def _sketch_segment_kind(seg: "Dict[str, Any]") -> "Optional[str]":
+    """Classify a sketch geometry spec into ``line`` / ``circle`` / ``arc``.
 
-    Each segment is ``{"start": [x, y], "end": [x, y], "construction": bool}``
-    and is written as a ``Part::GeomLineSegment`` (with the
-    ``Sketcher::SketchGeometryExtension`` FreeCAD attaches to every sketch edge),
-    so the kernel rebuilds the wire on recompute. Drawing a closed loop yields a
-    face the upstream pad/extrusion consumes.
+    The form is discriminated by which keys are present: a ``line`` has
+    ``start``/``end`` endpoints; an ``arc`` adds ``start_angle``/``end_angle`` to
+    a ``center``/``radius``; a ``circle`` is the bare ``center``/``radius``.
+    Returns ``None`` if no form matches so callers can raise a guided error.
+    """
+    if "start" in seg or "end" in seg:
+        return "line"
+    if "start_angle" in seg or "end_angle" in seg:
+        return "arc"
+    if "center" in seg or "radius" in seg:
+        return "circle"
+    return None
+
+
+def _geometry_element(parent: ET.Element, segments: "List[Dict[str, Any]]") -> None:
+    """Append a ``Part::PropertyGeometryList`` -- a sketch's edges authored from
+    file.
+
+    Each entry is one of three forms (all carrying an optional ``construction``
+    flag), written as the matching FreeCAD geometry with the
+    ``Sketcher::SketchGeometryExtension`` attached to every sketch edge, so the
+    kernel rebuilds the wire on recompute and a closed loop becomes a face the
+    upstream pad/extrusion/revolution consumes:
+
+    * line   -- ``{"start": [x, y], "end": [x, y]}`` -> ``Part::GeomLineSegment``
+    * circle -- ``{"center": [x, y], "radius": r}`` -> ``Part::GeomCircle``
+    * arc    -- ``{"center": [x, y], "radius": r, "start_angle": a,
+      "end_angle": b}`` (radians) -> ``Part::GeomArcOfCircle``
     """
     prop = ET.SubElement(parent, "Property",
                          {"name": "Geometry",
@@ -1225,21 +1269,38 @@ def _geometry_element(parent: ET.Element, segments: "List[Dict[str, Any]]") -> N
                           "status": "8192"})
     glist = ET.SubElement(prop, "GeometryList", {"count": str(len(segments))})
     for i, seg in enumerate(segments, start=1):
+        kind = _sketch_segment_kind(seg)
+        gtype = {"line": "Part::GeomLineSegment",
+                 "circle": "Part::GeomCircle",
+                 "arc": "Part::GeomArcOfCircle"}[kind]
         g = ET.SubElement(glist, "Geometry",
-                          {"type": "Part::GeomLineSegment", "id": str(i),
-                           "migrated": "1"})
+                          {"type": gtype, "id": str(i), "migrated": "1"})
         exts = ET.SubElement(g, "GeoExtensions", {"count": "1"})
         ET.SubElement(exts, "GeoExtension",
                       {"type": "Sketcher::SketchGeometryExtension", "id": str(i),
                        "internalGeometryType": "0",
                        "geometryModeFlags": "0" * 32, "geometryLayer": "0"})
-        sx, sy = seg["start"]
-        ex, ey = seg["end"]
-        ET.SubElement(g, "LineSegment",
-                      {"StartX": "%.16f" % float(sx),
-                       "StartY": "%.16f" % float(sy), "StartZ": "%.16f" % 0.0,
-                       "EndX": "%.16f" % float(ex),
-                       "EndY": "%.16f" % float(ey), "EndZ": "%.16f" % 0.0})
+        if kind == "line":
+            sx, sy = seg["start"]
+            ex, ey = seg["end"]
+            ET.SubElement(g, "LineSegment",
+                          {"StartX": "%.16f" % float(sx),
+                           "StartY": "%.16f" % float(sy), "StartZ": "%.16f" % 0.0,
+                           "EndX": "%.16f" % float(ex),
+                           "EndY": "%.16f" % float(ey), "EndZ": "%.16f" % 0.0})
+        else:
+            cx, cy = seg["center"]
+            attrs = {"CenterX": "%.16f" % float(cx),
+                     "CenterY": "%.16f" % float(cy), "CenterZ": "%.16f" % 0.0,
+                     "NormalX": "%.16f" % 0.0, "NormalY": "%.16f" % 0.0,
+                     "NormalZ": "%.16f" % 1.0, "AngleXU": "%.16f" % 0.0,
+                     "Radius": "%.16f" % float(seg["radius"])}
+            if kind == "arc":
+                attrs["StartAngle"] = "%.16f" % float(seg["start_angle"])
+                attrs["EndAngle"] = "%.16f" % float(seg["end_angle"])
+                ET.SubElement(g, "ArcOfCircle", attrs)
+            else:
+                ET.SubElement(g, "Circle", attrs)
         ET.SubElement(g, "Construction",
                       {"value": "1" if seg.get("construction") else "0"})
 
@@ -1496,24 +1557,55 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
             if not isinstance(segs, list) or not segs:
                 raise ValueError(
                     "synthesize: sketch %s needs a non-empty 'geometry' list of "
-                    "line segments" % name)
+                    "line/circle/arc entries" % name)
+
+            def _pt2(val: "Any", j: int, key: str) -> None:
+                if (not isinstance(val, (list, tuple)) or len(val) != 2
+                        or not all(isinstance(c, (int, float))
+                                   and not isinstance(c, bool) for c in val)):
+                    raise ValueError(
+                        "synthesize: sketch %s segment #%d '%s' must be "
+                        "[x, y] numbers" % (name, j, key))
+
+            def _num(val: "Any", j: int, key: str) -> None:
+                if isinstance(val, bool) or not isinstance(val, (int, float)):
+                    raise ValueError(
+                        "synthesize: sketch %s segment #%d '%s' must be a "
+                        "number" % (name, j, key))
+
             for j, seg in enumerate(segs):
                 if not isinstance(seg, dict):
                     raise ValueError(
                         "synthesize: sketch %s segment #%d must be a dict"
                         % (name, j))
-                for ekey in ("start", "end"):
-                    pt = seg.get(ekey)
-                    if (not isinstance(pt, (list, tuple)) or len(pt) != 2
-                            or not all(isinstance(c, (int, float))
-                                       and not isinstance(c, bool) for c in pt)):
-                        raise ValueError(
-                            "synthesize: sketch %s segment #%d '%s' must be "
-                            "[x, y] numbers" % (name, j, ekey))
-                if (list(seg["start"]) == list(seg["end"])):
+                kind = _sketch_segment_kind(seg)
+                if kind is None:
                     raise ValueError(
-                        "synthesize: sketch %s segment #%d is degenerate "
-                        "(start == end)" % (name, j))
+                        "synthesize: sketch %s segment #%d must be a line "
+                        "(start/end), circle (center/radius) or arc "
+                        "(center/radius/start_angle/end_angle)" % (name, j))
+                if kind == "line":
+                    _pt2(seg.get("start"), j, "start")
+                    _pt2(seg.get("end"), j, "end")
+                    if list(seg["start"]) == list(seg["end"]):
+                        raise ValueError(
+                            "synthesize: sketch %s segment #%d is degenerate "
+                            "(start == end)" % (name, j))
+                else:
+                    _pt2(seg.get("center"), j, "center")
+                    _num(seg.get("radius"), j, "radius")
+                    if seg["radius"] <= 0:
+                        raise ValueError(
+                            "synthesize: sketch %s segment #%d 'radius' must be "
+                            "positive" % (name, j))
+                    if kind == "arc":
+                        _num(seg.get("start_angle"), j, "start_angle")
+                        _num(seg.get("end_angle"), j, "end_angle")
+                        if seg["start_angle"] == seg["end_angle"]:
+                            raise ValueError(
+                                "synthesize: sketch %s segment #%d arc is "
+                                "degenerate (start_angle == end_angle)"
+                                % (name, j))
                 if ("construction" in seg
                         and not isinstance(seg["construction"], bool)):
                     raise ValueError(
