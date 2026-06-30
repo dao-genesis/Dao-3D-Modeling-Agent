@@ -620,6 +620,35 @@ def main():
           "(superhuman authoring: a whole pattern from one parametric line)"
           % avol)
 
+    # ---- polar_pattern: revolve copies about an axis from one spec -------- #
+    # four cubes at radius 30 revolved about Z, full 360 (step 90), grouped to a
+    # Compound. The file layer does the revolve arithmetic (Rodrigues) itself:
+    # copies land at the four cardinal radii, disjoint, so vol = 4 * 1000.
+    pol_specs = docformat.polar_pattern(
+        {"type": "Part::Box", "name": "Tooth",
+         "properties": {"Length": 10, "Width": 10, "Height": 10},
+         "placement": {"position": [30, 0, 0]}},
+        count=4, axis=[0, 0, 1], total_angle=360, group="Part::Compound")
+    assert [s["name"] for s in pol_specs] == [
+        "Tooth_0", "Tooth_1", "Tooth_2", "Tooth_3", "Tooth_all"], pol_specs
+    # copy 1 revolved 90 deg about Z: [30,0,0] -> [0,30,0].
+    p1 = pol_specs[1]["placement"]["position"]
+    assert abs(p1[0]) < 1e-6 and abs(p1[1] - 30) < 1e-6, p1
+    assert abs(pol_specs[1]["placement"]["angle"] - 90) < 1e-9, pol_specs[1]
+    pol_p = os.path.join(OUT, "synth_polar.FCStd")
+    docformat.synthesize(pol_p, pol_specs)
+    pold = App.openDocument(pol_p)
+    try:
+        for o in pold.Objects:
+            o.touch()
+        pold.recompute(None, True)
+        rvol = pold.getObject("Tooth_all").Shape.Volume
+    finally:
+        App.closeDocument(pold.Name)
+    assert abs(rvol - 4 * 1000) < 1e-3, rvol
+    print("docformat.polar_pattern: one spec -> 4-tooth ring revolved about Z, "
+          "grouped to vol %g (file layer does the revolve math itself)" % rvol)
+
     # ---- summarize: decompile a file back to a synthesize spec (round-trip) - #
     # author a document spanning every type the authoring layer writes -- a
     # parametric primitive, a placed/rotated primitive, a 2-way boolean, an

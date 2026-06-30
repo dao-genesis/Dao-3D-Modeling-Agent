@@ -1388,3 +1388,95 @@ def linear_pattern(
         key = _LINKLIST_TYPES[group][0]
         specs.append({"type": group, "name": "%s_all" % bname, key: names})
     return specs
+
+
+def _rodrigues(v: "List[float]", axis: "List[float]", angle_deg: float) -> "List[float]":
+    """Rotate vector ``v`` about ``axis`` by ``angle_deg`` degrees (right-hand
+    rule), via Rodrigues' formula. ``axis`` need not be unit -- it is normalised
+    here. The pure-Python rotation the file layer needs to *place* a polar array
+    without the kernel."""
+    n = math.sqrt(sum(c * c for c in axis))
+    if n == 0:
+        raise ValueError("_rodrigues: axis must be non-zero")
+    kx, ky, kz = axis[0] / n, axis[1] / n, axis[2] / n
+    th = math.radians(angle_deg)
+    c, s = math.cos(th), math.sin(th)
+    dot = kx * v[0] + ky * v[1] + kz * v[2]
+    cross = [ky * v[2] - kz * v[1], kz * v[0] - kx * v[2], kx * v[1] - ky * v[0]]
+    k = [kx, ky, kz]
+    return [v[i] * c + cross[i] * s + k[i] * dot * (1 - c) for i in range(3)]
+
+
+def polar_pattern(
+    base: "Dict[str, Any]",
+    count: int,
+    axis: "List[float]",
+    total_angle: float = 360.0,
+    center: "Optional[List[float]]" = None,
+    group: "Optional[str]" = None,
+) -> "List[Dict[str, Any]]":
+    """Expand a base primitive spec into ``count`` copies revolved about an axis,
+    returning a ``synthesize`` spec list.
+
+    Copy ``i`` is the base rotated by ``i * step`` degrees about ``axis`` through
+    ``center`` (default origin), where ``step`` spans ``total_angle`` over the
+    copies -- ``total_angle / count`` for a full 360 (so the ring closes without
+    overlap) or ``total_angle / (count - 1)`` otherwise (endpoints inclusive).
+    Each copy's placement is computed here (position revolved about the centre
+    via :func:`_rodrigues`, plus the same axis-angle rotation), so the kernel
+    just rebuilds geometry. ``group`` appends a link-list object over the copies,
+    exactly as in :func:`linear_pattern`.
+
+    A radial array a human builds by repeated rotate-copy steps, written from one
+    parametric description -- the file layer doing the revolve arithmetic itself.
+    """
+    if not isinstance(base, dict) or base.get("type") not in _PRIMITIVES:
+        raise ValueError(
+            "polar_pattern: 'base' must be a primitive spec (type in %s)"
+            % ", ".join(sorted(_PRIMITIVES)))
+    bname = base.get("name")
+    if not isinstance(bname, str) or not bname.strip():
+        raise ValueError("polar_pattern: base needs a non-empty name")
+    if not isinstance(count, int) or isinstance(count, bool) or count < 2:
+        raise ValueError("polar_pattern: 'count' must be an int >= 2")
+    if (not isinstance(axis, (list, tuple)) or len(axis) != 3
+            or not all(isinstance(c, (int, float)) and not isinstance(c, bool)
+                       for c in axis)
+            or not any(axis)):
+        raise ValueError("polar_pattern: 'axis' must be a non-zero [x, y, z]")
+    if (not isinstance(total_angle, (int, float))
+            or isinstance(total_angle, bool)):
+        raise ValueError("polar_pattern: 'total_angle' must be a number (degrees)")
+    if center is None:
+        center = [0.0, 0.0, 0.0]
+    if (not isinstance(center, (list, tuple)) or len(center) != 3
+            or not all(isinstance(c, (int, float)) and not isinstance(c, bool)
+                       for c in center)):
+        raise ValueError("polar_pattern: 'center' must be [x, y, z]")
+    if group is not None and group not in _LINKLIST_TYPES:
+        raise ValueError(
+            "polar_pattern: 'group' must be one of %s (or None)"
+            % ", ".join(sorted(_LINKLIST_TYPES)))
+    base_pos = ((base.get("placement") or {}).get("position")) or [0.0, 0.0, 0.0]
+    if len(base_pos) != 3:
+        raise ValueError("polar_pattern: base placement position must be [x,y,z]")
+    full = abs((total_angle % 360.0)) < 1e-9 and total_angle != 0
+    step = total_angle / count if full else total_angle / (count - 1)
+    rel = [base_pos[i] - center[i] for i in range(3)]
+    axis_l = [float(a) for a in axis]
+    specs: List[Dict[str, Any]] = []
+    names: List[str] = []
+    for i in range(count):
+        ang = i * step
+        revolved = _rodrigues(rel, axis_l, ang)
+        pos = [center[j] + revolved[j] for j in range(3)]
+        copy_spec = copy.deepcopy(base)
+        cname = "%s_%d" % (bname, i)
+        copy_spec["name"] = cname
+        copy_spec["placement"] = {"position": pos, "axis": axis_l, "angle": ang}
+        specs.append(copy_spec)
+        names.append(cname)
+    if group is not None:
+        key = _LINKLIST_TYPES[group][0]
+        specs.append({"type": group, "name": "%s_all" % bname, key: names})
+    return specs
