@@ -63,6 +63,16 @@ def main():
     r = s.act("analyze.distance", {"a": "b1", "b": "b2"})
     print("distance b1<->b2:", r.data["min_distance"])
     assert abs(r.data["min_distance"] - 15) < 1e-6
+    # the closest-point pair is exposed so a caller can act on the gap.
+    assert r.data["point_a"][0] == 10 and r.data["point_b"][0] == 25, r.data
+
+    # --- analyze.bbox: axis-aligned size/center for layout (b2 sits at x=25) ---
+    bb = s.act("analyze.bbox", {"name": "b2"})
+    assert bb.ok, bb.error
+    assert bb.data["size"] == [10, 10, 10], bb.data
+    assert bb.data["min"][0] == 25 and bb.data["max"][0] == 35, bb.data
+    assert bb.data["center"] == [30, 5, 5] and bb.data["box_volume"] == 1000, bb.data
+    print("analyze.bbox b2 -> size %s center %s" % (bb.data["size"], bb.data["center"]))
 
     # --- mesh watertightness ---
     r = s.act("mesh.analyze", {"name": "Brk", "tolerance": 0.2})
@@ -159,6 +169,8 @@ def main():
             "'XY'/'XZ'/'YZ'")
     _guided(s.act("analyze.section", {"name": "Brk", "plane": 123}),
             "'XY'/'XZ'/'YZ'")
+    _guided(s.act("analyze.bbox", {"name": "Nope"}), "no such solid")
+    _guided(s.act("analyze.distance", {"a": "b1", "b": "Nope"}), "no such solid")
     _guided(s.act("mesh.boolean", {"a": "mA", "b": "mB", "op": "xor"}),
             "union/difference/intersection")
     _guided(s.act("mesh.boolean", {"a": "Nope", "b": "mB"}), "no such solid")
