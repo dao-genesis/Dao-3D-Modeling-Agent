@@ -857,6 +857,48 @@ def main():
           " area %g (pi*9/2) authored from file, round-trip identical"
           % (disk_area, half_area))
 
+    # ---- regular_polygon: generate an N-gon profile from one description -- #
+    # superhuman generation: one (sides, radius) description -> every vertex
+    # computed by trig and written as a closed loop, what a human draws and
+    # constrains edge by edge. A hexagon radius 10 has area
+    # (1/2) n r^2 sin(2pi/n) = 259.808; extruded 4 it is a prism of that * 4.
+    hexg = docformat.regular_polygon("Hex", 6, 10)
+    assert len(hexg["geometry"]) == 6, hexg
+    poly_p = os.path.join(OUT, "synth_polygon.FCStd")
+    docformat.synthesize(poly_p, [
+        hexg,
+        {"type": "Part::Extrusion", "name": "Ext", "base": "Hex", "length": 4},
+    ])
+    poly_rt = os.path.join(OUT, "synth_polygon_rt.FCStd")
+    docformat.synthesize(poly_rt, docformat.summarize(poly_p))
+    assert docformat.fingerprint(poly_p) == docformat.fingerprint(poly_rt)
+    pd = App.openDocument(poly_p)
+    try:
+        for o in pd.Objects:
+            o.touch()
+        pd.recompute(None, True)
+        hex_w = Part.Wire(Part.__sortEdges__(pd.getObject("Hex").Shape.Edges))
+        hex_area = Part.Face(hex_w).Area
+        prism_vol = pd.getObject("Ext").Shape.Volume
+    finally:
+        App.closeDocument(pd.Name)
+    exp_area = 0.5 * 6 * 100 * math.sin(2 * math.pi / 6)
+    assert abs(hex_area - exp_area) < 1e-6, (hex_area, exp_area)
+    assert abs(prism_vol - exp_area * 4) < 1e-6, prism_vol
+    for kwargs, token in (
+            (dict(name="P", sides=2, radius=5), "'sides' must be an int >= 3"),
+            (dict(name="P", sides=5, radius=0), "'radius' must be a positive"),
+            (dict(name="", sides=5, radius=5), "non-empty name")):
+        try:
+            docformat.regular_polygon(**kwargs)
+        except ValueError as exc:
+            assert token in str(exc), (token, exc)
+        else:
+            raise AssertionError("expected ValueError for %r" % kwargs)
+    print("docformat regular_polygon: hexagon radius 10 generated from one "
+          "description -> area %g, extruded to prism volume %g (做人类靠重复才能做的)"
+          % (hex_area, prism_vol))
+
     # ---- Part::Extrusion: sweep a sketch profile into a solid ------------ #
     # the join between the sketch layer and the solid layer: author a 10x5
     # rectangle sketch + an extrusion that sweeps it 7 along +Z. The kernel
@@ -1108,6 +1150,31 @@ def main():
     assert not s.act("doc.pattern", {"mode": "spiral", "base": {}, "count": 2}).ok
     print("doc.pattern: linear 3-cube row + polar 6-tooth ring authored from one "
           "base spec each (array generation as an agent op, file-layer leverage)")
+
+    # ---- doc.profile: parametric 2D profile generation as an agent op ---- #
+    # the agent generates a regular N-gon sketch from one description and
+    # synthesizes it straight to a file -- a pentagon radius 8 with five edges.
+    op_pent = os.path.join(OUT, "op_pentagon.FCStd")
+    pf = s.act("doc.profile", {
+        "shape": "regular_polygon", "name": "Pent", "sides": 5,
+        "radius": 8, "path": op_pent})
+    assert pf.ok and pf.data["out"] == op_pent, pf
+    assert len(pf.data["object"]["geometry"]) == 5, pf.data
+    nd = App.openDocument(op_pent)
+    try:
+        for o in nd.Objects:
+            o.touch()
+        nd.recompute(None, True)
+        pent_w = Part.Wire(Part.__sortEdges__(nd.getObject("Pent").Shape.Edges))
+        pent_area = Part.Face(pent_w).Area
+    finally:
+        App.closeDocument(nd.Name)
+    assert abs(pent_area - 0.5 * 5 * 64 * math.sin(2 * math.pi / 5)) < 1e-6, \
+        pent_area
+    assert not s.act("doc.profile", {"shape": "blob", "name": "X"}).ok
+    print("doc.profile: pentagon radius 8 generated + synthesized from one "
+          "description -> closed wire area %g (profile generation as an agent op)"
+          % pent_area)
 
     # ---- two-layer fusion: the live kernel agrees with the file ---------- #
     # ss.bindings reads the same ExpressionEngine wiring from the *running*

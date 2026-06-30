@@ -1932,6 +1932,58 @@ def linear_pattern(
     return specs
 
 
+def regular_polygon(
+    name: str,
+    sides: int,
+    radius: float,
+    center: "Optional[List[float]]" = None,
+    start_angle: float = 0.0,
+    construction: bool = False,
+) -> "Dict[str, Any]":
+    """Generate a closed regular ``sides``-gon as a sketch spec (feed it to
+    :func:`synthesize` directly, or use it as the ``base`` of an extrusion /
+    revolution).
+
+    The ``sides`` vertices lie on a circle of ``radius`` about ``center``
+    (default origin) in the XY plane, the first at ``start_angle`` degrees from
+    +X and the rest spaced ``360 / sides`` apart; consecutive vertices are
+    joined by line segments and the loop is closed. The whole profile is
+    computed from one parametric description -- a human draws and constrains
+    each edge by hand, here the trig is done once and written exactly. 道法自然.
+    """
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("regular_polygon: needs a non-empty name")
+    if not isinstance(sides, int) or isinstance(sides, bool) or sides < 3:
+        raise ValueError("regular_polygon: 'sides' must be an int >= 3")
+    if (isinstance(radius, bool) or not isinstance(radius, (int, float))
+            or radius <= 0):
+        raise ValueError("regular_polygon: 'radius' must be a positive number")
+    if center is None:
+        center = [0.0, 0.0]
+    if (not isinstance(center, (list, tuple)) or len(center) != 2
+            or not all(isinstance(c, (int, float)) and not isinstance(c, bool)
+                       for c in center)):
+        raise ValueError("regular_polygon: 'center' must be [x, y] numbers")
+    if (isinstance(start_angle, bool)
+            or not isinstance(start_angle, (int, float))):
+        raise ValueError("regular_polygon: 'start_angle' must be a number")
+    if not isinstance(construction, bool):
+        raise ValueError("regular_polygon: 'construction' must be a bool")
+    cx, cy = float(center[0]), float(center[1])
+    verts = []
+    for k in range(sides):
+        th = math.radians(start_angle + 360.0 * k / sides)
+        verts.append([cx + radius * math.cos(th), cy + radius * math.sin(th)])
+    geometry: List[Dict[str, Any]] = []
+    for k in range(sides):
+        seg: Dict[str, Any] = {"start": verts[k],
+                               "end": verts[(k + 1) % sides]}
+        if construction:
+            seg["construction"] = True
+        geometry.append(seg)
+    return {"type": _SKETCH_TYPE, "name": name, "geometry": geometry}
+
+
 def _rodrigues(v: "List[float]", axis: "List[float]", angle_deg: float) -> "List[float]":
     """Rotate vector ``v`` about ``axis`` by ``angle_deg`` degrees (right-hand
     rule), via Rodrigues' formula. ``axis`` need not be unit -- it is normalised

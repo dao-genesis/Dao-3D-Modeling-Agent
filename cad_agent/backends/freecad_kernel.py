@@ -198,10 +198,37 @@ def _doc_handlers(state):
             result["out"] = path
         return result
 
+    def profile(a):
+        # generate a parametric 2D profile as a sketch spec, kernel-free -- the
+        # file layer computing every vertex from one description, what a human
+        # draws and constrains edge by edge. Optionally synthesizes to 'path'.
+        shape = a.get("shape")
+        df = _docformat()
+        if shape == "regular_polygon":
+            obj = df.regular_polygon(
+                a.get("name"), a.get("sides"), a.get("radius"),
+                center=a.get("center"), start_angle=a.get("start_angle", 0.0),
+                construction=a.get("construction", False))
+        else:
+            raise ValueError(
+                "doc.profile 'shape' must be 'regular_polygon' (got %r)"
+                % (shape,))
+        result = {"shape": shape, "object": obj}
+        path = a.get("path")
+        if path is not None:
+            if not isinstance(path, str) or not path:
+                raise ValueError(
+                    "doc.profile 'path' must be a non-empty .FCStd file path "
+                    "when given (got %r)" % (path,))
+            df.synthesize(path, [obj])
+            result["out"] = path
+        return result
+
     return {"doc.save": save, "doc.info": info, "doc.inspect": inspect,
             "doc.diff": diff, "doc.edit": edit,
             "doc.synthesize": synthesize, "doc.summarize": summarize,
-            "doc.realize": realize, "doc.pattern": pattern}
+            "doc.realize": realize, "doc.pattern": pattern,
+            "doc.profile": profile}
 
 
 def _build_handlers(state):
