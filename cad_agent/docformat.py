@@ -290,6 +290,51 @@ def _sketch_dimensions(sketches: "Dict[str, Dict[str, Any]]") -> Dict[str, Any]:
     return out
 
 
+def _sheet_cells(data_el: Optional[ET.Element]) -> "Dict[str, Dict[str, Any]]":
+    """spreadsheet name -> its aliased cell table, read kernel-free.
+
+    A ``Spreadsheet::Sheet`` stores its content in a
+    ``Spreadsheet::PropertySheet`` ``cells`` property: each ``<Cell>`` records an
+    ``address`` (e.g. ``A1``), its ``content`` (a literal or an ``=`` formula),
+    and an optional ``alias``. The aliased cells are the parametric *control
+    table* other objects bind their dimensions to; surfaced here they become the
+    file-level read dual of authoring one -- the master model's knobs, recovered
+    from the file without the kernel.
+
+    Per sheet: ``cells`` (each ``{address, content, alias}``), ``count``, and
+    ``aliases`` -- the alias -> content map (the user-facing knobs).
+    """
+    out: Dict[str, Dict[str, Any]] = {}
+    if data_el is None:
+        return out
+    for obj in data_el.findall("Object"):
+        name = obj.get("name")
+        if name is None:
+            continue
+        cells_el = None
+        for props_el in obj.findall("Properties"):
+            for prop in props_el.findall("Property"):
+                if prop.get("type") == "Spreadsheet::PropertySheet":
+                    cells_el = prop.find("Cells")
+                    break
+            if cells_el is not None:
+                break
+        if cells_el is None:
+            continue
+        cells: List[Dict[str, Any]] = []
+        aliases: Dict[str, str] = {}
+        for c in cells_el.findall("Cell"):
+            address = c.get("address") or ""
+            content = c.get("content") or ""
+            alias = c.get("alias") or ""
+            cells.append({"address": address, "content": content,
+                          "alias": alias})
+            if alias:
+                aliases[alias] = content
+        out[name] = {"cells": cells, "count": len(cells), "aliases": aliases}
+    return out
+
+
 # OpenCASCADE BREP ASCII shape records open with a two-letter type code on its
 # own line, inside the ``TShapes`` section. This is the topology root the API
 # only ever wraps -- counted straight from the file it needs no kernel.
@@ -384,6 +429,7 @@ def inspect_document(path: str) -> Dict[str, Any]:
         expr_edges = _expression_edges(expressions, obj_names, _label_map(props))
         sketches = _sketch_constraints(data_el)
         sketch_dims = _sketch_dimensions(sketches)
+        sheets = _sheet_cells(data_el)
         breps = []
         topo_totals = {name: 0 for name in _BREP_SHAPE_CODES.values()}
         for n in names:
@@ -418,6 +464,8 @@ def inspect_document(path: str) -> Dict[str, Any]:
             "sketches": sketches,
             "sketch_constraint_count": sum(s["count"] for s in sketches.values()),
             "sketch_dimensions": sketch_dims,
+            "spreadsheets": sheets,
+            "spreadsheet_cell_count": sum(s["count"] for s in sheets.values()),
             "brep_files": breps,
             "brep_bytes": sum(b["bytes"] for b in breps),
             "topology_totals": topo_totals,
