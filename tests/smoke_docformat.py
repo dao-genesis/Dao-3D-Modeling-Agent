@@ -1241,6 +1241,126 @@ def main():
     print("docformat Part::Revolution: sketch spun from file -> solid volume %g "
           "(Pappus 2*pi*3.5*12), round-trips identically" % round(rv_vol, 3))
 
+    # ---- Part::Circle: a parametric edge that keeps its placement ---------- #
+    # the section-feeding complement to the solid primitives: a full circle of
+    # radius 5 authored from file. Unlike a shape-less sketch, a Part::Circle's
+    # placement survives a reload (its execute() rebuilds the edge without
+    # resetting the frame), so it can be stacked at a z offset -- the property
+    # that makes it a loft section. summarize recovers the radius + placement and
+    # the spec round-trips to an identical document.
+    ci_p = os.path.join(OUT, "synth_circle.FCStd")
+    docformat.synthesize(ci_p, [
+        {"type": "Part::Circle", "name": "C0",
+         "properties": {"Radius": 5, "Angle2": 360},
+         "placement": {"position": [0, 0, 4]}},
+    ])
+    ci_spec = next(s for s in docformat.summarize(ci_p) if s["name"] == "C0")
+    assert ci_spec["properties"]["Radius"] == 5, ci_spec
+    assert ci_spec["placement"]["position"] == [0.0, 0.0, 4.0], ci_spec
+    ci_rt = os.path.join(OUT, "synth_circle_rt.FCStd")
+    docformat.synthesize(ci_rt, docformat.summarize(ci_p))
+    assert docformat.fingerprint(ci_p) == docformat.fingerprint(ci_rt)
+    cd = App.openDocument(ci_p)
+    try:
+        for o in cd.Objects:
+            o.touch()
+        cd.recompute(None, True)
+        c0 = cd.getObject("C0")
+        ci_edges = len(c0.Shape.Edges)
+        ci_z = c0.Placement.Base.z
+    finally:
+        App.closeDocument(cd.Name)
+    assert ci_edges == 1, ci_edges
+    assert abs(ci_z - 4.0) < 1e-6, ci_z
+    print("docformat Part::Circle: parametric edge authored from file -> 1 edge, "
+          "placement z=%g survives reload, round-trips identically" % ci_z)
+
+    # ---- Part::Loft: skin a solid through >=2 stacked sections ------------- #
+    # the multi-section complement to the single-profile extrude/revolve: two
+    # circles -- radius 5 at z=0, radius 3 at z=10 -- lofted into a truncated
+    # cone. The kernel skins the sections on recompute to a solid of volume
+    # (pi h / 3)(R^2 + R r + r^2) = (pi 10/3)(25+15+9) = 513.13 -- the file-first
+    # equivalent of the GUI's Loft. summarize recovers the ordered sections and
+    # flags, and the spec round-trips to an identical document.
+    lo_p = os.path.join(OUT, "synth_loft.FCStd")
+    docformat.synthesize(lo_p, [
+        {"type": "Part::Circle", "name": "L0",
+         "properties": {"Radius": 5, "Angle2": 360}},
+        {"type": "Part::Circle", "name": "L1",
+         "properties": {"Radius": 3, "Angle2": 360},
+         "placement": {"position": [0, 0, 10]}},
+        {"type": "Part::Loft", "name": "Lof", "sections": ["L0", "L1"]},
+    ])
+    lo_spec = next(s for s in docformat.summarize(lo_p) if s["name"] == "Lof")
+    assert lo_spec["sections"] == ["L0", "L1"], lo_spec
+    # solid loft is the default -- no solid/ruled/closed keys emitted at default.
+    assert "ruled" not in lo_spec and "closed" not in lo_spec, lo_spec
+    lo_rt = os.path.join(OUT, "synth_loft_rt.FCStd")
+    docformat.synthesize(lo_rt, docformat.summarize(lo_p))
+    assert docformat.fingerprint(lo_p) == docformat.fingerprint(lo_rt)
+    # the loft records its dependency on both sections (recompute DAG edges).
+    lo_file_deps = docformat.inspect_document(lo_p)["dependencies"].get("Lof", [])
+    assert "L0" in lo_file_deps and "L1" in lo_file_deps, lo_file_deps
+    ld = App.openDocument(lo_p)
+    try:
+        for o in ld.Objects:
+            o.touch()
+        ld.recompute(None, True)
+        lof = ld.getObject("Lof")
+        lo_vol = lof.Shape.Volume
+        lo_solids = len(lof.Shape.Solids)
+        lo_dep_names = [d.Name for d in lof.OutList]
+    finally:
+        App.closeDocument(ld.Name)
+    assert abs(lo_vol - 513.127) < 0.5, lo_vol
+    assert lo_solids == 1, lo_solids
+    assert "L0" in lo_dep_names and "L1" in lo_dep_names, lo_dep_names
+    # a ruled, non-solid, closed loft round-trips its non-default flags too.
+    lo2 = os.path.join(OUT, "synth_loft2.FCStd")
+    docformat.synthesize(lo2, [
+        {"type": "Part::Circle", "name": "A",
+         "properties": {"Radius": 4, "Angle2": 360}},
+        {"type": "Part::Circle", "name": "B",
+         "properties": {"Radius": 4, "Angle2": 360},
+         "placement": {"position": [0, 0, 6]}},
+        {"type": "Part::Loft", "name": "Sh", "sections": ["A", "B"],
+         "solid": False, "ruled": True},
+    ])
+    sh_spec = next(s for s in docformat.summarize(lo2) if s["name"] == "Sh")
+    assert sh_spec["solid"] is False and sh_spec["ruled"] is True, sh_spec
+    lo2_rt = os.path.join(OUT, "synth_loft2_rt.FCStd")
+    docformat.synthesize(lo2_rt, docformat.summarize(lo2))
+    assert docformat.fingerprint(lo2) == docformat.fingerprint(lo2_rt)
+    for bad, token in (
+            ([{"type": "Part::Circle", "name": "C",
+               "properties": {"Radius": 1, "Angle2": 360}},
+              {"type": "Part::Loft", "name": "L", "sections": ["C"]}],
+             "list of >=2"),
+            ([{"type": "Part::Loft", "name": "L",
+               "sections": ["Nope", "Nada"]}], "is not a defined object"),
+            ([{"type": "Part::Loft", "name": "L",
+               "sections": ["L", "L"]}], "cannot reference itself"),
+            ([{"type": "Part::Circle", "name": "C",
+               "properties": {"Radius": 1, "Angle2": 360}},
+              {"type": "Part::Loft", "name": "L", "sections": ["C", "C"]}],
+             "duplicate sections"),
+            ([{"type": "Part::Circle", "name": "C",
+               "properties": {"Radius": 1, "Angle2": 360}},
+              {"type": "Part::Circle", "name": "D",
+               "properties": {"Radius": 1, "Angle2": 360}},
+              {"type": "Part::Loft", "name": "L", "sections": ["C", "D"],
+               "solid": "yes"}], "must be a bool")):
+        try:
+            docformat.synthesize(os.path.join(OUT, "bad_lo.FCStd"), bad)
+        except ValueError as exc:
+            assert token in str(exc), (token, exc)
+        else:
+            raise AssertionError("expected ValueError for %r" % token)
+    print("docformat Part::Loft: two circles (r5@0, r3@10) skinned from file -> "
+          "solid volume %g (truncated cone), depends on both sections, "
+          "round-trips identically; ruled/closed flags + guards hold" %
+          round(lo_vol, 3))
+
     # ---- summarize: decompile a file back to a synthesize spec (round-trip) - #
     # author a document spanning every type the authoring layer writes -- a
     # parametric primitive, a placed/rotated primitive, a 2-way boolean, an
