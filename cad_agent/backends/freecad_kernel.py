@@ -225,10 +225,14 @@ def _doc_handlers(state):
                 weights=a.get("weights"),
                 construction=a.get("construction", False),
                 closed=a.get("closed", False))
+        elif shape == "point":
+            obj = df.point(
+                a.get("name"), a.get("at"),
+                construction=a.get("construction", False))
         else:
             raise ValueError(
                 "doc.profile 'shape' must be 'regular_polygon', 'slot', "
-                "'ellipse' or 'bspline' (got %r)" % (shape,))
+                "'ellipse', 'bspline' or 'point' (got %r)" % (shape,))
         result = {"shape": shape, "object": obj}
         path = a.get("path")
         if path is not None:

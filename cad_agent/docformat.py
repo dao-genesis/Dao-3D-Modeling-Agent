@@ -320,6 +320,7 @@ def _sketch_geometry(data_el: Optional[ET.Element]
             ell = g.find("Ellipse")
             aoe = g.find("ArcOfEllipse")
             bsp = g.find("BSplineCurve")
+            pt = g.find("GeomPoint")
             if gtype == "Part::GeomLineSegment" and seg is not None:
                 entry["line"] = True
                 entry["start"] = [float(seg.get("StartX", 0)),
@@ -367,6 +368,9 @@ def _sketch_geometry(data_el: Optional[ET.Element]
                 if any(abs(w - 1.0) > 1e-12 for w in weights):
                     spec["weights"] = weights
                 entry["bspline"] = spec
+            elif gtype == "Part::GeomPoint" and pt is not None:
+                entry["point"] = [float(pt.get("X", 0)),
+                                  float(pt.get("Y", 0))]
             cons = g.find("Construction")
             entry["construction"] = (cons is not None
                                       and cons.get("value") == "1")
@@ -698,6 +702,8 @@ def summarize(path: str) -> "List[Dict[str, Any]]":
                     if "weights" in bs:
                         inner["weights"] = list(bs["weights"])
                     seg = {"bspline": inner}
+                elif g.get("point") is not None:
+                    seg = {"point": list(g["point"])}
                 else:
                     continue
                 if g.get("construction"):
@@ -1304,6 +1310,8 @@ def _sketch_segment_kind(seg: "Dict[str, Any]") -> "Optional[str]":
     has_sweep = "start_angle" in seg or "end_angle" in seg
     if "bspline" in seg:
         return "bspline"
+    if "point" in seg:
+        return "point"
     if "start" in seg or "end" in seg:
         return "line"
     if has_axes and has_sweep:
@@ -1340,6 +1348,8 @@ def _geometry_element(parent: ET.Element, segments: "List[Dict[str, Any]]") -> N
       "mults": [...], "degree": d, "periodic": bool, "weights": [...]}}`` ->
       ``Part::GeomBSplineCurve`` (the general freeform curve; ``weights``
       default to 1, ``periodic`` to false)
+    * point   -- ``{"point": [x, y]}`` -> ``Part::GeomPoint`` (an isolated
+      sketch vertex: a reference / construction point, no edge)
     """
     prop = ET.SubElement(parent, "Property",
                          {"name": "Geometry",
@@ -1353,7 +1363,8 @@ def _geometry_element(parent: ET.Element, segments: "List[Dict[str, Any]]") -> N
                  "arc": "Part::GeomArcOfCircle",
                  "ellipse": "Part::GeomEllipse",
                  "arc_ellipse": "Part::GeomArcOfEllipse",
-                 "bspline": "Part::GeomBSplineCurve"}[kind]
+                 "bspline": "Part::GeomBSplineCurve",
+                 "point": "Part::GeomPoint"}[kind]
         g = ET.SubElement(glist, "Geometry",
                           {"type": gtype, "id": str(i), "migrated": "1"})
         exts = ET.SubElement(g, "GeoExtensions", {"count": "1"})
@@ -1403,6 +1414,11 @@ def _geometry_element(parent: ET.Element, segments: "List[Dict[str, Any]]") -> N
                 ET.SubElement(bel, "Knot",
                               {"Value": "%.16f" % float(kv),
                                "Mult": str(int(km))})
+        elif kind == "point":
+            px, py = seg["point"]
+            ET.SubElement(g, "GeomPoint",
+                          {"X": "%.16f" % float(px),
+                           "Y": "%.16f" % float(py), "Z": "%.16f" % 0.0})
         else:
             cx, cy = seg["center"]
             attrs = {"CenterX": "%.16f" % float(cx),
@@ -1779,6 +1795,8 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                     if kind == "arc_ellipse":
                         _num(seg.get("start_angle"), j, "start_angle")
                         _num(seg.get("end_angle"), j, "end_angle")
+                elif kind == "point":
+                    _pt2(seg.get("point"), j, "point")
                 else:
                     _pt2(seg.get("center"), j, "center")
                     _num(seg.get("radius"), j, "radius")
@@ -2337,6 +2355,33 @@ def bspline(
     if weights is not None:
         inner["weights"] = [float(w) for w in weights]
     seg: Dict[str, Any] = {"bspline": inner}
+    if construction:
+        seg["construction"] = True
+    return {"type": _SKETCH_TYPE, "name": name, "geometry": [seg]}
+
+
+def point(
+    name: str,
+    at: "List[float]",
+    construction: bool = False,
+) -> "Dict[str, Any]":
+    """Generate an isolated sketch point as a single-vertex sketch spec.
+
+    The simplest sketch primitive: a lone ``Part::GeomPoint`` at ``at``
+    ``[x, y]`` -- no edge, just a reference / construction vertex that other
+    geometry (mirror axes, pattern seeds, dimensional anchors) can hang off. It
+    carries the usual optional ``construction`` flag and round-trips byte-exact.
+    道法自然 -- 大方無隅.
+    """
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("point: needs a non-empty name")
+    if (not isinstance(at, (list, tuple)) or len(at) != 2
+            or not all(isinstance(c, (int, float)) and not isinstance(c, bool)
+                       for c in at)):
+        raise ValueError("point: 'at' must be [x, y] numbers")
+    if not isinstance(construction, bool):
+        raise ValueError("point: 'construction' must be a bool")
+    seg: Dict[str, Any] = {"point": [float(at[0]), float(at[1])]}
     if construction:
         seg["construction"] = True
     return {"type": _SKETCH_TYPE, "name": name, "geometry": [seg]}
