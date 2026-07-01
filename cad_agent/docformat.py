@@ -57,7 +57,13 @@ def _prop_value(prop: ET.Element) -> Any:
     tag = k.tag
     if tag == "Link":
         return {"link": k.get("value")}
-    if tag in ("LinkList", "LinkSubList", "LinkSub"):
+    if tag == "LinkSub":
+        # a link-with-subs: the target object is on the element itself while its
+        # children are the sub-elements followed (e.g. ``Edge1``). Keep both so
+        # a ``Spine``-style property round-trips its object *and* its edges.
+        return {"link": k.get("value"),
+                "subs": [c.get("value") for c in k if c.get("value")]}
+    if tag in ("LinkList", "LinkSubList"):
         return {"link_list": [c.get("value") or c.get("obj")
                               for c in k if (c.get("value") or c.get("obj"))]}
     if tag == "PropertyPlacement":
@@ -750,6 +756,21 @@ def summarize(path: str) -> "List[Dict[str, Any]]":
                 spec["ruled"] = True
             if props.get("Closed", {}).get("value") is True:
                 spec["closed"] = True
+        elif otype == _SWEEP_TYPE:
+            ll_val = props.get("Sections", {}).get("value")
+            spec["sections"] = (list(ll_val["link_list"])
+                                if isinstance(ll_val, dict)
+                                and "link_list" in ll_val else [])
+            spine_val = props.get("Spine", {}).get("value")
+            if isinstance(spine_val, dict) and spine_val.get("link"):
+                spec["spine"] = spine_val["link"]
+                subs = spine_val.get("subs") or []
+                if subs and list(subs) != ["Edge1"]:
+                    spec["spine_edges"] = list(subs)
+            if props.get("Solid", {}).get("value") is False:
+                spec["solid"] = False
+            if props.get("Frenet", {}).get("value") is True:
+                spec["frenet"] = True
         else:
             raise ValueError(
                 "summarize: object %s has type %r that synthesize cannot author"
@@ -1218,6 +1239,14 @@ _PRIMITIVES: "Dict[str, Dict[str, str]]" = {
     "Part::Circle": {"Radius": "App::PropertyLength",
                      "Angle1": "App::PropertyAngle",
                      "Angle2": "App::PropertyAngle"},
+    # ``Part::Line`` is the other parametric edge: a straight segment from
+    # (X1,Y1,Z1) to (X2,Y2,Z2), its geometry rebuilt from these scalars on
+    # execute() so it too survives a reload. It is the natural straight *spine*
+    # for a ``Part::Sweep`` -- a circle section swept along it traces a
+    # cylinder. 直者，繩之至也.
+    "Part::Line": {"X1": "App::PropertyDistance", "Y1": "App::PropertyDistance",
+                   "Z1": "App::PropertyDistance", "X2": "App::PropertyDistance",
+                   "Y2": "App::PropertyDistance", "Z2": "App::PropertyDistance"},
 }
 # Scalar FreeCAD property types serialise as a single ``<Float>`` child.
 _FLOAT_PROP_TYPES = {"App::PropertyLength", "App::PropertyAngle",
@@ -1305,6 +1334,17 @@ _REVOLVE_DEFAULT_ANGLE = 360.0
 # the sections + the loft from file and the kernel skins them on recompute:
 # the file-first equivalent of the GUI's Loft, no clicks.
 _LOFT_TYPE = "Part::Loft"
+
+# A ``Part::Sweep`` sweeps one or more section profiles (``Sections``) along a
+# ``Spine`` path -- a linked edge/wire of another object -- extruding the
+# cross-section down the curve. It is the path-driven complement to the
+# straight ``Part::Extrusion`` and the multi-section ``Part::Loft``: a circle
+# swept along a straight line traces a cylinder, along an arc a bent pipe.
+# ``Solid`` caps it into a body, ``Frenet`` keeps the moving section aligned to
+# the spine's Frenet frame (vs. a corrected frame). Author the sections + the
+# spine + the sweep from file and the kernel pipes them on recompute: the
+# file-first equivalent of the GUI's Sweep, no clicks.
+_SWEEP_TYPE = "Part::Sweep"
 
 
 def _cells_element(parent: ET.Element, cells: "Dict[str, Any]") -> None:
@@ -1571,6 +1611,42 @@ def _loft_properties(parent: ET.Element, spec: "Dict[str, Any]") -> None:
         ET.SubElement(bp, "Bool", {"value": "true" if flag else "false"})
 
 
+def _sweep_properties(parent: ET.Element, spec: "Dict[str, Any]") -> None:
+    """Append the ``Part::Sweep`` properties that pipe one or more ``Sections``
+    along a ``Spine`` path.
+
+    ``Sections`` is an ``App::PropertyLinkList`` of the profiles to sweep;
+    ``Spine`` an ``App::PropertyLinkSub`` naming the path object plus the
+    sub-edge(s) of it to follow (defaulting to ``Edge1``, the sole edge of a
+    ``Part::Line`` / ``Part::Circle`` spine). ``Solid`` caps the ends into a
+    body, ``Frenet`` aligns the moving section to the spine's Frenet frame, and
+    ``Transition`` (fixed at 1, the right-corner mode) governs how the swept
+    surface turns a corner. The kernel pipes them on recompute; the file just
+    declares it.
+    """
+    sections = spec["sections"]
+    lp = ET.SubElement(parent, "Property",
+                       {"name": "Sections", "type": "App::PropertyLinkList"})
+    ll = ET.SubElement(lp, "LinkList", {"count": str(len(sections))})
+    for ref in sections:
+        ET.SubElement(ll, "Link", {"value": ref})
+    subs = spec.get("spine_edges") or ["Edge1"]
+    sp = ET.SubElement(parent, "Property",
+                       {"name": "Spine", "type": "App::PropertyLinkSub"})
+    lsub = ET.SubElement(sp, "LinkSub",
+                         {"value": spec["spine"], "count": str(len(subs))})
+    for s in subs:
+        ET.SubElement(lsub, "Sub", {"value": s})
+    for pname, flag in (("Solid", spec.get("solid", True)),
+                        ("Frenet", spec.get("frenet", False))):
+        bp = ET.SubElement(parent, "Property",
+                           {"name": pname, "type": "App::PropertyBool"})
+        ET.SubElement(bp, "Bool", {"value": "true" if flag else "false"})
+    tp = ET.SubElement(parent, "Property",
+                       {"name": "Transition", "type": "App::PropertyEnumeration"})
+    ET.SubElement(tp, "Integer", {"value": "1"})
+
+
 def _placement_element(parent: ET.Element, position: "List[float]",
                        axis: "Optional[List[float]]" = None,
                        angle: float = 0.0) -> None:
@@ -1659,13 +1735,14 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                 and otype not in _LINKLIST_TYPES and otype != _SHEET_TYPE
                 and otype != _MIRROR_TYPE and otype != _SKETCH_TYPE
                 and otype != _EXTRUDE_TYPE and otype != _REVOLVE_TYPE
-                and otype != _LOFT_TYPE):
+                and otype != _LOFT_TYPE and otype != _SWEEP_TYPE):
             raise ValueError(
                 "synthesize: object #%d has unknown type %r (supported: %s)"
                 % (idx, otype, ", ".join(sorted(
                     set(_PRIMITIVES) | _BOOLEANS | set(_LINKLIST_TYPES)
                     | {_SHEET_TYPE, _MIRROR_TYPE, _SKETCH_TYPE,
-                       _EXTRUDE_TYPE, _REVOLVE_TYPE, _LOFT_TYPE}))))
+                       _EXTRUDE_TYPE, _REVOLVE_TYPE, _LOFT_TYPE,
+                       _SWEEP_TYPE}))))
         name = spec.get("name")
         if not isinstance(name, str) or not name.strip():
             raise ValueError("synthesize: object #%d needs a non-empty name" % idx)
@@ -1969,6 +2046,43 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                 raise ValueError(
                     "synthesize: loft %s takes sections/solid/ruled/closed, "
                     "not properties" % name)
+        elif otype == _SWEEP_TYPE:
+            sections = spec.get("sections")
+            if (not isinstance(sections, list) or len(sections) < 1
+                    or not all(isinstance(r, str) and r.strip()
+                               for r in sections)):
+                raise ValueError(
+                    "synthesize: sweep %s needs 'sections': a list of >=1 "
+                    "object names" % name)
+            spine = spec.get("spine")
+            if not isinstance(spine, str) or not spine.strip():
+                raise ValueError(
+                    "synthesize: sweep %s needs a 'spine' object name" % name)
+            if name in sections or name == spine:
+                raise ValueError(
+                    "synthesize: sweep %s cannot reference itself" % name)
+            if len(set(sections)) != len(sections):
+                raise ValueError(
+                    "synthesize: sweep %s has duplicate sections" % name)
+            if spine in sections:
+                raise ValueError(
+                    "synthesize: sweep %s spine cannot also be a section" % name)
+            for bkey in ("solid", "frenet"):
+                if bkey in spec and not isinstance(spec[bkey], bool):
+                    raise ValueError(
+                        "synthesize: sweep %s '%s' must be a bool"
+                        % (name, bkey))
+            se = spec.get("spine_edges")
+            if se is not None and (
+                    not isinstance(se, list) or not se
+                    or not all(isinstance(x, str) and x.strip() for x in se)):
+                raise ValueError(
+                    "synthesize: sweep %s 'spine_edges' must be a non-empty "
+                    "list of edge names" % name)
+            if spec.get("properties"):
+                raise ValueError(
+                    "synthesize: sweep %s takes sections/spine/solid/frenet/"
+                    "spine_edges, not properties" % name)
         else:
             props = spec.get("properties") or {}
             if not isinstance(props, dict):
@@ -2016,6 +2130,12 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                     raise ValueError(
                         "synthesize: loft %s section %r is not a defined object"
                         % (spec["name"], ref))
+        elif spec["type"] == _SWEEP_TYPE:
+            for ref in list(spec["sections"]) + [spec["spine"]]:
+                if ref not in all_names:
+                    raise ValueError(
+                        "synthesize: sweep %s reference %r is not a defined "
+                        "object" % (spec["name"], ref))
         elif spec["type"] in _LINKLIST_TYPES:
             key, _prop = _LINKLIST_TYPES[spec["type"]]
             for ref in spec[key]:
@@ -2044,8 +2164,10 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
         is_extrude = otype == _EXTRUDE_TYPE
         is_revolve = otype == _REVOLVE_TYPE
         is_loft = otype == _LOFT_TYPE
+        is_sweep = otype == _SWEEP_TYPE
         props = ({} if (is_bool or is_linklist or is_sheet or is_mirror
-                        or is_sketch or is_extrude or is_revolve or is_loft)
+                        or is_sketch or is_extrude or is_revolve or is_loft
+                        or is_sweep)
                  else (spec.get("properties") or {}))
         exprs = spec.get("expressions") or {}
         # links: an explicit DAG (boolean operands) plus every *other* object
@@ -2055,7 +2177,9 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                  else [spec["source"]] if is_mirror
                  else [spec["base"]] if is_extrude
                  else [spec["source"]] if is_revolve
-                 else list(spec["sections"]) if is_loft else [])
+                 else list(spec["sections"]) if is_loft
+                 else [spec["spine"]] + list(spec["sections"]) if is_sweep
+                 else [])
         dep_set = list(links)
         for other in all_names:
             if other != name and other not in dep_set and any(
@@ -2078,14 +2202,15 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
         angle = placement.get("angle", 0.0)
         has_placement = bool(position or axis or angle)
         prop_items = ([] if (is_bool or is_linklist or is_sheet or is_mirror
-                             or is_sketch or is_extrude or is_revolve or is_loft)
+                             or is_sketch or is_extrude or is_revolve or is_loft
+                             or is_sweep)
                       else [(p, _PRIMITIVES[otype][p], v) for p, v in props.items()])
         prop_count = (len(prop_items) + (1 if has_placement else 0)
                       + (1 if exprs else 0) + (2 if is_bool else 0)
                       + (1 if is_linklist else 0) + (1 if is_sheet else 0)
                       + (3 if is_mirror else 0) + (1 if is_sketch else 0)
                       + (6 if is_extrude else 0) + (6 if is_revolve else 0)
-                      + (4 if is_loft else 0))
+                      + (4 if is_loft else 0) + (5 if is_sweep else 0))
         props_el = ET.SubElement(
             od, "Properties", {"Count": str(prop_count), "TransientCount": "0"})
         if is_sheet:
@@ -2098,6 +2223,8 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
             _revolution_properties(props_el, spec)
         if is_loft:
             _loft_properties(props_el, spec)
+        if is_sweep:
+            _sweep_properties(props_el, spec)
         if is_bool:
             for role_name, ref in (("Base", spec["base"]), ("Tool", spec["tool"])):
                 lp = ET.SubElement(props_el, "Property",
@@ -2516,6 +2643,52 @@ def loft(
         spec["ruled"] = True
     if closed:
         spec["closed"] = True
+    return spec
+
+
+def sweep(
+    name: str,
+    sections: "List[str]",
+    spine: str,
+    solid: bool = True,
+    frenet: bool = False,
+    spine_edges: "Optional[List[str]]" = None,
+) -> "Dict[str, Any]":
+    """Generate a ``Part::Sweep`` object spec piping ``sections`` along ``spine``.
+
+    The path-driven solid: one or more section profiles ``sections`` (each the
+    name of another object -- a circle, a sketch) swept along the ``spine``
+    object's edge(s), by default its sole ``Edge1`` (override with
+    ``spine_edges``). ``solid`` caps the ends into a body (else an open shell),
+    ``frenet`` aligns the moving section to the spine's Frenet frame rather than
+    a corrected one. The result is a ``synthesize`` object spec -- feed it
+    alongside the section + spine specs into :func:`synthesize` and the kernel
+    pipes the sweep on recompute. 大道甚夷，其行也遠.
+    """
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("sweep: needs a non-empty name")
+    if (not isinstance(sections, (list, tuple)) or len(sections) < 1
+            or not all(isinstance(r, str) and r.strip() for r in sections)):
+        raise ValueError("sweep: 'sections' must be a list of >=1 object names")
+    if not isinstance(spine, str) or not spine.strip():
+        raise ValueError("sweep: 'spine' must be a non-empty object name")
+    for flag, fname in ((solid, "solid"), (frenet, "frenet")):
+        if not isinstance(flag, bool):
+            raise ValueError("sweep: '%s' must be a bool" % fname)
+    if spine_edges is not None and (
+            not isinstance(spine_edges, (list, tuple)) or not spine_edges
+            or not all(isinstance(x, str) and x.strip() for x in spine_edges)):
+        raise ValueError(
+            "sweep: 'spine_edges' must be a non-empty list of edge names")
+    spec: Dict[str, Any] = {"type": _SWEEP_TYPE, "name": name,
+                            "sections": [str(r) for r in sections],
+                            "spine": str(spine)}
+    if not solid:
+        spec["solid"] = False
+    if frenet:
+        spec["frenet"] = True
+    if spine_edges is not None:
+        spec["spine_edges"] = [str(x) for x in spine_edges]
     return spec
 
 
