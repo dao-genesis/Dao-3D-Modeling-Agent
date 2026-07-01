@@ -804,6 +804,10 @@ def summarize(path: str) -> "List[Dict[str, Any]]":
             if (isinstance(taper, (int, float)) and not isinstance(taper, bool)
                     and taper):
                 spec["taper"] = taper
+            taper_rev = props.get("TaperAngleRev", {}).get("value")
+            if (isinstance(taper_rev, (int, float))
+                    and not isinstance(taper_rev, bool) and taper_rev):
+                spec["taper_rev"] = taper_rev
             if props.get("Symmetric", {}).get("value") is True:
                 spec["symmetric"] = True
             solid = props.get("Solid", {}).get("value")
@@ -2247,8 +2251,11 @@ def _extrusion_properties(parent: ET.Element, spec: "Dict[str, Any]") -> None:
     the balanced pad; it too is written only when true. An optional
     ``length_rev`` authors a ``LengthRev`` so the sweep also grows the other way
     along ``-Dir`` -- the asymmetric two-sided pad (total extent
-    ``length + length_rev``); written only when non-zero. The kernel does the
-    sweep on recompute; the file just declares it.
+    ``length + length_rev``); written only when non-zero. An optional
+    ``taper_rev`` authors a ``TaperAngleRev`` -- an independent draft on that
+    reverse extent, so a two-sided pad can splay differently each way; written
+    only when non-zero and guarded to ``(-90, 90)`` like ``taper``. The kernel
+    does the sweep on recompute; the file just declares it.
     """
     bp = ET.SubElement(parent, "Property",
                        {"name": "Base", "type": "App::PropertyLink"})
@@ -2275,6 +2282,11 @@ def _extrusion_properties(parent: ET.Element, spec: "Dict[str, Any]") -> None:
         tp = ET.SubElement(parent, "Property",
                            {"name": "TaperAngle", "type": "App::PropertyAngle"})
         ET.SubElement(tp, "Float", {"value": "%.16f" % float(taper)})
+    taper_rev = spec.get("taper_rev")
+    if taper_rev:
+        vp = ET.SubElement(parent, "Property",
+                           {"name": "TaperAngleRev", "type": "App::PropertyAngle"})
+        ET.SubElement(vp, "Float", {"value": "%.16f" % float(taper_rev)})
     if spec.get("symmetric"):
         yp = ET.SubElement(parent, "Property",
                            {"name": "Symmetric", "type": "App::PropertyBool"})
@@ -2820,6 +2832,17 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                 raise ValueError(
                     "synthesize: extrusion %s 'taper' must be within "
                     "(-90, 90) degrees" % name)
+            taper_rev = spec.get("taper_rev")
+            if taper_rev is not None and (isinstance(taper_rev, bool)
+                                          or not isinstance(taper_rev,
+                                                            (int, float))):
+                raise ValueError(
+                    "synthesize: extrusion %s 'taper_rev' must be a number "
+                    "(draft angle in degrees)" % name)
+            if isinstance(taper_rev, (int, float)) and abs(taper_rev) >= 90:
+                raise ValueError(
+                    "synthesize: extrusion %s 'taper_rev' must be within "
+                    "(-90, 90) degrees" % name)
             if "symmetric" in spec and not isinstance(spec["symmetric"], bool):
                 raise ValueError(
                     "synthesize: extrusion %s 'symmetric' must be a bool" % name)
@@ -2835,7 +2858,7 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
             if spec.get("properties"):
                 raise ValueError(
                     "synthesize: extrusion %s takes base/length/dir/solid/taper/"
-                    "symmetric/length_rev, not properties" % name)
+                    "taper_rev/symmetric/length_rev, not properties" % name)
         elif otype == _REVOLVE_TYPE:
             src = spec.get("source")
             if not isinstance(src, str) or not src.strip():
@@ -3167,6 +3190,7 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                       + (3 if is_mirror else 0) + (1 if is_sketch else 0)
                       + (6 if is_extrude else 0)
                       + (1 if is_extrude and spec.get("taper") else 0)
+                      + (1 if is_extrude and spec.get("taper_rev") else 0)
                       + (1 if is_extrude and spec.get("symmetric") else 0)
                       + (1 if is_extrude and spec.get("length_rev") else 0)
                       + (6 if is_revolve else 0)

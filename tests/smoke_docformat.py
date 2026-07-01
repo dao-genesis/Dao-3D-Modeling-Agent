@@ -1619,6 +1619,54 @@ def main():
           "8), center-of-mass z %g (off-center), round-trips, guarded"
           % (round(lr_vol, 2), round(lr_z, 2)))
 
+    # ---- Part::Extrusion taper_rev: independent draft on the reverse side - #
+    # a two-sided pad (6 fwd + 6 rev) drafted +10 deg forward; adding a +20 deg
+    # taper_rev splays the reverse extent outward too, so the solid strictly
+    # grows. The reverse draft is authored only when non-zero, round-trips, and
+    # is guarded to (-90, 90) like taper. 大方無隅.
+    def _pad2(trev):
+        p = os.path.join(OUT, "synth_extrude_trev%d.FCStd" % (trev or 0))
+        spec = {"type": "Part::Extrusion", "name": "Ext", "base": "Sq",
+                "length": 6, "length_rev": 6, "taper": 10}
+        if trev:
+            spec["taper_rev"] = trev
+        docformat.synthesize(p, [
+            {"type": "Part::RegularPolygon", "name": "Sq",
+             "properties": {"Polygon": 4, "Circumradius": 10}}, spec])
+        d = App.openDocument(p)
+        try:
+            for o in d.Objects:
+                o.touch()
+            d.recompute(None, True)
+            sh = d.getObject("Ext").Shape
+            return p, sh.isValid(), sh.Volume
+        finally:
+            App.closeDocument(d.Name)
+    tv_base_p, tv_base_ok, tv_base_vol = _pad2(0)
+    tv_p, tv_ok, tv_vol = _pad2(20)
+    tv_spec = next(s for s in docformat.summarize(tv_p) if s["name"] == "Ext")
+    assert tv_spec.get("taper_rev") == 20, tv_spec
+    assert "taper_rev" not in next(s for s in docformat.summarize(tv_base_p)
+                                   if s["name"] == "Ext")
+    tv_rt = os.path.join(OUT, "synth_extrude_trev_rt.FCStd")
+    docformat.synthesize(tv_rt, docformat.summarize(tv_p))
+    assert docformat.fingerprint(tv_p) == docformat.fingerprint(tv_rt)
+    assert tv_base_ok and tv_ok, (tv_base_ok, tv_ok)
+    assert tv_vol > tv_base_vol, (tv_vol, tv_base_vol)
+    try:
+        docformat.synthesize(os.path.join(OUT, "bad_trev.FCStd"), [
+            {"type": "Part::RegularPolygon", "name": "Sq",
+             "properties": {"Polygon": 4, "Circumradius": 5}},
+            {"type": "Part::Extrusion", "name": "Ex", "base": "Sq",
+             "length": 5, "taper_rev": 90}])
+    except ValueError as exc:
+        assert "'taper_rev' must be within (-90, 90)" in str(exc), exc
+    else:
+        raise AssertionError("expected ValueError for taper_rev >= 90")
+    print("docformat Part::Extrusion taper_rev: +20 deg reverse draft -> vol %g "
+          "(> %g without), round-trips, guarded to (-90,90)"
+          % (round(tv_vol, 2), round(tv_base_vol, 2)))
+
     # ---- Part::Revolution: spin a sketch profile into a solid ------------ #
     # the lathe to the extrusion's mill: author a 3x4 rectangle offset from the
     # y-axis (x in [2,5]) + a full revolution about that axis. By Pappus the
