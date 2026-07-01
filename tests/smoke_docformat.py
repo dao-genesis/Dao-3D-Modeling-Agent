@@ -1105,6 +1105,41 @@ def main():
           "BSplineCurve edge (+ rational weights, round-trip exact); closed "
           "periodic loop bounds a face (area %g)" % cl_face_area)
 
+    # ---- point: the isolated sketch vertex (Part::GeomPoint) ------------- #
+    # the simplest primitive -- a lone reference/construction point, no edge.
+    # completes the sketch-geometry vocabulary; round-trips byte-exact and the
+    # kernel rebuilds exactly one vertex (zero edges) at the given coordinate.
+    ptg = docformat.point("PT", [3, 4])
+    ptc = docformat.point("PC", [-2, 7], construction=True)
+    assert ptg["geometry"][0] == {"point": [3.0, 4.0]}, ptg
+    assert ptc["geometry"][0].get("construction") is True, ptc
+    pt_p = os.path.join(OUT, "synth_point.FCStd")
+    docformat.synthesize(pt_p, [ptg, ptc])
+    pt_rt = os.path.join(OUT, "synth_point_rt.FCStd")
+    docformat.synthesize(pt_rt, docformat.summarize(pt_p))
+    assert docformat.fingerprint(pt_p) == docformat.fingerprint(pt_rt)
+    ptd = App.openDocument(pt_p)
+    try:
+        for o in ptd.Objects:
+            o.touch()
+        ptd.recompute(None, True)
+        pt_sh = ptd.getObject("PT").Shape
+        pt_nv, pt_ne = len(pt_sh.Vertexes), len(pt_sh.Edges)
+        pt_xy = (pt_sh.Vertexes[0].X, pt_sh.Vertexes[0].Y)
+    finally:
+        App.closeDocument(ptd.Name)
+    assert pt_nv == 1 and pt_ne == 0, (pt_nv, pt_ne)
+    assert abs(pt_xy[0] - 3.0) < 1e-9 and abs(pt_xy[1] - 4.0) < 1e-9, pt_xy
+    for bad in ([1], [1, 2, 3], "x"):
+        try:
+            docformat.point("x", bad)
+        except ValueError as exc:
+            assert "must be [x, y] numbers" in str(exc), exc
+        else:
+            raise AssertionError("expected ValueError for point %r" % (bad,))
+    print("docformat point: isolated Part::GeomPoint -> one vertex, zero edges "
+          "at (3,4) (+ construction flag, round-trip exact)")
+
     # ---- Part::Extrusion: sweep a sketch profile into a solid ------------ #
     # the join between the sketch layer and the solid layer: author a 10x5
     # rectangle sketch + an extrusion that sweeps it 7 along +Z. The kernel
@@ -1428,6 +1463,21 @@ def main():
     finally:
         App.closeDocument(bld2.Name)
     assert bsp2_kind == "BSplineCurve", bsp2_kind
+    # and an isolated reference point (one vertex, no edge) straight to a file.
+    op_pt = os.path.join(OUT, "op_point.FCStd")
+    pf = s.act("doc.profile", {
+        "shape": "point", "name": "Pt", "at": [5, 9], "path": op_pt})
+    assert pf.ok and pf.data["out"] == op_pt, pf
+    pld2 = App.openDocument(op_pt)
+    try:
+        for o in pld2.Objects:
+            o.touch()
+        pld2.recompute(None, True)
+        pt2_sh = pld2.getObject("Pt").Shape
+        pt2_nv, pt2_ne = len(pt2_sh.Vertexes), len(pt2_sh.Edges)
+    finally:
+        App.closeDocument(pld2.Name)
+    assert pt2_nv == 1 and pt2_ne == 0, (pt2_nv, pt2_ne)
     assert not s.act("doc.profile", {"shape": "blob", "name": "X"}).ok
     print("doc.profile: pentagon radius 8 (area %g) + slot 30x6 (area %g) + "
           "ellipse 12x7 (area %g) + freeform bspline (single BSplineCurve edge) "
