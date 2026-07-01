@@ -1023,6 +1023,59 @@ def main():
     print("docformat arc_ellipse: half-ellipse 10x5 + chord -> closed D-shape "
           "area %g (partial elliptic edge, tilt+round-trip exact)" % aoe_area)
 
+    # ---- bspline: the general freeform curve, one edge from control poles - #
+    # a degree-3 open B-spline through six control poles -- the freeform spline
+    # a human pushes/pulls point by point. The generator writes the exact
+    # clamped uniform knot vector (ends mult degree+1) so the kernel rebuilds a
+    # single Part::GeomBSplineCurve edge; summarize -> synthesize is byte-exact.
+    bspg = docformat.bspline(
+        "BSp", [[0, 0], [5, 8], [12, 6], [18, 0], [22, 7], [28, 2]], degree=3)
+    assert len(bspg["geometry"]) == 1, bspg
+    bsp_inner = bspg["geometry"][0]["bspline"]
+    assert bsp_inner["mults"] == [4, 1, 1, 4], bsp_inner
+    bsp_p = os.path.join(OUT, "synth_bspline.FCStd")
+    docformat.synthesize(bsp_p, [bspg])
+    bsp_rt = os.path.join(OUT, "synth_bspline_rt.FCStd")
+    docformat.synthesize(bsp_rt, docformat.summarize(bsp_p))
+    assert docformat.fingerprint(bsp_p) == docformat.fingerprint(bsp_rt)
+    bspd = App.openDocument(bsp_p)
+    try:
+        for o in bspd.Objects:
+            o.touch()
+        bspd.recompute(None, True)
+        bsp_sh = bspd.getObject("BSp").Shape
+        bsp_edges = len(bsp_sh.Edges)
+        bsp_kind = bsp_sh.Edges[0].Curve.__class__.__name__
+    finally:
+        App.closeDocument(bspd.Name)
+    assert bsp_edges == 1, bsp_edges
+    assert bsp_kind == "BSplineCurve", bsp_kind
+    # a rational (weighted) B-spline round-trips its weights byte-exact too.
+    rw = docformat.bspline("RW", [[0, 0], [5, 10], [10, 0], [15, 10]],
+                           degree=2, weights=[1, 3, 3, 1])
+    rw_p = os.path.join(OUT, "synth_bspline_rw.FCStd")
+    docformat.synthesize(rw_p, [rw])
+    rw_sum = docformat.summarize(rw_p)
+    rw_w = [s for s in rw_sum
+            if s["name"] == "RW"][0]["geometry"][0]["bspline"]["weights"]
+    assert rw_w == [1.0, 3.0, 3.0, 1.0], rw_w
+    rw_rt = os.path.join(OUT, "synth_bspline_rw_rt.FCStd")
+    docformat.synthesize(rw_rt, rw_sum)
+    assert docformat.fingerprint(rw_p) == docformat.fingerprint(rw_rt)
+    # guards: too few poles, and fewer poles than the degree needs.
+    for kwargs, token in (
+            (dict(name="x", poles=[[0, 0]], degree=3), "at least 2 'poles'"),
+            (dict(name="x", poles=[[0, 0], [1, 1], [2, 2]], degree=3),
+             "more than 'degree' poles")):
+        try:
+            docformat.bspline(**kwargs)
+        except ValueError as exc:
+            assert token in str(exc), (token, exc)
+        else:
+            raise AssertionError("expected ValueError for %r" % kwargs)
+    print("docformat bspline: degree-3 freeform through 6 poles -> single "
+          "BSplineCurve edge (+ rational weights, round-trip exact)")
+
     # ---- Part::Extrusion: sweep a sketch profile into a solid ------------ #
     # the join between the sketch layer and the solid layer: author a 10x5
     # rectangle sketch + an extrusion that sweeps it 7 along +Z. The kernel
@@ -1329,11 +1382,28 @@ def main():
     finally:
         App.closeDocument(eld2.Name)
     assert abs(ell2_area - (math.pi * 12 * 7)) < 1e-6, ell2_area
+    # and a freeform B-spline (single curved edge) straight to a file.
+    op_bsp = os.path.join(OUT, "op_bspline.FCStd")
+    bf = s.act("doc.profile", {
+        "shape": "bspline", "name": "BSp",
+        "poles": [[0, 0], [6, 9], [14, 5], [20, 0]], "degree": 3,
+        "path": op_bsp})
+    assert bf.ok and bf.data["out"] == op_bsp, bf
+    assert len(bf.data["object"]["geometry"]) == 1, bf.data
+    bld2 = App.openDocument(op_bsp)
+    try:
+        for o in bld2.Objects:
+            o.touch()
+        bld2.recompute(None, True)
+        bsp2_kind = bld2.getObject("BSp").Shape.Edges[0].Curve.__class__.__name__
+    finally:
+        App.closeDocument(bld2.Name)
+    assert bsp2_kind == "BSplineCurve", bsp2_kind
     assert not s.act("doc.profile", {"shape": "blob", "name": "X"}).ok
     print("doc.profile: pentagon radius 8 (area %g) + slot 30x6 (area %g) + "
-          "ellipse 12x7 (area %g) generated+synthesized from one description "
-          "each (profile generation as an agent op)"
-          % (pent_area, slot2_area, ell2_area))
+          "ellipse 12x7 (area %g) + freeform bspline (single BSplineCurve edge) "
+          "generated+synthesized from one description each (profile generation "
+          "as an agent op)" % (pent_area, slot2_area, ell2_area))
 
     # ---- two-layer fusion: the live kernel agrees with the file ---------- #
     # ss.bindings reads the same ExpressionEngine wiring from the *running*

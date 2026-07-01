@@ -319,6 +319,7 @@ def _sketch_geometry(data_el: Optional[ET.Element]
             arc = g.find("ArcOfCircle")
             ell = g.find("Ellipse")
             aoe = g.find("ArcOfEllipse")
+            bsp = g.find("BSplineCurve")
             if gtype == "Part::GeomLineSegment" and seg is not None:
                 entry["line"] = True
                 entry["start"] = [float(seg.get("StartX", 0)),
@@ -353,6 +354,19 @@ def _sketch_geometry(data_el: Optional[ET.Element]
                 entry["angle"] = float(aoe.get("AngleXU", 0))
                 entry["start_angle"] = float(aoe.get("StartAngle", 0))
                 entry["end_angle"] = float(aoe.get("EndAngle", 0))
+            elif gtype == "Part::GeomBSplineCurve" and bsp is not None:
+                poles = [[float(p.get("X", 0)), float(p.get("Y", 0))]
+                         for p in bsp.findall("Pole")]
+                weights = [float(p.get("Weight", 1)) for p in bsp.findall("Pole")]
+                knots = [float(k.get("Value", 0)) for k in bsp.findall("Knot")]
+                mults = [int(k.get("Mult", 1)) for k in bsp.findall("Knot")]
+                spec: Dict[str, Any] = {"poles": poles, "knots": knots,
+                                        "mults": mults,
+                                        "degree": int(bsp.get("Degree", 3)),
+                                        "periodic": bsp.get("IsPeriodic") == "1"}
+                if any(abs(w - 1.0) > 1e-12 for w in weights):
+                    spec["weights"] = weights
+                entry["bspline"] = spec
             cons = g.find("Construction")
             entry["construction"] = (cons is not None
                                       and cons.get("value") == "1")
@@ -673,6 +687,17 @@ def summarize(path: str) -> "List[Dict[str, Any]]":
                            "end_angle": g["end_angle"]}
                     if g.get("angle"):
                         seg["angle"] = g["angle"]
+                elif g.get("bspline"):
+                    bs = g["bspline"]
+                    inner = {"poles": [list(p) for p in bs["poles"]],
+                             "knots": list(bs["knots"]),
+                             "mults": list(bs["mults"]),
+                             "degree": bs["degree"]}
+                    if bs.get("periodic"):
+                        inner["periodic"] = True
+                    if "weights" in bs:
+                        inner["weights"] = list(bs["weights"])
+                    seg = {"bspline": inner}
                 else:
                     continue
                 if g.get("construction"):
@@ -1271,11 +1296,14 @@ def _sketch_segment_kind(seg: "Dict[str, Any]") -> "Optional[str]":
     a ``center``/``radius``; an ``arc_ellipse`` carries ``major_radius`` /
     ``minor_radius`` *and* ``start_angle``/``end_angle``; an ``ellipse`` carries
     ``major_radius`` / ``minor_radius`` only; a ``circle`` is the bare
-    ``center``/``radius``.
+    ``center``/``radius``; a ``bspline`` carries a ``bspline`` sub-dict
+    (poles / knots / mults / degree).
     Returns ``None`` if no form matches so callers can raise a guided error.
     """
     has_axes = "major_radius" in seg or "minor_radius" in seg
     has_sweep = "start_angle" in seg or "end_angle" in seg
+    if "bspline" in seg:
+        return "bspline"
     if "start" in seg or "end" in seg:
         return "line"
     if has_axes and has_sweep:
@@ -1308,6 +1336,10 @@ def _geometry_element(parent: ET.Element, segments: "List[Dict[str, Any]]") -> N
       default 0) -> ``Part::GeomEllipse``
     * arc_ellipse -- an ``ellipse`` spec plus ``start_angle``/``end_angle``
       (radians, swept on the ellipse's own parameter) -> ``Part::GeomArcOfEllipse``
+    * bspline -- ``{"bspline": {"poles": [[x, y], ...], "knots": [...],
+      "mults": [...], "degree": d, "periodic": bool, "weights": [...]}}`` ->
+      ``Part::GeomBSplineCurve`` (the general freeform curve; ``weights``
+      default to 1, ``periodic`` to false)
     """
     prop = ET.SubElement(parent, "Property",
                          {"name": "Geometry",
@@ -1320,7 +1352,8 @@ def _geometry_element(parent: ET.Element, segments: "List[Dict[str, Any]]") -> N
                  "circle": "Part::GeomCircle",
                  "arc": "Part::GeomArcOfCircle",
                  "ellipse": "Part::GeomEllipse",
-                 "arc_ellipse": "Part::GeomArcOfEllipse"}[kind]
+                 "arc_ellipse": "Part::GeomArcOfEllipse",
+                 "bspline": "Part::GeomBSplineCurve"}[kind]
         g = ET.SubElement(glist, "Geometry",
                           {"type": gtype, "id": str(i), "migrated": "1"})
         exts = ET.SubElement(g, "GeoExtensions", {"count": "1"})
@@ -1351,6 +1384,25 @@ def _geometry_element(parent: ET.Element, segments: "List[Dict[str, Any]]") -> N
                 ET.SubElement(g, "ArcOfEllipse", attrs)
             else:
                 ET.SubElement(g, "Ellipse", attrs)
+        elif kind == "bspline":
+            bs = seg["bspline"]
+            poles = bs["poles"]
+            weights = bs.get("weights") or [1.0] * len(poles)
+            knots, mults = bs["knots"], bs["mults"]
+            bel = ET.SubElement(
+                g, "BSplineCurve",
+                {"PolesCount": str(len(poles)), "KnotsCount": str(len(knots)),
+                 "Degree": str(int(bs["degree"])),
+                 "IsPeriodic": "1" if bs.get("periodic") else "0"})
+            for (px, py), w in zip(poles, weights):
+                ET.SubElement(bel, "Pole",
+                              {"X": "%.16f" % float(px),
+                               "Y": "%.16f" % float(py), "Z": "%.16f" % 0.0,
+                               "Weight": "%.16f" % float(w)})
+            for kv, km in zip(knots, mults):
+                ET.SubElement(bel, "Knot",
+                              {"Value": "%.16f" % float(kv),
+                               "Mult": str(int(km))})
         else:
             cx, cy = seg["center"]
             attrs = {"CenterX": "%.16f" % float(cx),
@@ -1655,6 +1707,61 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                         raise ValueError(
                             "synthesize: sketch %s segment #%d is degenerate "
                             "(start == end)" % (name, j))
+                elif kind == "bspline":
+                    bs = seg["bspline"]
+                    if not isinstance(bs, dict):
+                        raise ValueError(
+                            "synthesize: sketch %s segment #%d 'bspline' must "
+                            "be a dict" % (name, j))
+                    poles = bs.get("poles")
+                    if not isinstance(poles, list) or len(poles) < 2:
+                        raise ValueError(
+                            "synthesize: sketch %s segment #%d bspline needs "
+                            "at least 2 'poles'" % (name, j))
+                    for p in poles:
+                        _pt2(p, j, "pole")
+                    deg = bs.get("degree")
+                    if isinstance(deg, bool) or not isinstance(deg, int) or deg < 1:
+                        raise ValueError(
+                            "synthesize: sketch %s segment #%d bspline 'degree' "
+                            "must be an integer >= 1" % (name, j))
+                    if len(poles) <= deg:
+                        raise ValueError(
+                            "synthesize: sketch %s segment #%d bspline needs "
+                            "more than 'degree' poles" % (name, j))
+                    knots, mults = bs.get("knots"), bs.get("mults")
+                    if (not isinstance(knots, list) or not isinstance(mults, list)
+                            or len(knots) != len(mults) or len(knots) < 2):
+                        raise ValueError(
+                            "synthesize: sketch %s segment #%d bspline 'knots' "
+                            "and 'mults' must be equal-length lists (>=2)"
+                            % (name, j))
+                    for k in range(1, len(knots)):
+                        if knots[k] <= knots[k - 1]:
+                            raise ValueError(
+                                "synthesize: sketch %s segment #%d bspline "
+                                "'knots' must strictly increase" % (name, j))
+                    if any((isinstance(m, bool) or not isinstance(m, int)
+                            or m < 1) for m in mults):
+                        raise ValueError(
+                            "synthesize: sketch %s segment #%d bspline 'mults' "
+                            "must be integers >= 1" % (name, j))
+                    total = sum(mults)
+                    want = (len(poles) + 1 if bs.get("periodic")
+                            else len(poles) + deg + 1)
+                    if total != want:
+                        raise ValueError(
+                            "synthesize: sketch %s segment #%d bspline knot "
+                            "multiplicities sum to %d, expected %d (poles=%d "
+                            "degree=%d periodic=%s)"
+                            % (name, j, total, want, len(poles), deg,
+                               bool(bs.get("periodic"))))
+                    w = bs.get("weights")
+                    if w is not None and (not isinstance(w, list)
+                                          or len(w) != len(poles)):
+                        raise ValueError(
+                            "synthesize: sketch %s segment #%d bspline 'weights' "
+                            "must match the pole count" % (name, j))
                 elif kind in ("ellipse", "arc_ellipse"):
                     _pt2(seg.get("center"), j, "center")
                     _num(seg.get("major_radius"), j, "major_radius")
@@ -2158,6 +2265,59 @@ def ellipse(
                            "minor_radius": float(minor_radius)}
     if angle:
         seg["angle"] = math.radians(float(angle))
+    if construction:
+        seg["construction"] = True
+    return {"type": _SKETCH_TYPE, "name": name, "geometry": [seg]}
+
+
+def bspline(
+    name: str,
+    poles: "List[List[float]]",
+    degree: int = 3,
+    weights: "Optional[List[float]]" = None,
+    construction: bool = False,
+) -> "Dict[str, Any]":
+    """Generate a freeform B-spline curve as a single-edge sketch spec.
+
+    The most general curve: an open, clamped (endpoint-interpolating) B-spline
+    of ``degree`` through control ``poles`` ``[[x, y], ...]`` with an automatic
+    uniform knot vector. A human pushes/pulls control points by hand; here the
+    poles, the degree and the exact clamped knot/multiplicity vector come from
+    one description, written byte-exact. Optional rational ``weights`` (one per
+    pole) bend it toward heavy poles. The result is a ``Part::GeomBSplineCurve``
+    that extrudes / sweeps straight from file. 道法自然.
+    """
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("bspline: needs a non-empty name")
+    if not isinstance(poles, (list, tuple)) or len(poles) < 2:
+        raise ValueError("bspline: needs at least 2 'poles'")
+    if isinstance(degree, bool) or not isinstance(degree, int) or degree < 1:
+        raise ValueError("bspline: 'degree' must be an integer >= 1")
+    if len(poles) <= degree:
+        raise ValueError("bspline: needs more than 'degree' poles")
+    norm_poles: List[List[float]] = []
+    for p in poles:
+        if (not isinstance(p, (list, tuple)) or len(p) != 2
+                or not all(isinstance(c, (int, float)) and not isinstance(c, bool)
+                           for c in p)):
+            raise ValueError("bspline: each pole must be [x, y] numbers")
+        norm_poles.append([float(p[0]), float(p[1])])
+    if weights is not None and (not isinstance(weights, (list, tuple))
+                                or len(weights) != len(norm_poles)):
+        raise ValueError("bspline: 'weights' must give one number per pole")
+    if not isinstance(construction, bool):
+        raise ValueError("bspline: 'construction' must be a bool")
+    # clamped uniform knot vector: end knots carry multiplicity degree+1, the
+    # (n-degree) interior knots one each -- sum == poles + degree + 1.
+    n = len(norm_poles)
+    interior = n - degree - 1
+    knots = [0.0] + [float(i + 1) for i in range(interior)] + [float(interior + 1)]
+    mults = [degree + 1] + [1] * interior + [degree + 1]
+    inner: Dict[str, Any] = {"poles": norm_poles, "knots": knots,
+                             "mults": mults, "degree": degree}
+    if weights is not None:
+        inner["weights"] = [float(w) for w in weights]
+    seg: Dict[str, Any] = {"bspline": inner}
     if construction:
         seg["construction"] = True
     return {"type": _SKETCH_TYPE, "name": name, "geometry": [seg]}
