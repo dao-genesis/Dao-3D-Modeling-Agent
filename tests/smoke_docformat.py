@@ -1361,6 +1361,102 @@ def main():
           "round-trips identically; ruled/closed flags + guards hold" %
           round(lo_vol, 3))
 
+    # ---- Part::Sweep: pipe a section along a spine path -------------------- #
+    # the path-driven complement to the loft: a circle of radius 5 swept along a
+    # straight Part::Line spine 10 long (Z axis) traces a cylinder of volume
+    # pi r^2 h = pi 25 10 = 785.40. Both the section (Part::Circle) and the
+    # spine (Part::Line) are parametric edges rebuilt from scalars, so the whole
+    # sweep is authored from file with no BREP and the kernel pipes it on
+    # recompute -- the file-first equivalent of the GUI's Sweep. The generator
+    # docformat.sweep() writes the operator spec; summarize recovers the ordered
+    # sections + the spine link and the document round-trips identically.
+    sw_p = os.path.join(OUT, "synth_sweep.FCStd")
+    docformat.synthesize(sw_p, [
+        {"type": "Part::Circle", "name": "Sec",
+         "properties": {"Radius": 5, "Angle2": 360}},
+        {"type": "Part::Line", "name": "Path",
+         "properties": {"Z2": 10}},
+        docformat.sweep("Pipe", ["Sec"], "Path"),
+    ])
+    sw_spec = next(s for s in docformat.summarize(sw_p) if s["name"] == "Pipe")
+    assert sw_spec["sections"] == ["Sec"], sw_spec
+    assert sw_spec["spine"] == "Path", sw_spec
+    # solid sweep is the default -- no solid/frenet/spine_edges keys at default.
+    assert "frenet" not in sw_spec and "spine_edges" not in sw_spec, sw_spec
+    sw_rt = os.path.join(OUT, "synth_sweep_rt.FCStd")
+    docformat.synthesize(sw_rt, docformat.summarize(sw_p))
+    assert docformat.fingerprint(sw_p) == docformat.fingerprint(sw_rt)
+    # the sweep records its dependency on both the section and the spine.
+    sw_file_deps = docformat.inspect_document(sw_p)["dependencies"].get("Pipe", [])
+    assert "Sec" in sw_file_deps and "Path" in sw_file_deps, sw_file_deps
+    wd = App.openDocument(sw_p)
+    try:
+        for o in wd.Objects:
+            o.touch()
+        wd.recompute(None, True)
+        pipe = wd.getObject("Pipe")
+        sw_vol = pipe.Shape.Volume
+        sw_solids = len(pipe.Shape.Solids)
+        sw_dep_names = [d.Name for d in pipe.OutList]
+    finally:
+        App.closeDocument(wd.Name)
+    assert abs(sw_vol - 785.398) < 1.0, sw_vol
+    assert sw_solids == 1, sw_solids
+    assert "Sec" in sw_dep_names and "Path" in sw_dep_names, sw_dep_names
+    # a frenet, non-solid (shell) sweep round-trips its non-default flags.
+    sw2 = os.path.join(OUT, "synth_sweep2.FCStd")
+    docformat.synthesize(sw2, [
+        {"type": "Part::Circle", "name": "S2",
+         "properties": {"Radius": 4, "Angle2": 360}},
+        {"type": "Part::Line", "name": "P2", "properties": {"Z2": 8}},
+        docformat.sweep("Sh2", ["S2"], "P2", solid=False, frenet=True),
+    ])
+    sh2_spec = next(s for s in docformat.summarize(sw2) if s["name"] == "Sh2")
+    assert sh2_spec["solid"] is False and sh2_spec["frenet"] is True, sh2_spec
+    sw2_rt = os.path.join(OUT, "synth_sweep2_rt.FCStd")
+    docformat.synthesize(sw2_rt, docformat.summarize(sw2))
+    assert docformat.fingerprint(sw2) == docformat.fingerprint(sw2_rt)
+    for bad, token in (
+            ([{"type": "Part::Loft", "name": "L", "sections": ["a"]}],
+             "list of >=2"),  # loft still needs >=2 -- sweep is the >=1 sibling
+            ([{"type": "Part::Circle", "name": "C",
+               "properties": {"Radius": 1, "Angle2": 360}},
+              {"type": "Part::Sweep", "name": "W", "sections": [],
+               "spine": "C"}], "list of >=1"),
+            ([{"type": "Part::Circle", "name": "C",
+               "properties": {"Radius": 1, "Angle2": 360}},
+              {"type": "Part::Sweep", "name": "W", "sections": ["C"]}],
+             "needs a 'spine'"),
+            ([{"type": "Part::Sweep", "name": "W", "sections": ["Nope"],
+               "spine": "Nada"}], "is not a defined object"),
+            ([{"type": "Part::Circle", "name": "C",
+               "properties": {"Radius": 1, "Angle2": 360}},
+              {"type": "Part::Sweep", "name": "W", "sections": ["C"],
+               "spine": "W"}], "cannot reference itself"),
+            ([{"type": "Part::Circle", "name": "C",
+               "properties": {"Radius": 1, "Angle2": 360}},
+              {"type": "Part::Sweep", "name": "W", "sections": ["C", "C"],
+               "spine": "C"}], "duplicate sections"),
+            ([{"type": "Part::Circle", "name": "C",
+               "properties": {"Radius": 1, "Angle2": 360}},
+              {"type": "Part::Sweep", "name": "W", "sections": ["C"],
+               "spine": "C"}], "spine cannot also be a section"),
+            ([{"type": "Part::Circle", "name": "C",
+               "properties": {"Radius": 1, "Angle2": 360}},
+              {"type": "Part::Line", "name": "P", "properties": {"Z2": 5}},
+              {"type": "Part::Sweep", "name": "W", "sections": ["C"],
+               "spine": "P", "solid": "yes"}], "must be a bool")):
+        try:
+            docformat.synthesize(os.path.join(OUT, "bad_sw.FCStd"), bad)
+        except ValueError as exc:
+            assert token in str(exc), (token, exc)
+        else:
+            raise AssertionError("expected ValueError for %r" % token)
+    print("docformat Part::Sweep: circle r5 piped along a 10-long line spine "
+          "from file -> solid volume %g (cylinder), depends on section + spine, "
+          "round-trips identically; frenet/shell flags + guards hold" %
+          round(sw_vol, 3))
+
     # ---- summarize: decompile a file back to a synthesize spec (round-trip) - #
     # author a document spanning every type the authoring layer writes -- a
     # parametric primitive, a placed/rotated primitive, a 2-way boolean, an
