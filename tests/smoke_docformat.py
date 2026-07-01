@@ -1988,6 +1988,75 @@ def main():
           "%g, center-of-mass z ~0 (vs one-sided %g), round-trips, guarded"
           % (round(rv_sym_vol, 3), round(rv_one_z, 3)))
 
+    # ---- Part::Revolution axis_edge: spin about a linked edge -------------- #
+    # the same x in [2,5] rectangle, fully revolved -- but instead of an explicit
+    # Axis/Base the lathe references a Part::Line laid along the y-axis via an
+    # AxisLink. By Pappus the kernel spins the identical 2*pi*3.5*12=263.894
+    # solid, proving the linked edge drives the axis. summarize recovers
+    # axis_edge, it round-trips, and the line joins the dependency DAG; guarded
+    # against axis_edge+axis and a non-string sub. 大道氾兮，其可左右也.
+    def _axedge(link):
+        p = os.path.join(OUT, "synth_revolve_ax%d.FCStd" % link)
+        src = {"type": "Sketcher::SketchObject", "name": "P", "geometry": [
+            {"start": [2, 0], "end": [5, 0]}, {"start": [5, 0], "end": [5, 4]},
+            {"start": [5, 4], "end": [2, 4]}, {"start": [2, 4], "end": [2, 0]}]}
+        rev = {"type": "Part::Revolution", "name": "R", "source": "P",
+               "angle": 360}
+        objs = [src]
+        if link:
+            rev["axis_edge"] = "Ax"
+            objs.append({"type": "Part::Line", "name": "Ax",
+                         "properties": {"X1": 0, "Y1": 0, "Z1": 0,
+                                        "X2": 0, "Y2": 10, "Z2": 0}})
+        else:
+            rev["axis"] = [0, 1, 0]
+        objs.append(rev)
+        docformat.synthesize(p, objs)
+        d = App.openDocument(p)
+        try:
+            for o in d.Objects:
+                o.touch()
+            d.recompute(None, True)
+            sh = d.getObject("R").Shape
+            return p, sh.isValid(), sh.Volume
+        finally:
+            App.closeDocument(d.Name)
+    ax_expl_p, ax_expl_ok, ax_expl_v = _axedge(0)
+    ax_p, ax_ok, ax_v = _axedge(1)
+    ax_spec = next(s for s in docformat.summarize(ax_p) if s["name"] == "R")
+    assert ax_spec.get("axis_edge") == "Ax", ax_spec
+    assert "axis_edge" not in next(s for s in docformat.summarize(ax_expl_p)
+                                   if s["name"] == "R")
+    assert "Ax" in docformat.inspect_document(ax_p)["dependencies"]["R"]
+    ax_rt = os.path.join(OUT, "synth_revolve_ax_rt.FCStd")
+    docformat.synthesize(ax_rt, docformat.summarize(ax_p))
+    assert docformat.fingerprint(ax_p) == docformat.fingerprint(ax_rt)
+    assert ax_expl_ok and ax_ok, (ax_expl_ok, ax_ok)
+    assert abs(ax_v - ax_expl_v) < 1e-6, (ax_v, ax_expl_v)
+    for bad, needle in (
+            ({"type": "Part::Revolution", "name": "R", "source": "P",
+              "axis_edge": "Ax", "axis": [0, 1, 0]}, "mutually exclusive"),
+            ({"type": "Part::Revolution", "name": "R", "source": "P",
+              "axis_edge": "Ax", "axis_edge_sub": [1]},
+             "'axis_edge_sub' must be a list of edge names")):
+        try:
+            docformat.synthesize(os.path.join(OUT, "bad_ax.FCStd"), [
+                {"type": "Sketcher::SketchObject", "name": "P", "geometry": [
+                    {"start": [2, 0], "end": [5, 0]},
+                    {"start": [5, 0], "end": [5, 4]},
+                    {"start": [5, 4], "end": [2, 4]},
+                    {"start": [2, 4], "end": [2, 0]}]},
+                {"type": "Part::Line", "name": "Ax",
+                 "properties": {"X1": 0, "Y1": 0, "Z1": 0,
+                                "X2": 0, "Y2": 1, "Z2": 0}}, bad])
+        except ValueError as exc:
+            assert needle in str(exc), (needle, str(exc))
+        else:
+            raise AssertionError("expected ValueError for %s" % needle)
+    print("docformat Part::Revolution axis_edge: spun about linked line -> vol %g "
+          "(== %g explicit-axis), dep on line, round-trips, guarded"
+          % (round(ax_v, 3), round(ax_expl_v, 3)))
+
     # ---- Part::Circle: a parametric edge that keeps its placement ---------- #
     # the section-feeding complement to the solid primitives: a full circle of
     # radius 5 authored from file. Unlike a shape-less sketch, a Part::Circle's

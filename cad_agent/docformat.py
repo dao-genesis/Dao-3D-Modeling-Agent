@@ -830,12 +830,19 @@ def summarize(path: str) -> "List[Dict[str, Any]]":
                 spec["solid"] = False
         elif otype == _REVOLVE_TYPE:
             spec["source"] = _link_target(props.get("Source"))
-            axis_vec = _vector_spec(props.get("Axis"))
-            if axis_vec and axis_vec != _REVOLVE_DEFAULT_AXIS:
-                spec["axis"] = axis_vec
-            base_vec = _vector_spec(props.get("Base"))
-            if base_vec and base_vec != _REVOLVE_DEFAULT_BASE:
-                spec["base"] = base_vec
+            al_val = props.get("AxisLink", {}).get("value")
+            if isinstance(al_val, dict) and al_val.get("link"):
+                spec["axis_edge"] = al_val["link"]
+                subs = al_val.get("subs") or []
+                if subs and list(subs) != ["Edge1"]:
+                    spec["axis_edge_sub"] = list(subs)
+            else:
+                axis_vec = _vector_spec(props.get("Axis"))
+                if axis_vec and axis_vec != _REVOLVE_DEFAULT_AXIS:
+                    spec["axis"] = axis_vec
+                base_vec = _vector_spec(props.get("Base"))
+                if base_vec and base_vec != _REVOLVE_DEFAULT_BASE:
+                    spec["base"] = base_vec
             angle = props.get("Angle", {}).get("value")
             if (isinstance(angle, (int, float)) and not isinstance(angle, bool)
                     and angle != _REVOLVE_DEFAULT_ANGLE):
@@ -2351,6 +2358,12 @@ def _revolution_properties(parent: ET.Element, spec: "Dict[str, Any]") -> None:
     ``Axis`` + ``Base`` for the revolution axis (a direction through a point),
     ``Angle`` (degrees) for the sweep, ``Solid`` to cap it, and a bullseye
     ``FaceMakerClass`` so a closed wire becomes a fillable face. An optional
+    ``axis_edge`` (an object name, plus ``axis_edge_sub`` for its sub-edge,
+    default ``Edge1``) instead authors an ``AxisLink`` so the lathe spins about
+    *another object's edge* (a linked ``Part::Line``) rather than the explicit
+    ``Axis``/``Base`` -- the axis then tracks that edge; mutually exclusive with
+    an explicit ``axis``/``base`` and written only when set so a plain revolve
+    stays byte-identical. An optional
     ``symmetric`` spins the profile half the ``Angle`` to each side of its plane
     (``+Angle/2 .. -Angle/2``) instead of all one way -- the balanced lathe cut;
     it is written only when true so a plain one-sided revolve stays
@@ -2373,6 +2386,15 @@ def _revolution_properties(parent: ET.Element, spec: "Dict[str, Any]") -> None:
                   {"valueX": "%.16f" % float(base[0]),
                    "valueY": "%.16f" % float(base[1]),
                    "valueZ": "%.16f" % float(base[2])})
+    axis_edge = spec.get("axis_edge")
+    if axis_edge:
+        subs = spec.get("axis_edge_sub") or ["Edge1"]
+        alp = ET.SubElement(parent, "Property",
+                            {"name": "AxisLink", "type": "App::PropertyLinkSub"})
+        lsub = ET.SubElement(alp, "LinkSub",
+                             {"value": axis_edge, "count": str(len(subs))})
+        for s in subs:
+            ET.SubElement(lsub, "Sub", {"value": s})
     angle = spec.get("angle", _REVOLVE_DEFAULT_ANGLE)
     gp = ET.SubElement(parent, "Property",
                        {"name": "Angle", "type": "App::PropertyFloatConstraint"})
@@ -2969,10 +2991,27 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                 raise ValueError(
                     "synthesize: revolution %s 'symmetric' must be a bool"
                     % name)
+            ae = spec.get("axis_edge")
+            if ae is not None:
+                if not isinstance(ae, str) or not ae.strip():
+                    raise ValueError(
+                        "synthesize: revolution %s 'axis_edge' must be an object "
+                        "name" % name)
+                if spec.get("axis") is not None or spec.get("base") is not None:
+                    raise ValueError(
+                        "synthesize: revolution %s 'axis_edge' and explicit "
+                        "'axis'/'base' are mutually exclusive" % name)
+                asub = spec.get("axis_edge_sub")
+                if asub is not None and (not isinstance(asub, list)
+                                         or not all(isinstance(x, str)
+                                                    for x in asub)):
+                    raise ValueError(
+                        "synthesize: revolution %s 'axis_edge_sub' must be a "
+                        "list of edge names" % name)
             if spec.get("properties"):
                 raise ValueError(
-                    "synthesize: revolution %s takes source/axis/base/angle/"
-                    "solid/symmetric, not properties" % name)
+                    "synthesize: revolution %s takes source/axis/base/axis_edge/"
+                    "angle/solid/symmetric, not properties" % name)
         elif otype == _LOFT_TYPE:
             sections = spec.get("sections")
             if (not isinstance(sections, list) or len(sections) < 2
@@ -3226,7 +3265,9 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                  else ([spec["base"]]
                        + ([spec["dir_edge"]] if spec.get("dir_edge") else [])
                        ) if is_extrude
-                 else [spec["source"]] if is_revolve
+                 else ([spec["source"]]
+                       + ([spec["axis_edge"]] if spec.get("axis_edge") else [])
+                       ) if is_revolve
                  else list(spec["sections"]) if is_loft
                  else [spec["spine"]] + list(spec["sections"]) if is_sweep
                  else [spec["base"]] if is_edge
@@ -3279,6 +3320,7 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                       + (1 if is_extrude and spec.get("dir_edge") else 0)
                       + (6 if is_revolve else 0)
                       + (1 if is_revolve and spec.get("symmetric") else 0)
+                      + (1 if is_revolve and spec.get("axis_edge") else 0)
                       + (4 if is_loft else 0) + (5 if is_sweep else 0)
                       + (3 if is_edge else 0) + (6 if is_thick else 0)
                       + (7 if is_offset else 0) + (3 if is_ruled else 0)
