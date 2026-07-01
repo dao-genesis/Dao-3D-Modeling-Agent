@@ -710,6 +710,9 @@ def summarize(path: str) -> "List[Dict[str, Any]]":
                     seg["construction"] = True
                 segs.append(seg)
             spec["geometry"] = segs
+            placement = _placement_spec(props.get("Placement"))
+            if placement:
+                spec["placement"] = placement
         elif otype == _EXTRUDE_TYPE:
             spec["base"] = _link_target(props.get("Base"))
             length = props.get("LengthFwd", {}).get("value")
@@ -736,6 +739,17 @@ def summarize(path: str) -> "List[Dict[str, Any]]":
             solid = props.get("Solid", {}).get("value")
             if solid is False:
                 spec["solid"] = False
+        elif otype == _LOFT_TYPE:
+            ll_val = props.get("Sections", {}).get("value")
+            spec["sections"] = (list(ll_val["link_list"])
+                                if isinstance(ll_val, dict)
+                                and "link_list" in ll_val else [])
+            if props.get("Solid", {}).get("value") is False:
+                spec["solid"] = False
+            if props.get("Ruled", {}).get("value") is True:
+                spec["ruled"] = True
+            if props.get("Closed", {}).get("value") is True:
+                spec["closed"] = True
         else:
             raise ValueError(
                 "summarize: object %s has type %r that synthesize cannot author"
@@ -1194,6 +1208,16 @@ _PRIMITIVES: "Dict[str, Dict[str, str]]" = {
                     "Polygon": "App::PropertyIntegerConstraint",
                     "FirstAngle": "App::PropertyAngle",
                     "SecondAngle": "App::PropertyAngle"},
+    # ``Part::Circle`` is the odd one out: a parametric *edge*, not a solid --
+    # a circular arc of ``Radius`` from ``Angle1`` to ``Angle2`` degrees (a full
+    # circle at 0..360). It carries a placement like any primitive, but unlike a
+    # shape-less sketch that placement *survives a reload* (its ``execute()``
+    # rebuilds the edge without resetting the frame), which makes it the natural
+    # section to feed a ``Part::Loft``: stack circles at different z and the
+    # kernel skins a solid between them. 圆者，规之至也.
+    "Part::Circle": {"Radius": "App::PropertyLength",
+                     "Angle1": "App::PropertyAngle",
+                     "Angle2": "App::PropertyAngle"},
 }
 # Scalar FreeCAD property types serialise as a single ``<Float>`` child.
 _FLOAT_PROP_TYPES = {"App::PropertyLength", "App::PropertyAngle",
@@ -1270,6 +1294,17 @@ _REVOLVE_TYPE = "Part::Revolution"
 _REVOLVE_DEFAULT_AXIS = [0.0, 0.0, 1.0]
 _REVOLVE_DEFAULT_BASE = [0.0, 0.0, 0.0]
 _REVOLVE_DEFAULT_ANGLE = 360.0
+
+# A ``Part::Loft`` lofts a solid (or shell) through an ordered list of >=2
+# section profiles (``Sections``), morphing one cross-section into the next --
+# the multi-section complement to the single-profile extrude/revolve, and the
+# feature that most directly cashes in the sketch vocabulary (a circle to a
+# closed B-spline to a point apex). ``Solid`` caps it into a body, ``Ruled``
+# joins sections with straight (ruled) surfaces rather than a smooth spline,
+# and ``Closed`` wraps the last section back to the first into a loop. Author
+# the sections + the loft from file and the kernel skins them on recompute:
+# the file-first equivalent of the GUI's Loft, no clicks.
+_LOFT_TYPE = "Part::Loft"
 
 
 def _cells_element(parent: ET.Element, cells: "Dict[str, Any]") -> None:
@@ -1511,6 +1546,31 @@ def _revolution_properties(parent: ET.Element, spec: "Dict[str, Any]") -> None:
     ET.SubElement(fp, "String", {"value": _FACEMAKER})
 
 
+def _loft_properties(parent: ET.Element, spec: "Dict[str, Any]") -> None:
+    """Append the ``Part::Loft`` properties that skin an ordered list of >=2
+    ``Sections`` into a lofted body.
+
+    Four properties carry the feature: ``Sections`` (an ``App::PropertyLinkList``
+    of the section profiles in loft order), ``Solid`` to cap the ends into a
+    solid rather than a shell, ``Ruled`` to join sections with straight (ruled)
+    surfaces instead of a smooth interpolating spline, and ``Closed`` to wrap the
+    last section back to the first into a loop. The kernel skins them on
+    recompute; the file just declares it.
+    """
+    sections = spec["sections"]
+    lp = ET.SubElement(parent, "Property",
+                       {"name": "Sections", "type": "App::PropertyLinkList"})
+    ll = ET.SubElement(lp, "LinkList", {"count": str(len(sections))})
+    for ref in sections:
+        ET.SubElement(ll, "Link", {"value": ref})
+    for pname, flag in (("Solid", spec.get("solid", True)),
+                        ("Ruled", spec.get("ruled", False)),
+                        ("Closed", spec.get("closed", False))):
+        bp = ET.SubElement(parent, "Property",
+                           {"name": pname, "type": "App::PropertyBool"})
+        ET.SubElement(bp, "Bool", {"value": "true" if flag else "false"})
+
+
 def _placement_element(parent: ET.Element, position: "List[float]",
                        axis: "Optional[List[float]]" = None,
                        angle: float = 0.0) -> None:
@@ -1598,13 +1658,14 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
         if (otype not in _PRIMITIVES and otype not in _BOOLEANS
                 and otype not in _LINKLIST_TYPES and otype != _SHEET_TYPE
                 and otype != _MIRROR_TYPE and otype != _SKETCH_TYPE
-                and otype != _EXTRUDE_TYPE and otype != _REVOLVE_TYPE):
+                and otype != _EXTRUDE_TYPE and otype != _REVOLVE_TYPE
+                and otype != _LOFT_TYPE):
             raise ValueError(
                 "synthesize: object #%d has unknown type %r (supported: %s)"
                 % (idx, otype, ", ".join(sorted(
                     set(_PRIMITIVES) | _BOOLEANS | set(_LINKLIST_TYPES)
                     | {_SHEET_TYPE, _MIRROR_TYPE, _SKETCH_TYPE,
-                       _EXTRUDE_TYPE, _REVOLVE_TYPE}))))
+                       _EXTRUDE_TYPE, _REVOLVE_TYPE, _LOFT_TYPE}))))
         name = spec.get("name")
         if not isinstance(name, str) or not name.strip():
             raise ValueError("synthesize: object #%d needs a non-empty name" % idx)
@@ -1886,6 +1947,28 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                 raise ValueError(
                     "synthesize: revolution %s takes source/axis/base/angle/"
                     "solid, not properties" % name)
+        elif otype == _LOFT_TYPE:
+            sections = spec.get("sections")
+            if (not isinstance(sections, list) or len(sections) < 2
+                    or not all(isinstance(r, str) and r.strip()
+                               for r in sections)):
+                raise ValueError(
+                    "synthesize: loft %s needs 'sections': a list of >=2 "
+                    "object names" % name)
+            if name in sections:
+                raise ValueError(
+                    "synthesize: loft %s cannot reference itself" % name)
+            if len(set(sections)) != len(sections):
+                raise ValueError(
+                    "synthesize: loft %s has duplicate sections" % name)
+            for bkey in ("solid", "ruled", "closed"):
+                if bkey in spec and not isinstance(spec[bkey], bool):
+                    raise ValueError(
+                        "synthesize: loft %s '%s' must be a bool" % (name, bkey))
+            if spec.get("properties"):
+                raise ValueError(
+                    "synthesize: loft %s takes sections/solid/ruled/closed, "
+                    "not properties" % name)
         else:
             props = spec.get("properties") or {}
             if not isinstance(props, dict):
@@ -1927,6 +2010,12 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                 raise ValueError(
                     "synthesize: revolution %s source=%r is not a defined object"
                     % (spec["name"], spec["source"]))
+        elif spec["type"] == _LOFT_TYPE:
+            for ref in spec["sections"]:
+                if ref not in all_names:
+                    raise ValueError(
+                        "synthesize: loft %s section %r is not a defined object"
+                        % (spec["name"], ref))
         elif spec["type"] in _LINKLIST_TYPES:
             key, _prop = _LINKLIST_TYPES[spec["type"]]
             for ref in spec[key]:
@@ -1954,8 +2043,9 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
         is_sketch = otype == _SKETCH_TYPE
         is_extrude = otype == _EXTRUDE_TYPE
         is_revolve = otype == _REVOLVE_TYPE
+        is_loft = otype == _LOFT_TYPE
         props = ({} if (is_bool or is_linklist or is_sheet or is_mirror
-                        or is_sketch or is_extrude or is_revolve)
+                        or is_sketch or is_extrude or is_revolve or is_loft)
                  else (spec.get("properties") or {}))
         exprs = spec.get("expressions") or {}
         # links: an explicit DAG (boolean operands) plus every *other* object
@@ -1964,7 +2054,8 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                  else list(spec[ll_key]) if is_linklist
                  else [spec["source"]] if is_mirror
                  else [spec["base"]] if is_extrude
-                 else [spec["source"]] if is_revolve else [])
+                 else [spec["source"]] if is_revolve
+                 else list(spec["sections"]) if is_loft else [])
         dep_set = list(links)
         for other in all_names:
             if other != name and other not in dep_set and any(
@@ -1987,13 +2078,14 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
         angle = placement.get("angle", 0.0)
         has_placement = bool(position or axis or angle)
         prop_items = ([] if (is_bool or is_linklist or is_sheet or is_mirror
-                             or is_sketch or is_extrude or is_revolve)
+                             or is_sketch or is_extrude or is_revolve or is_loft)
                       else [(p, _PRIMITIVES[otype][p], v) for p, v in props.items()])
         prop_count = (len(prop_items) + (1 if has_placement else 0)
                       + (1 if exprs else 0) + (2 if is_bool else 0)
                       + (1 if is_linklist else 0) + (1 if is_sheet else 0)
                       + (3 if is_mirror else 0) + (1 if is_sketch else 0)
-                      + (6 if is_extrude else 0) + (6 if is_revolve else 0))
+                      + (6 if is_extrude else 0) + (6 if is_revolve else 0)
+                      + (4 if is_loft else 0))
         props_el = ET.SubElement(
             od, "Properties", {"Count": str(prop_count), "TransientCount": "0"})
         if is_sheet:
@@ -2004,6 +2096,8 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
             _extrusion_properties(props_el, spec)
         if is_revolve:
             _revolution_properties(props_el, spec)
+        if is_loft:
+            _loft_properties(props_el, spec)
         if is_bool:
             for role_name, ref in (("Base", spec["base"]), ("Tool", spec["tool"])):
                 lp = ET.SubElement(props_el, "Property",
@@ -2385,6 +2479,44 @@ def point(
     if construction:
         seg["construction"] = True
     return {"type": _SKETCH_TYPE, "name": name, "geometry": [seg]}
+
+
+def loft(
+    name: str,
+    sections: "List[str]",
+    solid: bool = True,
+    ruled: bool = False,
+    closed: bool = False,
+) -> "Dict[str, Any]":
+    """Generate a ``Part::Loft`` object spec skinning >=2 ``sections``.
+
+    The multi-section solid: a body lofted through the ordered list of section
+    profiles ``sections`` (each the name of another object in the same
+    document -- a sketch, a face, a point-apex). ``solid`` caps the ends into a
+    solid (else an open shell), ``ruled`` joins consecutive sections with
+    straight (ruled) surfaces rather than a smooth interpolating spline, and
+    ``closed`` wraps the last section back to the first into a loop. The result
+    is a ``synthesize`` object spec, not a sketch -- feed it alongside the
+    section specs into :func:`synthesize` and the kernel skins the loft on
+    recompute. 道生一，一生二，二生三，三生萬物.
+    """
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("loft: needs a non-empty name")
+    if (not isinstance(sections, (list, tuple)) or len(sections) < 2
+            or not all(isinstance(r, str) and r.strip() for r in sections)):
+        raise ValueError("loft: 'sections' must be a list of >=2 object names")
+    for flag, fname in ((solid, "solid"), (ruled, "ruled"), (closed, "closed")):
+        if not isinstance(flag, bool):
+            raise ValueError("loft: '%s' must be a bool" % fname)
+    spec: Dict[str, Any] = {"type": _LOFT_TYPE, "name": name,
+                            "sections": [str(r) for r in sections]}
+    if not solid:
+        spec["solid"] = False
+    if ruled:
+        spec["ruled"] = True
+    if closed:
+        spec["closed"] = True
+    return spec
 
 
 def _rodrigues(v: "List[float]", axis: "List[float]", angle_deg: float) -> "List[float]":
