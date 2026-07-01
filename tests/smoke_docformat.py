@@ -16,6 +16,7 @@ kernel, saves it, then reads it back *without the kernel* via
 import math
 import os
 import sys
+import zipfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from cad_agent import docformat, new_session  # noqa: E402
@@ -1456,6 +1457,133 @@ def main():
           "from file -> solid volume %g (cylinder), depends on section + spine, "
           "round-trips identically; frenet/shell flags + guards hold" %
           round(sw_vol, 3))
+
+    # ---- Part::Fillet / Part::Chamfer: edge treatments (binary side member) - #
+    # the edge-treatment family: a fillet rounds chosen edges of a base solid,
+    # a chamfer bevels them. Unlike every other feature, their per-edge sizes
+    # live not in Document.xml but in a binary "Edges" side member of the .FCStd
+    # zip -- so synthesize writes that member and summarize reads it back. A box
+    # of side 10 (volume 1000) filleted r2 on one edge loses a rounded sliver
+    # (kernel volume ~991.42); the generator docformat.fillet() writes the spec,
+    # summarize recovers {edge, radius}, and the whole document -- side member
+    # included -- round-trips byte-identically. 大直若詘.
+    fi_p = os.path.join(OUT, "synth_fillet.FCStd")
+    docformat.synthesize(fi_p, [
+        {"type": "Part::Box", "name": "Blk",
+         "properties": {"Length": 10, "Width": 10, "Height": 10}},
+        docformat.fillet("Round", "Blk", [{"edge": 1, "radius": 2}]),
+    ])
+    assert "Edges" in zipfile.ZipFile(fi_p).namelist()
+    fi_spec = next(s for s in docformat.summarize(fi_p) if s["name"] == "Round")
+    assert fi_spec["base"] == "Blk", fi_spec
+    assert fi_spec["edges"] == [{"edge": 1, "radius": 2}], fi_spec
+    fi_rt = os.path.join(OUT, "synth_fillet_rt.FCStd")
+    docformat.synthesize(fi_rt, docformat.summarize(fi_p))
+    assert docformat.fingerprint(fi_p) == docformat.fingerprint(fi_rt)
+    fi_deps = docformat.inspect_document(fi_p)["dependencies"].get("Round", [])
+    assert fi_deps == ["Blk"], fi_deps
+    wd = App.openDocument(fi_p)
+    try:
+        for o in wd.Objects:
+            o.touch()
+        wd.recompute(None, True)
+        rnd = wd.getObject("Round")
+        fi_vol = rnd.Shape.Volume
+        fi_solids = len(rnd.Shape.Solids)
+    finally:
+        App.closeDocument(wd.Name)
+    assert 900.0 < fi_vol < 1000.0, fi_vol
+    assert fi_solids == 1, fi_solids
+
+    # a chamfer with a symmetric bevel + an asymmetric one, and a variable-radius
+    # fillet, all in one document -> two treatments, so two side members named
+    # FreeCAD-style "Edges" and "Edges1". Each recovers its own edge list and the
+    # multi-member document round-trips identically.
+    ch_p = os.path.join(OUT, "synth_chamfer.FCStd")
+    docformat.synthesize(ch_p, [
+        {"type": "Part::Box", "name": "Blk",
+         "properties": {"Length": 10, "Width": 10, "Height": 10}},
+        docformat.chamfer("Bevel", "Blk",
+                          [{"edge": 1, "distance": 2},
+                           {"edge": 2, "distance1": 1, "distance2": 3}]),
+        docformat.fillet("VRound", "Blk", [{"edge": 5, "radius1": 1,
+                                            "radius2": 2}]),
+    ])
+    assert {"Edges", "Edges1"} <= set(zipfile.ZipFile(ch_p).namelist())
+    ch_spec = next(s for s in docformat.summarize(ch_p) if s["name"] == "Bevel")
+    assert ch_spec["edges"] == [{"edge": 1, "distance": 2},
+                                {"edge": 2, "distance1": 1, "distance2": 3}], ch_spec
+    vr_spec = next(s for s in docformat.summarize(ch_p) if s["name"] == "VRound")
+    assert vr_spec["edges"] == [{"edge": 5, "radius1": 1, "radius2": 2}], vr_spec
+    ch_rt = os.path.join(OUT, "synth_chamfer_rt.FCStd")
+    docformat.synthesize(ch_rt, docformat.summarize(ch_p))
+    assert docformat.fingerprint(ch_p) == docformat.fingerprint(ch_rt)
+    wd = App.openDocument(ch_p)
+    try:
+        for o in wd.Objects:
+            o.touch()
+        wd.recompute(None, True)
+        ch_vol = wd.getObject("Bevel").Shape.Volume
+    finally:
+        App.closeDocument(wd.Name)
+    assert 900.0 < ch_vol < 1000.0, ch_vol
+    for bad, token in (
+            ([{"type": "Part::Box", "name": "B",
+               "properties": {"Length": 10, "Width": 10, "Height": 10}},
+              {"type": "Part::Fillet", "name": "F", "base": "B", "edges": []}],
+             "non-empty 'edges'"),
+            ([{"type": "Part::Fillet", "name": "F", "base": "Gone",
+               "edges": [{"edge": 1, "radius": 2}]}], "is not a defined object"),
+            ([{"type": "Part::Box", "name": "B",
+               "properties": {"Length": 10, "Width": 10, "Height": 10}},
+              {"type": "Part::Fillet", "name": "F", "base": "F",
+               "edges": [{"edge": 1, "radius": 2}]}], "cannot reference itself"),
+            ([{"type": "Part::Box", "name": "B",
+               "properties": {"Length": 10, "Width": 10, "Height": 10}},
+              {"type": "Part::Fillet", "name": "F", "base": "B",
+               "edges": [{"edge": 0, "radius": 2}]}], "1-based"),
+            ([{"type": "Part::Box", "name": "B",
+               "properties": {"Length": 10, "Width": 10, "Height": 10}},
+              {"type": "Part::Fillet", "name": "F", "base": "B",
+               "edges": [{"edge": 1, "radius": -2}]}], "positive"),
+            ([{"type": "Part::Box", "name": "B",
+               "properties": {"Length": 10, "Width": 10, "Height": 10}},
+              {"type": "Part::Fillet", "name": "F", "base": "B",
+               "edges": [{"edge": 1, "radius": "big"}]}], "number"),
+            ([{"type": "Part::Box", "name": "B",
+               "properties": {"Length": 10, "Width": 10, "Height": 10}},
+              {"type": "Part::Fillet", "name": "F", "base": "B",
+               "edges": [{"edge": 1, "radius": 2}, {"edge": 1, "radius": 3}]}],
+             "duplicate"),
+            ([{"type": "Part::Box", "name": "B",
+               "properties": {"Length": 10, "Width": 10, "Height": 10}},
+              {"type": "Part::Chamfer", "name": "C", "base": "B",
+               "edges": [{"edge": 1, "distance1": 2}]}], "both"),
+            ([{"type": "Part::Box", "name": "B",
+               "properties": {"Length": 10, "Width": 10, "Height": 10}},
+              {"type": "Part::Fillet", "name": "F", "base": "B",
+               "edges": [{"edge": 1, "radius": 2}],
+               "properties": {"Foo": 1}}], "not properties")):
+        try:
+            docformat.synthesize(os.path.join(OUT, "bad_edge.FCStd"), bad)
+        except ValueError as exc:
+            assert token in str(exc), (token, exc)
+        else:
+            raise AssertionError("expected ValueError for %r" % token)
+    for badcall in (
+            lambda: docformat.fillet("", "B", [{"edge": 1, "radius": 2}]),
+            lambda: docformat.chamfer("C", "", [{"edge": 1, "distance": 2}]),
+            lambda: docformat.fillet("F", "B", [])):
+        try:
+            badcall()
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("expected ValueError from generator")
+    print("docformat edge treatments: box side 10 filleted r2 -> solid volume "
+          "%g, chamfer/variable-radius via binary Edges side member(s), "
+          "round-trips identically; 9 synthesize + 3 generator guards hold" %
+          round(fi_vol, 3))
 
     # ---- summarize: decompile a file back to a synthesize spec (round-trip) - #
     # author a document spanning every type the authoring layer writes -- a

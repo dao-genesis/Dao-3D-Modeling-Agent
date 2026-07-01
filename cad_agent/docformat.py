@@ -28,6 +28,7 @@ import hashlib
 import math
 import os
 import re
+import struct
 import xml.etree.ElementTree as ET
 import zipfile
 from typing import Any, Dict, List, Optional
@@ -98,6 +99,14 @@ def _maybe_float(s: str) -> Any:
             return s == "true"
         return s
     return int(f) if f.is_integer() else round(f, 6)
+
+
+def _tidy_size(v: float) -> Any:
+    """An integral edge-treatment size (``2.0``) read back as ``int`` for a
+    clean spec, a fractional one kept as its exact ``float`` -- either way
+    ``float()`` of the result re-encodes to the identical double, so a fillet /
+    chamfer round-trips byte-for-byte."""
+    return int(v) if float(v).is_integer() else v
 
 
 def _object_deps(objects_el: Optional[ET.Element]) -> Dict[str, List[str]]:
@@ -771,6 +780,24 @@ def summarize(path: str) -> "List[Dict[str, Any]]":
                 spec["solid"] = False
             if props.get("Frenet", {}).get("value") is True:
                 spec["frenet"] = True
+        elif otype in _EDGE_TREATMENTS:
+            spec["base"] = _link_target(props.get("Base"))
+            fileref = props.get("Edges", {}).get("value")
+            member = fileref.get("file") if isinstance(fileref, dict) else None
+            scalar, k1, k2, _noun = _edge_treatment_size_keys(otype)
+            edges_spec: List[Dict[str, Any]] = []
+            if member:
+                with zipfile.ZipFile(path) as _z:
+                    triples = _parse_fillet_edges_blob(_z.read(member))
+                for eid, s1, s2 in triples:
+                    if s1 == s2:
+                        edges_spec.append({"edge": int(eid),
+                                           scalar: _tidy_size(s1)})
+                    else:
+                        edges_spec.append({"edge": int(eid),
+                                           k1: _tidy_size(s1),
+                                           k2: _tidy_size(s2)})
+            spec["edges"] = edges_spec
         else:
             raise ValueError(
                 "summarize: object %s has type %r that synthesize cannot author"
@@ -1346,6 +1373,133 @@ _LOFT_TYPE = "Part::Loft"
 # file-first equivalent of the GUI's Sweep, no clicks.
 _SWEEP_TYPE = "Part::Sweep"
 
+# ``Part::Fillet`` and ``Part::Chamfer`` are the edge *treatments*: they take a
+# solid ``Base`` and round (fillet) or bevel (chamfer) a chosen set of its edges.
+# Unlike every other authored feature their per-edge sizes do not live in
+# ``Document.xml`` -- FreeCAD persists the ``Edges`` property
+# (``Part::PropertyFilletEdges``) as a *separate binary member* inside the
+# ``.FCStd`` zip, referenced by ``<FilletEdges file="Edges"/>``. That blob is a
+# little-endian ``<uint32 count>`` then, per edge, ``<uint32 edge-id><double
+# size1><double size2>`` -- the 1-based index of the base edge plus its two radii
+# (fillet) / setbacks (chamfer), equal for a constant treatment, distinct for a
+# variable one. Authoring a treatment therefore means writing that side file as
+# well as the XML, the first feature to push the file layer past a lone
+# ``Document.xml``. A ``Base``-shape edge index is only meaningful once the base
+# is recomputed, so both also carry an ``EdgeLinks`` ``LinkSub`` naming the base
+# + its ``Edge<n>`` subs -- the topological-naming handle mirroring the blob.
+# 大直若詘: the sharp edge softened is the stronger form.
+_FILLET_TYPE = "Part::Fillet"
+_CHAMFER_TYPE = "Part::Chamfer"
+_EDGE_TREATMENTS = {_FILLET_TYPE, _CHAMFER_TYPE}
+
+
+def _edge_treatment_size_keys(otype: str) -> "tuple":
+    """The (scalar, pair1, pair2, noun) spec keys an edge treatment reads its
+    per-edge size from: ``radius`` for a fillet, ``distance`` for a chamfer."""
+    scalar = "radius" if otype == _FILLET_TYPE else "distance"
+    return scalar, scalar + "1", scalar + "2", scalar
+
+
+def _norm_edge_treatment(spec: "Dict[str, Any]") -> "List[tuple]":
+    """Validate a fillet/chamfer ``edges`` spec and normalise it to an ordered
+    list of ``(edge_id, size1, size2)`` tuples -- the exact triples the ``Edges``
+    binary blob encodes.
+
+    Each entry is ``{"edge": <1-based int>, "<size>": s}`` for a constant
+    treatment or ``{"edge": int, "<size>1": s1, "<size>2": s2}`` for a variable
+    one, where ``<size>`` is ``radius`` (fillet) or ``distance`` (chamfer). Raises
+    ``ValueError`` (with the object name) for a malformed / empty / duplicate /
+    non-positive entry so a bad treatment never reaches the kernel.
+    """
+    name, otype = spec.get("name"), spec["type"]
+    scalar, k1, k2, noun = _edge_treatment_size_keys(otype)
+    edges = spec.get("edges")
+    if not isinstance(edges, list) or not edges:
+        raise ValueError(
+            "synthesize: %s %s needs a non-empty 'edges' list" % (otype, name))
+    out: List[tuple] = []
+    seen: set = set()
+    for j, e in enumerate(edges):
+        if not isinstance(e, dict):
+            raise ValueError(
+                "synthesize: %s %s edge #%d must be a dict" % (otype, name, j))
+        eid = e.get("edge")
+        if isinstance(eid, bool) or not isinstance(eid, int) or eid < 1:
+            raise ValueError(
+                "synthesize: %s %s edge #%d 'edge' must be a 1-based integer"
+                % (otype, name, j))
+        if eid in seen:
+            raise ValueError(
+                "synthesize: %s %s has duplicate edge %d" % (otype, name, eid))
+        seen.add(eid)
+        if scalar in e:
+            if k1 in e or k2 in e:
+                raise ValueError(
+                    "synthesize: %s %s edge %d takes either '%s' or '%s'/'%s', "
+                    "not both" % (otype, name, eid, scalar, k1, k2))
+            s1 = s2 = e[scalar]
+        elif k1 in e and k2 in e:
+            s1, s2 = e[k1], e[k2]
+        else:
+            raise ValueError(
+                "synthesize: %s %s edge %d needs a '%s' (or both '%s' and '%s')"
+                % (otype, name, eid, scalar, k1, k2))
+        for s in (s1, s2):
+            if isinstance(s, bool) or not isinstance(s, (int, float)) or s <= 0:
+                raise ValueError(
+                    "synthesize: %s %s edge %d %s must be a positive number"
+                    % (otype, name, eid, noun))
+        out.append((eid, float(s1), float(s2)))
+    return out
+
+
+def _fillet_edges_blob(edges: "List[tuple]") -> bytes:
+    """Encode ``[(edge_id, size1, size2)]`` as the ``Part::PropertyFilletEdges``
+    side file: little-endian ``<uint32 count>`` then ``<uint32 id><double s1>
+    <double s2>`` per edge."""
+    out = struct.pack("<I", len(edges))
+    for eid, s1, s2 in edges:
+        out += struct.pack("<Idd", int(eid), float(s1), float(s2))
+    return out
+
+
+def _parse_fillet_edges_blob(data: bytes) -> "List[tuple]":
+    """Decode a ``Part::PropertyFilletEdges`` side file back to
+    ``[(edge_id, size1, size2)]`` -- the inverse of :func:`_fillet_edges_blob`."""
+    if len(data) < 4:
+        raise ValueError("fillet edges blob too short")
+    (count,) = struct.unpack_from("<I", data, 0)
+    if len(data) != 4 + count * 20:
+        raise ValueError("fillet edges blob size %d != 4 + %d*20"
+                         % (len(data), count))
+    out: List[tuple] = []
+    off = 4
+    for _ in range(count):
+        eid, s1, s2 = struct.unpack_from("<Idd", data, off)
+        off += 20
+        out.append((eid, s1, s2))
+    return out
+
+
+def _edge_treatment_properties(parent: ET.Element, spec: "Dict[str, Any]",
+                               edges: "List[tuple]", edges_file: str) -> None:
+    """Append the ``Base`` / ``EdgeLinks`` / ``Edges`` properties of a fillet or
+    chamfer. The per-edge sizes themselves live in the ``edges_file`` binary
+    member (written separately); here ``Edges`` only *references* it, while
+    ``EdgeLinks`` records the base object + its ``Edge<n>`` sub-references."""
+    bp = ET.SubElement(parent, "Property",
+                       {"name": "Base", "type": "App::PropertyLink"})
+    ET.SubElement(bp, "Link", {"value": spec["base"]})
+    ep = ET.SubElement(parent, "Property",
+                       {"name": "EdgeLinks", "type": "App::PropertyLinkSub"})
+    lsub = ET.SubElement(ep, "LinkSub",
+                         {"value": spec["base"], "count": str(len(edges))})
+    for eid, _s1, _s2 in edges:
+        ET.SubElement(lsub, "Sub", {"value": "Edge%d" % eid})
+    fp = ET.SubElement(parent, "Property",
+                       {"name": "Edges", "type": "Part::PropertyFilletEdges"})
+    ET.SubElement(fp, "FilletEdges", {"file": edges_file})
+
 
 def _cells_element(parent: ET.Element, cells: "Dict[str, Any]") -> None:
     """Append a ``Spreadsheet::PropertySheet`` ``cells`` property.
@@ -1735,11 +1889,13 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                 and otype not in _LINKLIST_TYPES and otype != _SHEET_TYPE
                 and otype != _MIRROR_TYPE and otype != _SKETCH_TYPE
                 and otype != _EXTRUDE_TYPE and otype != _REVOLVE_TYPE
-                and otype != _LOFT_TYPE and otype != _SWEEP_TYPE):
+                and otype != _LOFT_TYPE and otype != _SWEEP_TYPE
+                and otype not in _EDGE_TREATMENTS):
             raise ValueError(
                 "synthesize: object #%d has unknown type %r (supported: %s)"
                 % (idx, otype, ", ".join(sorted(
                     set(_PRIMITIVES) | _BOOLEANS | set(_LINKLIST_TYPES)
+                    | _EDGE_TREATMENTS
                     | {_SHEET_TYPE, _MIRROR_TYPE, _SKETCH_TYPE,
                        _EXTRUDE_TYPE, _REVOLVE_TYPE, _LOFT_TYPE,
                        _SWEEP_TYPE}))))
@@ -2083,6 +2239,19 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                 raise ValueError(
                     "synthesize: sweep %s takes sections/spine/solid/frenet/"
                     "spine_edges, not properties" % name)
+        elif otype in _EDGE_TREATMENTS:
+            base = spec.get("base")
+            if not isinstance(base, str) or not base.strip():
+                raise ValueError(
+                    "synthesize: %s %s needs a 'base' object name" % (otype, name))
+            if base == name:
+                raise ValueError(
+                    "synthesize: %s %s cannot reference itself" % (otype, name))
+            _norm_edge_treatment(spec)  # validates 'edges'
+            if spec.get("properties"):
+                raise ValueError(
+                    "synthesize: %s %s takes base/edges, not properties"
+                    % (otype, name))
         else:
             props = spec.get("properties") or {}
             if not isinstance(props, dict):
@@ -2136,6 +2305,11 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                     raise ValueError(
                         "synthesize: sweep %s reference %r is not a defined "
                         "object" % (spec["name"], ref))
+        elif spec["type"] in _EDGE_TREATMENTS:
+            if spec["base"] not in all_names:
+                raise ValueError(
+                    "synthesize: %s %s base=%r is not a defined object"
+                    % (spec["type"], spec["name"], spec["base"]))
         elif spec["type"] in _LINKLIST_TYPES:
             key, _prop = _LINKLIST_TYPES[spec["type"]]
             for ref in spec[key]:
@@ -2153,6 +2327,13 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                              "Dependencies": str(len(objects))})
     data_el = ET.SubElement(root, "ObjectData", {"Count": str(len(objects))})
 
+    # Edge treatments (fillet / chamfer) persist their per-edge sizes in binary
+    # side members; collect them here (member name -> blob) to write alongside
+    # Document.xml. The k-th treatment's file is named FreeCAD-style -- "Edges"
+    # for the first, "Edges1", "Edges2", ... after -- deterministically, so a
+    # summarize -> synthesize round-trip regenerates the identical member.
+    aux_members: "Dict[str, bytes]" = {}
+
     for idx, spec in enumerate(objects, start=1):
         name, otype = spec["name"], spec["type"]
         is_bool = otype in _BOOLEANS
@@ -2165,9 +2346,10 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
         is_revolve = otype == _REVOLVE_TYPE
         is_loft = otype == _LOFT_TYPE
         is_sweep = otype == _SWEEP_TYPE
+        is_edge = otype in _EDGE_TREATMENTS
         props = ({} if (is_bool or is_linklist or is_sheet or is_mirror
                         or is_sketch or is_extrude or is_revolve or is_loft
-                        or is_sweep)
+                        or is_sweep or is_edge)
                  else (spec.get("properties") or {}))
         exprs = spec.get("expressions") or {}
         # links: an explicit DAG (boolean operands) plus every *other* object
@@ -2179,6 +2361,7 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                  else [spec["source"]] if is_revolve
                  else list(spec["sections"]) if is_loft
                  else [spec["spine"]] + list(spec["sections"]) if is_sweep
+                 else [spec["base"]] if is_edge
                  else [])
         dep_set = list(links)
         for other in all_names:
@@ -2203,14 +2386,15 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
         has_placement = bool(position or axis or angle)
         prop_items = ([] if (is_bool or is_linklist or is_sheet or is_mirror
                              or is_sketch or is_extrude or is_revolve or is_loft
-                             or is_sweep)
+                             or is_sweep or is_edge)
                       else [(p, _PRIMITIVES[otype][p], v) for p, v in props.items()])
         prop_count = (len(prop_items) + (1 if has_placement else 0)
                       + (1 if exprs else 0) + (2 if is_bool else 0)
                       + (1 if is_linklist else 0) + (1 if is_sheet else 0)
                       + (3 if is_mirror else 0) + (1 if is_sketch else 0)
                       + (6 if is_extrude else 0) + (6 if is_revolve else 0)
-                      + (4 if is_loft else 0) + (5 if is_sweep else 0))
+                      + (4 if is_loft else 0) + (5 if is_sweep else 0)
+                      + (3 if is_edge else 0))
         props_el = ET.SubElement(
             od, "Properties", {"Count": str(prop_count), "TransientCount": "0"})
         if is_sheet:
@@ -2225,6 +2409,11 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
             _loft_properties(props_el, spec)
         if is_sweep:
             _sweep_properties(props_el, spec)
+        if is_edge:
+            edge_triples = _norm_edge_treatment(spec)
+            member = "Edges" if not aux_members else "Edges%d" % len(aux_members)
+            aux_members[member] = _fillet_edges_blob(edge_triples)
+            _edge_treatment_properties(props_el, spec, edge_triples, member)
         if is_bool:
             for role_name, ref in (("Base", spec["base"]), ("Tool", spec["tool"])):
                 lp = ET.SubElement(props_el, "Property",
@@ -2298,6 +2487,8 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                + ET.tostring(root, encoding="utf-8"))
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zo:
         zo.writestr(DOCUMENT_XML, payload)
+        for member, blob in aux_members.items():
+            zo.writestr(member, blob)
     return {"out": path, "objects": [s["name"] for s in objects],
             "object_count": len(objects)}
 
@@ -2689,6 +2880,51 @@ def sweep(
         spec["frenet"] = True
     if spine_edges is not None:
         spec["spine_edges"] = [str(x) for x in spine_edges]
+    return spec
+
+
+def fillet(name: str, base: str,
+           edges: "List[Dict[str, Any]]") -> "Dict[str, Any]":
+    """Generate a ``Part::Fillet`` object spec rounding edges of ``base``.
+
+    ``edges`` is a list of per-edge dicts: ``{"edge": <1-based int>, "radius":
+    r}`` for a constant round or ``{"edge": int, "radius1": r1, "radius2": r2}``
+    for a variable one (the radius eased along the edge). The result is a
+    ``synthesize`` object spec -- feed it alongside the ``base`` solid's spec
+    into :func:`synthesize` and the kernel rolls a ball of the given radius
+    into each named edge on recompute, writing the sizes to the ``Edges`` binary
+    side member. 大直若詘.
+    """
+    return _edge_treatment_spec(_FILLET_TYPE, name, base, edges)
+
+
+def chamfer(name: str, base: str,
+            edges: "List[Dict[str, Any]]") -> "Dict[str, Any]":
+    """Generate a ``Part::Chamfer`` object spec bevelling edges of ``base``.
+
+    ``edges`` is a list of per-edge dicts: ``{"edge": <1-based int>, "distance":
+    d}`` for a symmetric bevel or ``{"edge": int, "distance1": d1, "distance2":
+    d2}`` for an asymmetric one (the two setbacks off the edge). The result is a
+    ``synthesize`` object spec -- feed it alongside the ``base`` solid's spec
+    into :func:`synthesize` and the kernel planes each named edge back by the
+    given setbacks on recompute. The chamfer is the fillet's straight-cut
+    sibling; both persist through the same ``Edges`` binary side member.
+    """
+    return _edge_treatment_spec(_CHAMFER_TYPE, name, base, edges)
+
+
+def _edge_treatment_spec(otype: str, name: str, base: str,
+                         edges: "List[Dict[str, Any]]") -> "Dict[str, Any]":
+    """Shared builder for :func:`fillet` / :func:`chamfer`: assemble and validate
+    the ``{type, name, base, edges}`` spec (via :func:`_norm_edge_treatment`), so
+    a malformed treatment fails at authoring time rather than on recompute."""
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("%s: needs a non-empty name" % otype)
+    if not isinstance(base, str) or not base.strip():
+        raise ValueError("%s: 'base' must be a non-empty object name" % otype)
+    spec: Dict[str, Any] = {"type": otype, "name": name, "base": str(base),
+                            "edges": edges}
+    _norm_edge_treatment(spec)
     return spec
 
 
