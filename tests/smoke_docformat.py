@@ -824,6 +824,62 @@ def main():
     print("docformat Part::Ellipse: 8x5 ellipse -> one valid edge (length %g); "
           "half-ellipse arc round-trips (angles persist), no BREP" % round(el_len, 3))
 
+    # ---- Part::Refine: the one-link shape-cleanup feature ------------------- #
+    # fuse two abutting 10-cubes -> the shared seam splits faces (10 faces); a
+    # Part::Refine wrapping the fusion merges the coplanar faces back to the 6 of
+    # a clean 10x20x10 box, preserving volume (2000). The feature carries a single
+    # Source link, no scalars, so it round-trips byte-identically. 大巧若拙.
+    rf_p = os.path.join(OUT, "synth_refine.FCStd")
+    docformat.synthesize(rf_p, [
+        {"type": "Part::Box", "name": "Ra",
+         "properties": {"Length": 10, "Width": 10, "Height": 10}},
+        {"type": "Part::Box", "name": "Rb",
+         "properties": {"Length": 10, "Width": 10, "Height": 10},
+         "placement": {"position": [10, 0, 0]}},
+        {"type": "Part::Fuse", "name": "Rf", "base": "Ra", "tool": "Rb"},
+        docformat.refine("Rr", "Rf"),
+    ])
+    assert zipfile.ZipFile(rf_p).namelist() == ["Document.xml"]
+    rf_spec = next(s for s in docformat.summarize(rf_p) if s["name"] == "Rr")
+    assert rf_spec["type"] == "Part::Refine" and rf_spec["source"] == "Rf", rf_spec
+    rf_rt = os.path.join(OUT, "synth_refine_rt.FCStd")
+    docformat.synthesize(rf_rt, docformat.summarize(rf_p))
+    assert docformat.fingerprint(rf_p) == docformat.fingerprint(rf_rt)
+    rfd = App.openDocument(rf_p)
+    try:
+        for o in rfd.Objects:
+            o.touch()
+        rfd.recompute(None, True)
+        fuse_faces = len(rfd.getObject("Rf").Shape.Faces)
+        rr_sh = rfd.getObject("Rr").Shape
+        rr_faces = len(rr_sh.Faces)
+        rr_vol = rr_sh.Volume
+        rr_ok = rr_sh.isValid()
+    finally:
+        App.closeDocument(rfd.Name)
+    assert rr_ok and rr_faces == 6 and fuse_faces > 6, (fuse_faces, rr_faces)
+    assert abs(rr_vol - 2000.0) < 1e-6, rr_vol
+    # a refine pointing at a missing source is guided.
+    for badcall in (
+            lambda: docformat.refine("", "Rf"),
+            lambda: docformat.refine("Rr", "")):
+        try:
+            badcall()
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("expected ValueError from refine generator")
+    try:
+        docformat.synthesize(os.path.join(OUT, "bad_refine.FCStd"),
+                             [docformat.refine("Rr", "Ghost")])
+    except ValueError as exc:
+        assert "not a defined object" in str(exc), exc
+    else:
+        raise AssertionError("expected ValueError for refine of missing source")
+    print("docformat Part::Refine: fuse of two abutting cubes (%d faces) refined "
+          "-> clean 6-face box (vol %g), volume-preserving, round-trips; source "
+          "guards hold" % (fuse_faces, rr_vol))
+
     # ---- Sketcher::SketchObject: author a 2D profile from file ----------- #
     # the most upstream authoring surface: draw a closed 10x5 rectangle as four
     # line segments straight into the Part::PropertyGeometryList. The kernel
