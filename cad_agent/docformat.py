@@ -334,6 +334,7 @@ def _sketch_geometry(data_el: Optional[ET.Element]
             arc = g.find("ArcOfCircle")
             ell = g.find("Ellipse")
             aoe = g.find("ArcOfEllipse")
+            aop = g.find("ArcOfParabola")
             bsp = g.find("BSplineCurve")
             pt = g.find("GeomPoint")
             if gtype == "Part::GeomLineSegment" and seg is not None:
@@ -370,6 +371,14 @@ def _sketch_geometry(data_el: Optional[ET.Element]
                 entry["angle"] = float(aoe.get("AngleXU", 0))
                 entry["start_angle"] = float(aoe.get("StartAngle", 0))
                 entry["end_angle"] = float(aoe.get("EndAngle", 0))
+            elif gtype == "Part::GeomArcOfParabola" and aop is not None:
+                entry["parabola"] = True
+                entry["center"] = [float(aop.get("CenterX", 0)),
+                                   float(aop.get("CenterY", 0))]
+                entry["focal"] = float(aop.get("Focal", 0))
+                entry["angle"] = float(aop.get("AngleXU", 0))
+                entry["start_angle"] = float(aop.get("StartAngle", 0))
+                entry["end_angle"] = float(aop.get("EndAngle", 0))
             elif gtype == "Part::GeomBSplineCurve" and bsp is not None:
                 poles = [[float(p.get("X", 0)), float(p.get("Y", 0))]
                          for p in bsp.findall("Pole")]
@@ -729,6 +738,12 @@ def summarize(path: str) -> "List[Dict[str, Any]]":
                     seg = {"center": list(g["center"]),
                            "major_radius": g["major_radius"],
                            "minor_radius": g["minor_radius"],
+                           "start_angle": g["start_angle"],
+                           "end_angle": g["end_angle"]}
+                    if g.get("angle"):
+                        seg["angle"] = g["angle"]
+                elif g.get("parabola"):
+                    seg = {"center": list(g["center"]), "focal": g["focal"],
                            "start_angle": g["start_angle"],
                            "end_angle": g["end_angle"]}
                     if g.get("angle"):
@@ -2016,6 +2031,8 @@ def _sketch_segment_kind(seg: "Dict[str, Any]") -> "Optional[str]":
         return "point"
     if "start" in seg or "end" in seg:
         return "line"
+    if "focal" in seg:
+        return "parabola"
     if has_axes and has_sweep:
         return "arc_ellipse"
     if has_sweep:
@@ -2046,6 +2063,10 @@ def _geometry_element(parent: ET.Element, segments: "List[Dict[str, Any]]") -> N
       default 0) -> ``Part::GeomEllipse``
     * arc_ellipse -- an ``ellipse`` spec plus ``start_angle``/``end_angle``
       (radians, swept on the ellipse's own parameter) -> ``Part::GeomArcOfEllipse``
+    * parabola -- ``{"center": [x, y], "focal": f, "start_angle": a,
+      "end_angle": b, "angle": t}`` (``center`` is the vertex, ``focal`` the
+      focal length, ``angle`` the axis tilt from +X in radians default 0, the two
+      angles the parameter range) -> ``Part::GeomArcOfParabola``
     * bspline -- ``{"bspline": {"poles": [[x, y], ...], "knots": [...],
       "mults": [...], "degree": d, "periodic": bool, "weights": [...]}}`` ->
       ``Part::GeomBSplineCurve`` (the general freeform curve; ``weights``
@@ -2065,6 +2086,7 @@ def _geometry_element(parent: ET.Element, segments: "List[Dict[str, Any]]") -> N
                  "arc": "Part::GeomArcOfCircle",
                  "ellipse": "Part::GeomEllipse",
                  "arc_ellipse": "Part::GeomArcOfEllipse",
+                 "parabola": "Part::GeomArcOfParabola",
                  "bspline": "Part::GeomBSplineCurve",
                  "point": "Part::GeomPoint"}[kind]
         g = ET.SubElement(glist, "Geometry",
@@ -2097,6 +2119,17 @@ def _geometry_element(parent: ET.Element, segments: "List[Dict[str, Any]]") -> N
                 ET.SubElement(g, "ArcOfEllipse", attrs)
             else:
                 ET.SubElement(g, "Ellipse", attrs)
+        elif kind == "parabola":
+            cx, cy = seg["center"]
+            ET.SubElement(g, "ArcOfParabola",
+                          {"CenterX": "%.16f" % float(cx),
+                           "CenterY": "%.16f" % float(cy), "CenterZ": "%.16f" % 0.0,
+                           "NormalX": "%.16f" % 0.0, "NormalY": "%.16f" % 0.0,
+                           "NormalZ": "%.16f" % 1.0,
+                           "Focal": "%.16f" % float(seg["focal"]),
+                           "AngleXU": "%.16f" % float(seg.get("angle", 0.0)),
+                           "StartAngle": "%.16f" % float(seg["start_angle"]),
+                           "EndAngle": "%.16f" % float(seg["end_angle"])})
         elif kind == "bspline":
             bs = seg["bspline"]
             poles = bs["poles"]
@@ -2605,6 +2638,21 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                         _num(seg.get("end_angle"), j, "end_angle")
                 elif kind == "point":
                     _pt2(seg.get("point"), j, "point")
+                elif kind == "parabola":
+                    _pt2(seg.get("center"), j, "center")
+                    _num(seg.get("focal"), j, "focal")
+                    if seg["focal"] <= 0:
+                        raise ValueError(
+                            "synthesize: sketch %s segment #%d 'focal' must be "
+                            "positive" % (name, j))
+                    if "angle" in seg:
+                        _num(seg.get("angle"), j, "angle")
+                    _num(seg.get("start_angle"), j, "start_angle")
+                    _num(seg.get("end_angle"), j, "end_angle")
+                    if seg["start_angle"] == seg["end_angle"]:
+                        raise ValueError(
+                            "synthesize: sketch %s segment #%d parabola is "
+                            "degenerate (start_angle == end_angle)" % (name, j))
                 else:
                     _pt2(seg.get("center"), j, "center")
                     _num(seg.get("radius"), j, "radius")

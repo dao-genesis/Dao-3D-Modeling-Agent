@@ -1156,6 +1156,57 @@ def main():
     print("docformat arc_ellipse: half-ellipse 10x5 + chord -> closed D-shape "
           "area %g (partial elliptic edge, tilt+round-trip exact)" % aoe_area)
 
+    # ---- parabola: the open conic, one edge from a focal length ---------- #
+    # a Part::GeomArcOfParabola about vertex (0,0), focal 5, parameter -3..3 --
+    # the reflector / dish profile a human sweeps as a parabola arc. Its
+    # endpoints (0.45, +/-3) close via a chord into a parabolic segment of area
+    # (2/3)*base*height = (2/3)*6*0.45 = 1.8. Discriminated purely by 'focal',
+    # it round-trips byte-exact (no other conic carries a focal length). 抛物之道.
+    pgeom = [{"center": [0, 0], "focal": 5.0,
+              "start_angle": -3.0, "end_angle": 3.0}]
+    pspec = {"type": docformat._SKETCH_TYPE, "name": "Par", "geometry": pgeom}
+    par_p = os.path.join(OUT, "synth_parabola.FCStd")
+    docformat.synthesize(par_p, [pspec])
+    par_seg = next(s for s in docformat.summarize(par_p)
+                   if s["name"] == "Par")["geometry"][0]
+    assert par_seg["focal"] == 5.0 and par_seg["start_angle"] == -3.0, par_seg
+    par_rt = os.path.join(OUT, "synth_parabola_rt.FCStd")
+    docformat.synthesize(par_rt, docformat.summarize(par_p))
+    assert docformat.fingerprint(par_p) == docformat.fingerprint(par_rt)
+    pard = App.openDocument(par_p)
+    try:
+        for o in pard.Objects:
+            o.touch()
+        pard.recompute(None, True)
+        pedges = pard.getObject("Par").Shape.Edges
+        par_kind = pedges[0].Curve.__class__.__name__
+        pvs = pedges[0].Vertexes
+        pchord = Part.LineSegment(pvs[0].Point, pvs[-1].Point).toShape()
+        par_w = Part.Wire(Part.__sortEdges__(list(pedges) + [pchord]))
+        par_closed = par_w.isClosed()
+        par_area = Part.Face(par_w).Area
+    finally:
+        App.closeDocument(pard.Name)
+    assert len(pedges) == 1 and par_kind == "Parabola", (len(pedges), par_kind)
+    assert par_closed and abs(par_area - 1.8) < 1e-6, (par_closed, par_area)
+    # a parabola needs a positive focal length and a non-degenerate range.
+    for bad, token in (
+            ({"center": [0, 0], "focal": 0,
+              "start_angle": -3.0, "end_angle": 3.0}, "'focal' must be positive"),
+            ({"center": [0, 0], "focal": 5,
+              "start_angle": 2.0, "end_angle": 2.0}, "parabola is degenerate")):
+        try:
+            docformat.synthesize(
+                os.path.join(OUT, "bad_parabola.FCStd"),
+                [{"type": docformat._SKETCH_TYPE, "name": "B",
+                  "geometry": [bad]}])
+        except ValueError as exc:
+            assert token in str(exc), (token, exc)
+        else:
+            raise AssertionError("expected ValueError for %r" % bad)
+    print("docformat parabola: focal-5 arc (-3..3) + chord -> parabolic segment "
+          "area %g (open conic edge, focal-discriminated, round-trips)" % par_area)
+
     # ---- bspline: the general freeform curve, one edge from control poles - #
     # a degree-3 open B-spline through six control poles -- the freeform spline
     # a human pushes/pulls point by point. The generator writes the exact
