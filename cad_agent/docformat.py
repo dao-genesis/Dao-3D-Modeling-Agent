@@ -680,6 +680,12 @@ def summarize(path: str) -> "List[Dict[str, Any]]":
             style_i = props.get("Style", {}).get("value")
             if isinstance(style_i, int) and 0 < style_i < len(_HELIX_STYLES):
                 spec["style"] = _HELIX_STYLES[style_i]
+        elif otype == _SPIRAL_TYPE:
+            for key, pname in (("growth", "Growth"), ("rotations", "Rotations"),
+                               ("radius", "Radius")):
+                v = props.get(pname, {}).get("value")
+                if isinstance(v, (int, float)):
+                    spec[key] = v
         elif otype in _LINKLIST_TYPES:
             key, prop_name = _LINKLIST_TYPES[otype]
             ll_val = props.get(prop_name, {}).get("value")
@@ -1528,6 +1534,15 @@ _HELIX_TYPE = "Part::Helix"
 _HELIX_HANDS = ("Right-handed", "Left-handed")
 _HELIX_STYLES = ("Old style", "New style")
 
+# Part::Spiral -- the planar sibling of the helix: a flat Archimedean spiral edge
+# lying in the XY plane, where the radius grows linearly with angle instead of the
+# curve climbing in z. Three scalars fix it: ``Growth`` (radial increase per full
+# turn), ``Rotations`` (how many turns) and ``Radius`` (the starting radius at
+# angle 0). Like the helix its ``execute()`` rebuilds the edge from these alone --
+# no BREP written, and the read-only computed ``Length`` is left for recompute.
+# Fed as a spine it drives volutes, clock springs and scroll profiles. 大道氾兮.
+_SPIRAL_TYPE = "Part::Spiral"
+
 
 def _edge_treatment_size_keys(otype: str) -> "tuple":
     """The (scalar, pair1, pair2, noun) spec keys an edge treatment reads its
@@ -1888,6 +1903,44 @@ def _helix_properties(parent: ET.Element, spec: "Dict[str, Any]") -> None:
     sp = ET.SubElement(parent, "Property",
                        {"name": "Style", "type": "App::PropertyEnumeration"})
     ET.SubElement(sp, "Integer", {"value": str(_HELIX_STYLES.index(norm["style"]))})
+
+
+def _norm_spiral(spec: "Dict[str, Any]") -> "Dict[str, Any]":
+    """Validate a ``Part::Spiral`` spec and return it normalised: positive
+    ``growth`` (radial increase per turn) and ``rotations`` (turn count), a
+    non-negative starting ``radius``. Raises ``ValueError`` (naming the object)
+    so a degenerate spiral never reaches the kernel."""
+    name = spec.get("name")
+    out = {}
+    for key in ("growth", "rotations"):
+        val = spec.get(key)
+        if not isinstance(val, (int, float)) or isinstance(val, bool) or val <= 0:
+            raise ValueError(
+                "synthesize: spiral %s needs a positive %r (got %r)"
+                % (name, key, val))
+        out[key] = float(val)
+    radius = spec.get("radius", 0.0)
+    if not isinstance(radius, (int, float)) or isinstance(radius, bool) \
+            or radius < 0:
+        raise ValueError(
+            "synthesize: spiral %s needs a non-negative 'radius' (got %r)"
+            % (name, radius))
+    out["radius"] = float(radius)
+    return out
+
+
+def _spiral_properties(parent: ET.Element, spec: "Dict[str, Any]") -> None:
+    """Append the ``Part::Spiral`` properties: ``Growth`` / ``Radius``
+    (``App::PropertyLength``) and ``Rotations``
+    (``App::PropertyQuantityConstraint``), each a single ``<Float>``. No BREP; the
+    read-only ``Length`` is left for the kernel to recompute."""
+    norm = _norm_spiral(spec)
+    for pname, key, ptype in (
+            ("Growth", "growth", "App::PropertyLength"),
+            ("Radius", "radius", "App::PropertyLength"),
+            ("Rotations", "rotations", "App::PropertyQuantityConstraint")):
+        pp = ET.SubElement(parent, "Property", {"name": pname, "type": ptype})
+        ET.SubElement(pp, "Float", {"value": "%.16f" % norm[key]})
 
 
 def _cells_element(parent: ET.Element, cells: "Dict[str, Any]") -> None:
@@ -2282,7 +2335,7 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                 and otype not in _EDGE_TREATMENTS
                 and otype != _THICKNESS_TYPE and otype not in _OFFSET_TYPES
                 and otype != _RULED_TYPE and otype != _SECTION_TYPE
-                and otype != _HELIX_TYPE):
+                and otype != _HELIX_TYPE and otype != _SPIRAL_TYPE):
             raise ValueError(
                 "synthesize: object #%d has unknown type %r (supported: %s)"
                 % (idx, otype, ", ".join(sorted(
@@ -2291,7 +2344,7 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                     | {_SHEET_TYPE, _MIRROR_TYPE, _SKETCH_TYPE,
                        _EXTRUDE_TYPE, _REVOLVE_TYPE, _LOFT_TYPE,
                        _SWEEP_TYPE, _THICKNESS_TYPE, _RULED_TYPE,
-                       _SECTION_TYPE, _HELIX_TYPE}))))
+                       _SECTION_TYPE, _HELIX_TYPE, _SPIRAL_TYPE}))))
         name = spec.get("name")
         if not isinstance(name, str) or not name.strip():
             raise ValueError("synthesize: object #%d needs a non-empty name" % idx)
@@ -2365,6 +2418,12 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
             if spec.get("properties"):
                 raise ValueError(
                     "synthesize: helix %s takes pitch/height/radius/angle, "
+                    "not properties" % name)
+        elif otype == _SPIRAL_TYPE:
+            _norm_spiral(spec)  # validates growth/rotations/radius
+            if spec.get("properties"):
+                raise ValueError(
+                    "synthesize: spiral %s takes growth/rotations/radius, "
                     "not properties" % name)
         elif otype == _MIRROR_TYPE:
             src = spec.get("source")
@@ -2824,10 +2883,11 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
         is_ruled = otype == _RULED_TYPE
         is_section = otype == _SECTION_TYPE
         is_helix = otype == _HELIX_TYPE
+        is_spiral = otype == _SPIRAL_TYPE
         props = ({} if (is_bool or is_linklist or is_sheet or is_mirror
                         or is_sketch or is_extrude or is_revolve or is_loft
                         or is_sweep or is_edge or is_thick or is_offset
-                        or is_ruled or is_section or is_helix)
+                        or is_ruled or is_section or is_helix or is_spiral)
                  else (spec.get("properties") or {}))
         exprs = spec.get("expressions") or {}
         # links: an explicit DAG (boolean operands) plus every *other* object
@@ -2868,7 +2928,7 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
         prop_items = ([] if (is_bool or is_linklist or is_sheet or is_mirror
                              or is_sketch or is_extrude or is_revolve or is_loft
                              or is_sweep or is_edge or is_thick or is_offset
-                             or is_ruled or is_section or is_helix)
+                             or is_ruled or is_section or is_helix or is_spiral)
                       else [(p, _PRIMITIVES[otype][p], v) for p, v in props.items()])
         prop_count = (len(prop_items) + (1 if has_placement else 0)
                       + (1 if exprs else 0) + (2 if is_bool else 0)
@@ -2878,7 +2938,8 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                       + (4 if is_loft else 0) + (5 if is_sweep else 0)
                       + (3 if is_edge else 0) + (6 if is_thick else 0)
                       + (7 if is_offset else 0) + (3 if is_ruled else 0)
-                      + (4 if is_section else 0) + (6 if is_helix else 0))
+                      + (4 if is_section else 0) + (6 if is_helix else 0)
+                      + (3 if is_spiral else 0))
         props_el = ET.SubElement(
             od, "Properties", {"Count": str(prop_count), "TransientCount": "0"})
         if is_sheet:
@@ -2909,6 +2970,8 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
             _ruled_properties(props_el, spec)
         if is_helix:
             _helix_properties(props_el, spec)
+        if is_spiral:
+            _spiral_properties(props_el, spec)
         if is_section:
             for role_name, ref in (("Base", spec["base"]), ("Tool", spec["tool"])):
                 lp = ET.SubElement(props_el, "Property",
@@ -3596,6 +3659,28 @@ def helix(name: str, pitch: float, height: float, radius: float,
     if not isinstance(name, str) or not name.strip():
         raise ValueError("%s: needs a non-empty name" % _HELIX_TYPE)
     _norm_helix(spec)
+    return spec
+
+
+def spiral(name: str, growth: float, rotations: float, radius: float = 0.0,
+           placement: "Optional[Dict[str, Any]]" = None) -> "Dict[str, Any]":
+    """Generate a ``Part::Spiral`` object spec: a flat Archimedean spiral edge.
+
+    The planar sibling of :func:`helix`, lying in the XY plane. ``growth`` is the
+    radial increase per full turn, ``rotations`` the number of turns, and
+    ``radius`` the starting radius at angle 0 (``0`` spirals out from the centre).
+    Feed the result into :func:`synthesize` on its own, or as the ``spine`` of a
+    :func:`sweep` to drive volutes, clock springs and scroll profiles; the kernel
+    rebuilds the edge on recompute from these scalars alone. 大道氾兮.
+    """
+    spec: Dict[str, Any] = {"type": _SPIRAL_TYPE, "name": name,
+                            "growth": growth, "rotations": rotations,
+                            "radius": radius}
+    if placement:
+        spec["placement"] = placement
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("%s: needs a non-empty name" % _SPIRAL_TYPE)
+    _norm_spiral(spec)
     return spec
 
 
