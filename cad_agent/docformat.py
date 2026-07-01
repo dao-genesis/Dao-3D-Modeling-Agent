@@ -686,6 +686,8 @@ def summarize(path: str) -> "List[Dict[str, Any]]":
                 v = props.get(pname, {}).get("value")
                 if isinstance(v, (int, float)):
                     spec[key] = v
+        elif otype == _REFINE_TYPE:
+            spec["source"] = _link_target(props.get("Source"))
         elif otype in _LINKLIST_TYPES:
             key, prop_name = _LINKLIST_TYPES[otype]
             ll_val = props.get(prop_name, {}).get("value")
@@ -1427,6 +1429,13 @@ _SHEET_TYPE = "Spreadsheet::Sheet"
 # two vector properties -- the file building a mirror feature with no kernel.
 _MIRROR_TYPE = "Part::Mirroring"
 _MIRROR_DEFAULT_NORMAL = [0.0, 0.0, 1.0]
+
+# A ``Part::Refine`` cleans a ``Source`` shape: it merges the coplanar faces and
+# collinear edges a boolean leaves behind (a cut across a box splits one face
+# into two -- refine fuses them back). Geometry-preserving (same volume), it
+# carries a single ``Source`` link and no scalars; authored from file it is the
+# leanest one-link feature -- the tidy-up node downstream of a CSG tree. 大巧若拙.
+_REFINE_TYPE = "Part::Refine"
 
 # A ``Sketcher::SketchObject`` is the 2D profile upstream of every pad / pocket /
 # extrusion -- the most fundamental authoring surface there is. Its edges live in
@@ -2357,7 +2366,8 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                 and otype not in _EDGE_TREATMENTS
                 and otype != _THICKNESS_TYPE and otype not in _OFFSET_TYPES
                 and otype != _RULED_TYPE and otype != _SECTION_TYPE
-                and otype != _HELIX_TYPE and otype != _SPIRAL_TYPE):
+                and otype != _HELIX_TYPE and otype != _SPIRAL_TYPE
+                and otype != _REFINE_TYPE):
             raise ValueError(
                 "synthesize: object #%d has unknown type %r (supported: %s)"
                 % (idx, otype, ", ".join(sorted(
@@ -2366,7 +2376,8 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                     | {_SHEET_TYPE, _MIRROR_TYPE, _SKETCH_TYPE,
                        _EXTRUDE_TYPE, _REVOLVE_TYPE, _LOFT_TYPE,
                        _SWEEP_TYPE, _THICKNESS_TYPE, _RULED_TYPE,
-                       _SECTION_TYPE, _HELIX_TYPE, _SPIRAL_TYPE}))))
+                       _SECTION_TYPE, _HELIX_TYPE, _SPIRAL_TYPE,
+                       _REFINE_TYPE}))))
         name = spec.get("name")
         if not isinstance(name, str) or not name.strip():
             raise ValueError("synthesize: object #%d needs a non-empty name" % idx)
@@ -2447,6 +2458,15 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                 raise ValueError(
                     "synthesize: spiral %s takes growth/rotations/radius, "
                     "not properties" % name)
+        elif otype == _REFINE_TYPE:
+            src = spec.get("source")
+            if not isinstance(src, str) or not src.strip():
+                raise ValueError(
+                    "synthesize: refine %s needs a 'source' object name" % name)
+            if spec.get("properties"):
+                raise ValueError(
+                    "synthesize: refine %s takes only 'source', not properties"
+                    % name)
         elif otype == _MIRROR_TYPE:
             src = spec.get("source")
             if not isinstance(src, str) or not src.strip():
@@ -2820,6 +2840,11 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                 raise ValueError(
                     "synthesize: mirror %s source=%r is not a defined object"
                     % (spec["name"], spec["source"]))
+        elif spec["type"] == _REFINE_TYPE:
+            if spec["source"] not in all_names:
+                raise ValueError(
+                    "synthesize: refine %s source=%r is not a defined object"
+                    % (spec["name"], spec["source"]))
         elif spec["type"] == _EXTRUDE_TYPE:
             if spec["base"] not in all_names:
                 raise ValueError(
@@ -2906,10 +2931,12 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
         is_section = otype == _SECTION_TYPE
         is_helix = otype == _HELIX_TYPE
         is_spiral = otype == _SPIRAL_TYPE
+        is_refine = otype == _REFINE_TYPE
         props = ({} if (is_bool or is_linklist or is_sheet or is_mirror
                         or is_sketch or is_extrude or is_revolve or is_loft
                         or is_sweep or is_edge or is_thick or is_offset
-                        or is_ruled or is_section or is_helix or is_spiral)
+                        or is_ruled or is_section or is_helix or is_spiral
+                        or is_refine)
                  else (spec.get("properties") or {}))
         exprs = spec.get("expressions") or {}
         # links: an explicit DAG (boolean operands) plus every *other* object
@@ -2925,6 +2952,7 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                  else [spec["base"]] if is_thick
                  else [spec["source"]] if is_offset
                  else [spec["curve1"], spec["curve2"]] if is_ruled
+                 else [spec["source"]] if is_refine
                  else [])
         dep_set = list(links)
         for other in all_names:
@@ -2950,7 +2978,8 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
         prop_items = ([] if (is_bool or is_linklist or is_sheet or is_mirror
                              or is_sketch or is_extrude or is_revolve or is_loft
                              or is_sweep or is_edge or is_thick or is_offset
-                             or is_ruled or is_section or is_helix or is_spiral)
+                             or is_ruled or is_section or is_helix or is_spiral
+                             or is_refine)
                       else [(p, _PRIMITIVES[otype][p], v) for p, v in props.items()])
         prop_count = (len(prop_items) + (1 if has_placement else 0)
                       + (1 if exprs else 0) + (2 if is_bool else 0)
@@ -2961,7 +2990,7 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                       + (3 if is_edge else 0) + (6 if is_thick else 0)
                       + (7 if is_offset else 0) + (3 if is_ruled else 0)
                       + (4 if is_section else 0) + (6 if is_helix else 0)
-                      + (3 if is_spiral else 0))
+                      + (3 if is_spiral else 0) + (1 if is_refine else 0))
         props_el = ET.SubElement(
             od, "Properties", {"Count": str(prop_count), "TransientCount": "0"})
         if is_sheet:
@@ -2994,6 +3023,10 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
             _helix_properties(props_el, spec)
         if is_spiral:
             _spiral_properties(props_el, spec)
+        if is_refine:
+            rp = ET.SubElement(props_el, "Property",
+                               {"name": "Source", "type": "App::PropertyLink"})
+            ET.SubElement(rp, "Link", {"value": spec["source"]})
         if is_section:
             for role_name, ref in (("Base", spec["base"]), ("Tool", spec["tool"])):
                 lp = ET.SubElement(props_el, "Property",
@@ -3704,6 +3737,23 @@ def spiral(name: str, growth: float, rotations: float, radius: float = 0.0,
         raise ValueError("%s: needs a non-empty name" % _SPIRAL_TYPE)
     _norm_spiral(spec)
     return spec
+
+
+def refine(name: str, source: str) -> "Dict[str, Any]":
+    """Generate a ``Part::Refine`` object spec: a shape-cleanup feature.
+
+    Wraps a single ``source`` object and, on recompute, merges the coplanar faces
+    and collinear edges its shape carries (the redundant seams a boolean leaves
+    behind -- a cut across a box splits one face in two, refine fuses them back).
+    The refinement preserves geometry (same volume), so it is the natural tidy-up
+    node to drop downstream of a :func:`synthesize`d CSG tree. 大巧若拙.
+    """
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("%s: needs a non-empty name" % _REFINE_TYPE)
+    if not isinstance(source, str) or not source.strip():
+        raise ValueError("%s: %s needs a 'source' object name"
+                         % (_REFINE_TYPE, name))
+    return {"type": _REFINE_TYPE, "name": name, "source": source}
 
 
 def _rodrigues(v: "List[float]", axis: "List[float]", angle_deg: float) -> "List[float]":
