@@ -1973,6 +1973,89 @@ def main():
           "Reversed orientation round-trip identically; 4 synthesize + 4 "
           "generator guards hold" % round(skin_area, 3))
 
+    # ---- Part::Section: the cross-section curves of two shapes ------------- #
+    # the cross-section boolean: intersect Base with Tool and keep only the 1-D
+    # wire where their boundaries cross. A 10-box and a radius-6 sphere centred at
+    # its far corner cross in a closed section wire (edges, no faces). Carries two
+    # plain Base/Tool links (like the CSG booleans) plus Approximation / Refine
+    # flags; no binary member, round-trips byte-identically. 大成若缺.
+    sc_p = os.path.join(OUT, "synth_section.FCStd")
+    docformat.synthesize(sc_p, [
+        {"type": "Part::Box", "name": "B",
+         "properties": {"Length": 10, "Width": 10, "Height": 10}},
+        {"type": "Part::Sphere", "name": "S", "properties": {"Radius": 6},
+         "placement": {"position": [5, 5, 5]}},
+        docformat.section("Sec", "B", "S"),
+    ])
+    assert zipfile.ZipFile(sc_p).namelist() == ["Document.xml"]
+    sc_spec = next(s for s in docformat.summarize(sc_p) if s["name"] == "Sec")
+    assert sc_spec["type"] == "Part::Section", sc_spec
+    assert sc_spec["base"] == "B" and sc_spec["tool"] == "S", sc_spec
+    assert "approximation" not in sc_spec and "refine" not in sc_spec, sc_spec
+    sc_deps = docformat.inspect_document(sc_p)["dependencies"].get("Sec", [])
+    assert sc_deps == ["B", "S"], sc_deps
+    sc_rt = os.path.join(OUT, "synth_section_rt.FCStd")
+    docformat.synthesize(sc_rt, docformat.summarize(sc_p))
+    assert docformat.fingerprint(sc_p) == docformat.fingerprint(sc_rt)
+    scd = App.openDocument(sc_p)
+    try:
+        for o in scd.Objects:
+            o.touch()
+        scd.recompute(None, True)
+        secsh = scd.getObject("Sec").Shape
+        sec_edges = len(secsh.Faces), len(secsh.Edges)
+        sec_ok = secsh.isValid()
+    finally:
+        App.closeDocument(scd.Name)
+    assert sec_ok and sec_edges[0] == 0 and sec_edges[1] > 0, sec_edges
+    # both flags set persist + round-trip identically.
+    sc2_p = os.path.join(OUT, "synth_section_b.FCStd")
+    docformat.synthesize(sc2_p, [
+        {"type": "Part::Box", "name": "B",
+         "properties": {"Length": 10, "Width": 10, "Height": 10}},
+        {"type": "Part::Sphere", "name": "S", "properties": {"Radius": 6},
+         "placement": {"position": [5, 5, 5]}},
+        docformat.section("Sec", "B", "S", approximation=True, refine=True),
+    ])
+    sc2_spec = next(s for s in docformat.summarize(sc2_p) if s["name"] == "Sec")
+    assert sc2_spec["approximation"] is True and sc2_spec["refine"] is True, sc2_spec
+    sc2_rt = os.path.join(OUT, "synth_section_b_rt.FCStd")
+    docformat.synthesize(sc2_rt, docformat.summarize(sc2_p))
+    assert docformat.fingerprint(sc2_p) == docformat.fingerprint(sc2_rt)
+    for bad, token in (
+            ([{"type": "Part::Section", "name": "X", "base": "Gone",
+               "tool": "S"},
+              {"type": "Part::Sphere", "name": "S",
+               "properties": {"Radius": 6}}], "is not a defined object"),
+            ([{"type": "Part::Sphere", "name": "S",
+               "properties": {"Radius": 6}},
+              {"type": "Part::Section", "name": "X", "tool": "S"}],
+             "needs a 'base'"),
+            ([{"type": "Part::Section", "name": "X", "base": "X",
+               "tool": "S"},
+              {"type": "Part::Sphere", "name": "S",
+               "properties": {"Radius": 6}}], "cannot reference itself")):
+        try:
+            docformat.synthesize(os.path.join(OUT, "bad_sec.FCStd"), bad)
+        except ValueError as exc:
+            assert token in str(exc), (token, exc)
+        else:
+            raise AssertionError("expected ValueError for %r" % token)
+    for badcall in (
+            lambda: docformat.section("", "B", "S"),
+            lambda: docformat.section("X", "", "S"),
+            lambda: docformat.section("X", "B", "B")):
+        try:
+            badcall()
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("expected ValueError from section generator")
+    print("docformat Part::Section: 10-box cut by a radius-6 sphere at its corner "
+          "-> valid intersection wire (%d edges, 0 faces); base/tool links + "
+          "Approximation/Refine flags round-trip identically; 3 synthesize + 3 "
+          "generator guards hold" % sec_edges[1])
+
     # ---- summarize: decompile a file back to a synthesize spec (round-trip) - #
     # author a document spanning every type the authoring layer writes -- a
     # parametric primitive, a placed/rotated primitive, a 2-way boolean, an

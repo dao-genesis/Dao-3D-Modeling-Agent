@@ -661,6 +661,13 @@ def summarize(path: str) -> "List[Dict[str, Any]]":
         elif otype in _BOOLEANS:
             spec["base"] = _link_target(props.get("Base"))
             spec["tool"] = _link_target(props.get("Tool"))
+        elif otype == _SECTION_TYPE:
+            spec["base"] = _link_target(props.get("Base"))
+            spec["tool"] = _link_target(props.get("Tool"))
+            if props.get("Approximation", {}).get("value") is True:
+                spec["approximation"] = True
+            if props.get("Refine", {}).get("value") is True:
+                spec["refine"] = True
         elif otype in _LINKLIST_TYPES:
             key, prop_name = _LINKLIST_TYPES[otype]
             ll_val = props.get(prop_name, {}).get("value")
@@ -1335,6 +1342,16 @@ _INT_PROP_TYPES = {"App::PropertyInteger", "App::PropertyIntegerConstraint"}
 # recompute. Authoring these from file builds a constructive-solid-geometry tree
 # (an object-link DAG), the dual of the primitive leaves above.
 _BOOLEANS = {"Part::Cut", "Part::Fuse", "Part::Common"}
+
+# Part::Section -- the *cross-section* boolean: intersect a ``Base`` shape with a
+# ``Tool`` shape and keep only the intersection *curves* (the wire where their
+# boundaries cross), not a solid. Like the CSG booleans it carries two plain
+# ``Base`` / ``Tool`` links, but its result is 1-dimensional, so it adds two bool
+# flags instead of producing volume: ``Approximation`` (fit a single B-spline
+# through the section edges rather than keep the exact analytic curves) and
+# ``Refine`` (drop redundant edges/vertices from the result). The kernel rebuilds
+# the section on recompute from the two links + two flags alone; no BREP written.
+_SECTION_TYPE = "Part::Section"
 
 # N-ary boolean operators -- each takes a ``Shapes`` link-list of *two or more*
 # operands and folds the CSG across all of them in one recompute. A human drives
@@ -2181,7 +2198,7 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                 and otype != _LOFT_TYPE and otype != _SWEEP_TYPE
                 and otype not in _EDGE_TREATMENTS
                 and otype != _THICKNESS_TYPE and otype not in _OFFSET_TYPES
-                and otype != _RULED_TYPE):
+                and otype != _RULED_TYPE and otype != _SECTION_TYPE):
             raise ValueError(
                 "synthesize: object #%d has unknown type %r (supported: %s)"
                 % (idx, otype, ", ".join(sorted(
@@ -2189,7 +2206,8 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                     | _EDGE_TREATMENTS | _OFFSET_TYPES
                     | {_SHEET_TYPE, _MIRROR_TYPE, _SKETCH_TYPE,
                        _EXTRUDE_TYPE, _REVOLVE_TYPE, _LOFT_TYPE,
-                       _SWEEP_TYPE, _THICKNESS_TYPE, _RULED_TYPE}))))
+                       _SWEEP_TYPE, _THICKNESS_TYPE, _RULED_TYPE,
+                       _SECTION_TYPE}))))
         name = spec.get("name")
         if not isinstance(name, str) or not name.strip():
             raise ValueError("synthesize: object #%d needs a non-empty name" % idx)
@@ -2244,6 +2262,20 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
             if spec.get("properties"):
                 raise ValueError(
                     "synthesize: boolean %s takes base/tool, not properties" % name)
+        elif otype == _SECTION_TYPE:
+            for role in ("base", "tool"):
+                ref = spec.get(role)
+                if not isinstance(ref, str) or not ref.strip():
+                    raise ValueError(
+                        "synthesize: section %s needs a %r object name"
+                        % (name, role))
+                if ref == name:
+                    raise ValueError(
+                        "synthesize: section %s cannot reference itself" % name)
+            if spec.get("properties"):
+                raise ValueError(
+                    "synthesize: section %s takes base/tool, not properties"
+                    % name)
         elif otype == _MIRROR_TYPE:
             src = spec.get("source")
             if not isinstance(src, str) or not src.strip():
@@ -2606,6 +2638,12 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                     raise ValueError(
                         "synthesize: boolean %s %s=%r is not a defined object"
                         % (spec["name"], role, spec[role]))
+        elif spec["type"] == _SECTION_TYPE:
+            for role in ("base", "tool"):
+                if spec[role] not in all_names:
+                    raise ValueError(
+                        "synthesize: section %s %s=%r is not a defined object"
+                        % (spec["name"], role, spec[role]))
         elif spec["type"] == _MIRROR_TYPE:
             if spec["source"] not in all_names:
                 raise ValueError(
@@ -2694,15 +2732,16 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
         is_thick = otype == _THICKNESS_TYPE
         is_offset = otype in _OFFSET_TYPES
         is_ruled = otype == _RULED_TYPE
+        is_section = otype == _SECTION_TYPE
         props = ({} if (is_bool or is_linklist or is_sheet or is_mirror
                         or is_sketch or is_extrude or is_revolve or is_loft
                         or is_sweep or is_edge or is_thick or is_offset
-                        or is_ruled)
+                        or is_ruled or is_section)
                  else (spec.get("properties") or {}))
         exprs = spec.get("expressions") or {}
         # links: an explicit DAG (boolean operands) plus every *other* object
         # referenced in a formula -- together the object's dependency edges.
-        links = ([spec["base"], spec["tool"]] if is_bool
+        links = ([spec["base"], spec["tool"]] if (is_bool or is_section)
                  else list(spec[ll_key]) if is_linklist
                  else [spec["source"]] if is_mirror
                  else [spec["base"]] if is_extrude
@@ -2738,7 +2777,7 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
         prop_items = ([] if (is_bool or is_linklist or is_sheet or is_mirror
                              or is_sketch or is_extrude or is_revolve or is_loft
                              or is_sweep or is_edge or is_thick or is_offset
-                             or is_ruled)
+                             or is_ruled or is_section)
                       else [(p, _PRIMITIVES[otype][p], v) for p, v in props.items()])
         prop_count = (len(prop_items) + (1 if has_placement else 0)
                       + (1 if exprs else 0) + (2 if is_bool else 0)
@@ -2747,7 +2786,8 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                       + (6 if is_extrude else 0) + (6 if is_revolve else 0)
                       + (4 if is_loft else 0) + (5 if is_sweep else 0)
                       + (3 if is_edge else 0) + (6 if is_thick else 0)
-                      + (7 if is_offset else 0) + (3 if is_ruled else 0))
+                      + (7 if is_offset else 0) + (3 if is_ruled else 0)
+                      + (4 if is_section else 0))
         props_el = ET.SubElement(
             od, "Properties", {"Count": str(prop_count), "TransientCount": "0"})
         if is_sheet:
@@ -2776,6 +2816,16 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
             _offset_properties(props_el, spec)
         if is_ruled:
             _ruled_properties(props_el, spec)
+        if is_section:
+            for role_name, ref in (("Base", spec["base"]), ("Tool", spec["tool"])):
+                lp = ET.SubElement(props_el, "Property",
+                                   {"name": role_name, "type": "App::PropertyLink"})
+                ET.SubElement(lp, "Link", {"value": ref})
+            for pname, flag in (("Approximation", spec.get("approximation", False)),
+                                ("Refine", spec.get("refine", False))):
+                bp = ET.SubElement(props_el, "Property",
+                                   {"name": pname, "type": "App::PropertyBool"})
+                ET.SubElement(bp, "Bool", {"value": "true" if flag else "false"})
         if is_bool:
             for role_name, ref in (("Base", spec["base"]), ("Tool", spec["tool"])):
                 lp = ET.SubElement(props_el, "Property",
@@ -3400,6 +3450,33 @@ def ruled_surface(name: str, curve1: str, curve2: str,
         spec["curve2_edges"] = list(curve2_edges)
     _norm_ruled(spec)
     return spec
+
+
+def section(name: str, base: str, tool: str, approximation: bool = False,
+            refine: bool = False) -> "Dict[str, Any]":
+    """Generate a ``Part::Section`` object spec: the intersection curves of two
+    shapes.
+
+    The cross-section boolean: intersect ``base`` with ``tool`` and keep only the
+    1-dimensional wire where their boundaries cross (not a solid). ``approximation``
+    fits a single B-spline through the section edges instead of keeping the exact
+    analytic curves; ``refine`` drops redundant edges/vertices from the result.
+    Feed the result alongside the two operand specs into :func:`synthesize`; the
+    kernel rebuilds the section on recompute from the two links + two flags alone.
+    大成若缺.
+    """
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("%s: needs a non-empty name" % _SECTION_TYPE)
+    for role, ref in (("base", base), ("tool", tool)):
+        if not isinstance(ref, str) or not ref.strip():
+            raise ValueError(
+                "%s: %r must be a non-empty object name" % (_SECTION_TYPE, role))
+    if base == tool:
+        raise ValueError(
+            "%s: base and tool must be two distinct objects" % _SECTION_TYPE)
+    return {"type": _SECTION_TYPE, "name": name, "base": str(base),
+            "tool": str(tool), "approximation": bool(approximation),
+            "refine": bool(refine)}
 
 
 def _rodrigues(v: "List[float]", axis: "List[float]", angle_deg: float) -> "List[float]":
