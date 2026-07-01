@@ -798,6 +798,27 @@ def summarize(path: str) -> "List[Dict[str, Any]]":
                                            k1: _tidy_size(s1),
                                            k2: _tidy_size(s2)})
             spec["edges"] = edges_spec
+        elif otype == _THICKNESS_TYPE:
+            faces_val = props.get("Faces", {}).get("value")
+            spec["base"] = (faces_val.get("link")
+                            if isinstance(faces_val, dict) else None)
+            subs = (faces_val.get("subs") or []
+                    if isinstance(faces_val, dict) else [])
+            spec["faces"] = [int(s[4:]) for s in subs
+                             if isinstance(s, str) and s.startswith("Face")]
+            val = props.get("Value", {}).get("value")
+            if isinstance(val, (int, float)) and not isinstance(val, bool):
+                spec["value"] = _tidy_size(val)
+            mode_i = props.get("Mode", {}).get("value")
+            if isinstance(mode_i, int) and 0 < mode_i < len(_THICKNESS_MODES):
+                spec["mode"] = _THICKNESS_MODES[mode_i]
+            join_i = props.get("Join", {}).get("value")
+            if isinstance(join_i, int) and 0 < join_i < len(_THICKNESS_JOINS):
+                spec["join"] = _THICKNESS_JOINS[join_i]
+            if props.get("Intersection", {}).get("value") is True:
+                spec["intersection"] = True
+            if props.get("SelfIntersection", {}).get("value") is True:
+                spec["self_intersection"] = True
         else:
             raise ValueError(
                 "summarize: object %s has type %r that synthesize cannot author"
@@ -1392,6 +1413,18 @@ _FILLET_TYPE = "Part::Fillet"
 _CHAMFER_TYPE = "Part::Chamfer"
 _EDGE_TREATMENTS = {_FILLET_TYPE, _CHAMFER_TYPE}
 
+# Part::Thickness -- shelling: hollow a solid ``Base`` to a wall of ``Value``
+# thick, opening it at a chosen set of its faces (the ``Faces`` LinkSub: the base
+# object plus its ``Face<n>`` subs, the removed faces the hollow vents through).
+# A positive value walls inward, a negative one outward. ``Mode`` picks the
+# offset algorithm and ``Join`` how adjacent offset faces reconnect at a corner;
+# both are enumerations persisted by their integer index. Like the edge
+# treatments the kernel rebuilds the shell on recompute from these scalars +
+# link alone -- no BREP in the file. 大成若缺，其用不弊: the hollowed form still serves.
+_THICKNESS_TYPE = "Part::Thickness"
+_THICKNESS_MODES = ("Skin", "Pipe", "RectoVerso")
+_THICKNESS_JOINS = ("Arc", "Tangent", "Intersection")
+
 
 def _edge_treatment_size_keys(otype: str) -> "tuple":
     """The (scalar, pair1, pair2, noun) spec keys an edge treatment reads its
@@ -1499,6 +1532,85 @@ def _edge_treatment_properties(parent: ET.Element, spec: "Dict[str, Any]",
     fp = ET.SubElement(parent, "Property",
                        {"name": "Edges", "type": "Part::PropertyFilletEdges"})
     ET.SubElement(fp, "FilletEdges", {"file": edges_file})
+
+
+def _norm_thickness(spec: "Dict[str, Any]") -> "Dict[str, Any]":
+    """Validate a ``Part::Thickness`` spec and return it normalised: ``faces`` an
+    ordered de-duplicated list of 1-based ints, ``value`` a non-zero float,
+    ``mode`` / ``join`` valid enumeration names. Raises ``ValueError`` (naming the
+    object) so a malformed shell never reaches the kernel."""
+    name = spec.get("name")
+    faces = spec.get("faces")
+    if not isinstance(faces, list) or not faces:
+        raise ValueError(
+            "synthesize: thickness %s needs a non-empty 'faces' list" % name)
+    seen: set = set()
+    norm_faces: List[int] = []
+    for j, f in enumerate(faces):
+        if isinstance(f, bool) or not isinstance(f, int) or f < 1:
+            raise ValueError(
+                "synthesize: thickness %s face #%d must be a 1-based integer"
+                % (name, j))
+        if f in seen:
+            raise ValueError(
+                "synthesize: thickness %s has duplicate face %d" % (name, f))
+        seen.add(f)
+        norm_faces.append(f)
+    value = spec.get("value")
+    if (isinstance(value, bool) or not isinstance(value, (int, float))
+            or value == 0):
+        raise ValueError(
+            "synthesize: thickness %s 'value' must be a non-zero number" % name)
+    mode = spec.get("mode", "Skin")
+    if mode not in _THICKNESS_MODES:
+        raise ValueError(
+            "synthesize: thickness %s mode %r must be one of %s"
+            % (name, mode, ", ".join(_THICKNESS_MODES)))
+    join = spec.get("join", "Arc")
+    if join not in _THICKNESS_JOINS:
+        raise ValueError(
+            "synthesize: thickness %s join %r must be one of %s"
+            % (name, join, ", ".join(_THICKNESS_JOINS)))
+    for flag in ("intersection", "self_intersection"):
+        if flag in spec and not isinstance(spec[flag], bool):
+            raise ValueError(
+                "synthesize: thickness %s '%s' must be a bool" % (name, flag))
+    return {"faces": norm_faces, "value": float(value), "mode": mode,
+            "join": join, "intersection": bool(spec.get("intersection", False)),
+            "self_intersection": bool(spec.get("self_intersection", False))}
+
+
+def _thickness_properties(parent: ET.Element, spec: "Dict[str, Any]") -> None:
+    """Append the ``Part::Thickness`` properties hollowing ``Base`` to a shell.
+
+    ``Value`` is the wall thickness; ``Faces`` a ``LinkSub`` naming the base plus
+    the ``Face<n>`` subs the hollow opens at; ``Mode`` / ``Join`` the offset
+    algorithm + corner rule (each an enumeration written as its integer index);
+    ``Intersection`` / ``SelfIntersection`` the two self-collision flags. The
+    kernel shells it on recompute; the file only declares it."""
+    norm = _norm_thickness(spec)
+    vp = ET.SubElement(parent, "Property",
+                       {"name": "Value", "type": "App::PropertyQuantity"})
+    ET.SubElement(vp, "Float", {"value": "%.16f" % norm["value"]})
+    fp = ET.SubElement(parent, "Property",
+                       {"name": "Faces", "type": "App::PropertyLinkSub"})
+    lsub = ET.SubElement(fp, "LinkSub",
+                         {"value": spec["base"], "count": str(len(norm["faces"]))})
+    for fid in norm["faces"]:
+        ET.SubElement(lsub, "Sub", {"value": "Face%d" % fid})
+    mp = ET.SubElement(parent, "Property",
+                       {"name": "Mode", "type": "App::PropertyEnumeration"})
+    ET.SubElement(mp, "Integer",
+                  {"value": str(_THICKNESS_MODES.index(norm["mode"]))})
+    jp = ET.SubElement(parent, "Property",
+                       {"name": "Join", "type": "App::PropertyEnumeration"})
+    ET.SubElement(jp, "Integer",
+                  {"value": str(_THICKNESS_JOINS.index(norm["join"]))})
+    for pname, flag in (("Intersection", norm["intersection"]),
+                        ("SelfIntersection", norm["self_intersection"])):
+        bp = ET.SubElement(parent, "Property",
+                           {"name": pname, "type": "App::PropertyBool"})
+        ET.SubElement(bp, "Bool", {"value": "true" if flag else "false"})
 
 
 def _cells_element(parent: ET.Element, cells: "Dict[str, Any]") -> None:
@@ -1890,7 +2002,8 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                 and otype != _MIRROR_TYPE and otype != _SKETCH_TYPE
                 and otype != _EXTRUDE_TYPE and otype != _REVOLVE_TYPE
                 and otype != _LOFT_TYPE and otype != _SWEEP_TYPE
-                and otype not in _EDGE_TREATMENTS):
+                and otype not in _EDGE_TREATMENTS
+                and otype != _THICKNESS_TYPE):
             raise ValueError(
                 "synthesize: object #%d has unknown type %r (supported: %s)"
                 % (idx, otype, ", ".join(sorted(
@@ -1898,7 +2011,7 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                     | _EDGE_TREATMENTS
                     | {_SHEET_TYPE, _MIRROR_TYPE, _SKETCH_TYPE,
                        _EXTRUDE_TYPE, _REVOLVE_TYPE, _LOFT_TYPE,
-                       _SWEEP_TYPE}))))
+                       _SWEEP_TYPE, _THICKNESS_TYPE}))))
         name = spec.get("name")
         if not isinstance(name, str) or not name.strip():
             raise ValueError("synthesize: object #%d needs a non-empty name" % idx)
@@ -2252,6 +2365,19 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                 raise ValueError(
                     "synthesize: %s %s takes base/edges, not properties"
                     % (otype, name))
+        elif otype == _THICKNESS_TYPE:
+            base = spec.get("base")
+            if not isinstance(base, str) or not base.strip():
+                raise ValueError(
+                    "synthesize: thickness %s needs a 'base' object name" % name)
+            if base == name:
+                raise ValueError(
+                    "synthesize: thickness %s cannot reference itself" % name)
+            _norm_thickness(spec)  # validates faces / value / mode / join
+            if spec.get("properties"):
+                raise ValueError(
+                    "synthesize: thickness %s takes base/faces/value, "
+                    "not properties" % name)
         else:
             props = spec.get("properties") or {}
             if not isinstance(props, dict):
@@ -2310,6 +2436,11 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                 raise ValueError(
                     "synthesize: %s %s base=%r is not a defined object"
                     % (spec["type"], spec["name"], spec["base"]))
+        elif spec["type"] == _THICKNESS_TYPE:
+            if spec["base"] not in all_names:
+                raise ValueError(
+                    "synthesize: thickness %s base=%r is not a defined object"
+                    % (spec["name"], spec["base"]))
         elif spec["type"] in _LINKLIST_TYPES:
             key, _prop = _LINKLIST_TYPES[spec["type"]]
             for ref in spec[key]:
@@ -2347,9 +2478,10 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
         is_loft = otype == _LOFT_TYPE
         is_sweep = otype == _SWEEP_TYPE
         is_edge = otype in _EDGE_TREATMENTS
+        is_thick = otype == _THICKNESS_TYPE
         props = ({} if (is_bool or is_linklist or is_sheet or is_mirror
                         or is_sketch or is_extrude or is_revolve or is_loft
-                        or is_sweep or is_edge)
+                        or is_sweep or is_edge or is_thick)
                  else (spec.get("properties") or {}))
         exprs = spec.get("expressions") or {}
         # links: an explicit DAG (boolean operands) plus every *other* object
@@ -2362,6 +2494,7 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                  else list(spec["sections"]) if is_loft
                  else [spec["spine"]] + list(spec["sections"]) if is_sweep
                  else [spec["base"]] if is_edge
+                 else [spec["base"]] if is_thick
                  else [])
         dep_set = list(links)
         for other in all_names:
@@ -2386,7 +2519,7 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
         has_placement = bool(position or axis or angle)
         prop_items = ([] if (is_bool or is_linklist or is_sheet or is_mirror
                              or is_sketch or is_extrude or is_revolve or is_loft
-                             or is_sweep or is_edge)
+                             or is_sweep or is_edge or is_thick)
                       else [(p, _PRIMITIVES[otype][p], v) for p, v in props.items()])
         prop_count = (len(prop_items) + (1 if has_placement else 0)
                       + (1 if exprs else 0) + (2 if is_bool else 0)
@@ -2394,7 +2527,7 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                       + (3 if is_mirror else 0) + (1 if is_sketch else 0)
                       + (6 if is_extrude else 0) + (6 if is_revolve else 0)
                       + (4 if is_loft else 0) + (5 if is_sweep else 0)
-                      + (3 if is_edge else 0))
+                      + (3 if is_edge else 0) + (6 if is_thick else 0))
         props_el = ET.SubElement(
             od, "Properties", {"Count": str(prop_count), "TransientCount": "0"})
         if is_sheet:
@@ -2414,6 +2547,8 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
             member = "Edges" if not aux_members else "Edges%d" % len(aux_members)
             aux_members[member] = _fillet_edges_blob(edge_triples)
             _edge_treatment_properties(props_el, spec, edge_triples, member)
+        if is_thick:
+            _thickness_properties(props_el, spec)
         if is_bool:
             for role_name, ref in (("Base", spec["base"]), ("Tool", spec["tool"])):
                 lp = ET.SubElement(props_el, "Property",
@@ -2925,6 +3060,34 @@ def _edge_treatment_spec(otype: str, name: str, base: str,
     spec: Dict[str, Any] = {"type": otype, "name": name, "base": str(base),
                             "edges": edges}
     _norm_edge_treatment(spec)
+    return spec
+
+
+def thickness(name: str, base: str, faces: "List[int]", value: float,
+              mode: str = "Skin", join: str = "Arc",
+              intersection: bool = False,
+              self_intersection: bool = False) -> "Dict[str, Any]":
+    """Generate a ``Part::Thickness`` object spec hollowing ``base`` into a shell.
+
+    ``faces`` is the list of 1-based face indices to *remove* (the openings the
+    hollow vents through); ``value`` the wall thickness (positive walls inward,
+    negative outward). ``mode`` is the offset algorithm (``Skin`` / ``Pipe`` /
+    ``RectoVerso``) and ``join`` how offset faces reconnect at a corner (``Arc``
+    / ``Tangent`` / ``Intersection``). Feed the result alongside the ``base``
+    solid's spec into :func:`synthesize`; the kernel shells it on recompute from
+    these scalars + the face link alone. 大成若缺，其用不弊.
+    """
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("%s: needs a non-empty name" % _THICKNESS_TYPE)
+    if not isinstance(base, str) or not base.strip():
+        raise ValueError(
+            "%s: 'base' must be a non-empty object name" % _THICKNESS_TYPE)
+    spec: Dict[str, Any] = {"type": _THICKNESS_TYPE, "name": name,
+                            "base": str(base), "faces": faces,
+                            "value": value, "mode": mode, "join": join,
+                            "intersection": intersection,
+                            "self_intersection": self_intersection}
+    _norm_thickness(spec)
     return spec
 
 

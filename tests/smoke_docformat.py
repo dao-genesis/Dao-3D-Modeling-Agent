@@ -1585,6 +1585,119 @@ def main():
           "round-trips identically; 9 synthesize + 3 generator guards hold" %
           round(fi_vol, 3))
 
+    # ---- Part::Thickness: shelling (hollow a solid to a wall) ------------- #
+    # the shelling operator: hollow a solid base to a wall of a given thickness,
+    # opening it at chosen faces. A box of side 10 (volume 1000) shelled to a 1mm
+    # wall with its top face (Face6) removed becomes an open box -- kernel volume
+    # ~564.93 (a 1000 cube minus its 8x8x9 interior void). Unlike the edge
+    # treatments no binary side member is needed: Value + the Faces LinkSub drive
+    # the recompute, and the whole document round-trips byte-identically. The
+    # generator docformat.thickness() writes the spec; summarize recovers
+    # {base, faces, value} (+ any non-default mode/join/flags). 大成若缺，其用不弊.
+    th_p = os.path.join(OUT, "synth_thickness.FCStd")
+    docformat.synthesize(th_p, [
+        {"type": "Part::Box", "name": "Blk",
+         "properties": {"Length": 10, "Width": 10, "Height": 10}},
+        docformat.thickness("Shell", "Blk", [6], 1.0),
+    ])
+    assert zipfile.ZipFile(th_p).namelist() == ["Document.xml"]
+    th_spec = next(s for s in docformat.summarize(th_p) if s["name"] == "Shell")
+    assert th_spec["base"] == "Blk", th_spec
+    assert th_spec["faces"] == [6], th_spec
+    assert th_spec["value"] == 1, th_spec
+    assert "mode" not in th_spec and "join" not in th_spec, th_spec
+    th_rt = os.path.join(OUT, "synth_thickness_rt.FCStd")
+    docformat.synthesize(th_rt, docformat.summarize(th_p))
+    assert docformat.fingerprint(th_p) == docformat.fingerprint(th_rt)
+    th_deps = docformat.inspect_document(th_p)["dependencies"].get("Shell", [])
+    assert th_deps == ["Blk"], th_deps
+    wd = App.openDocument(th_p)
+    try:
+        for o in wd.Objects:
+            o.touch()
+        wd.recompute(None, True)
+        shl = wd.getObject("Shell")
+        th_vol = shl.Shape.Volume
+        th_ok = shl.Shape.isValid()
+        th_solids = len(shl.Shape.Solids)
+    finally:
+        App.closeDocument(wd.Name)
+    assert th_ok and th_solids == 1, (th_ok, th_solids)
+    assert 400.0 < th_vol < 1000.0, th_vol
+
+    # a multi-face opening with a non-default join + intersection flag: summarize
+    # recovers the enumeration name and the bool, and it round-trips identically.
+    th2_p = os.path.join(OUT, "synth_thickness2.FCStd")
+    docformat.synthesize(th2_p, [
+        {"type": "Part::Box", "name": "B",
+         "properties": {"Length": 20, "Width": 20, "Height": 20}},
+        docformat.thickness("S2", "B", [5, 6], 2.0, join="Intersection",
+                            intersection=True),
+    ])
+    th2_spec = next(s for s in docformat.summarize(th2_p) if s["name"] == "S2")
+    assert th2_spec["faces"] == [5, 6], th2_spec
+    assert th2_spec["join"] == "Intersection", th2_spec
+    assert th2_spec["intersection"] is True, th2_spec
+    th2_rt = os.path.join(OUT, "synth_thickness2_rt.FCStd")
+    docformat.synthesize(th2_rt, docformat.summarize(th2_p))
+    assert docformat.fingerprint(th2_p) == docformat.fingerprint(th2_rt)
+    for bad, token in (
+            ([{"type": "Part::Box", "name": "B",
+               "properties": {"Length": 10, "Width": 10, "Height": 10}},
+              {"type": "Part::Thickness", "name": "T", "base": "B",
+               "faces": [], "value": 1}], "non-empty 'faces'"),
+            ([{"type": "Part::Thickness", "name": "T", "base": "Gone",
+               "faces": [6], "value": 1}], "is not a defined object"),
+            ([{"type": "Part::Box", "name": "B",
+               "properties": {"Length": 10, "Width": 10, "Height": 10}},
+              {"type": "Part::Thickness", "name": "T", "base": "T",
+               "faces": [6], "value": 1}], "cannot reference itself"),
+            ([{"type": "Part::Box", "name": "B",
+               "properties": {"Length": 10, "Width": 10, "Height": 10}},
+              {"type": "Part::Thickness", "name": "T", "base": "B",
+               "faces": [0], "value": 1}], "1-based"),
+            ([{"type": "Part::Box", "name": "B",
+               "properties": {"Length": 10, "Width": 10, "Height": 10}},
+              {"type": "Part::Thickness", "name": "T", "base": "B",
+               "faces": [6, 6], "value": 1}], "duplicate face"),
+            ([{"type": "Part::Box", "name": "B",
+               "properties": {"Length": 10, "Width": 10, "Height": 10}},
+              {"type": "Part::Thickness", "name": "T", "base": "B",
+               "faces": [6], "value": 0}], "non-zero"),
+            ([{"type": "Part::Box", "name": "B",
+               "properties": {"Length": 10, "Width": 10, "Height": 10}},
+              {"type": "Part::Thickness", "name": "T", "base": "B",
+               "faces": [6], "value": 1, "mode": "Nope"}], "mode"),
+            ([{"type": "Part::Box", "name": "B",
+               "properties": {"Length": 10, "Width": 10, "Height": 10}},
+              {"type": "Part::Thickness", "name": "T", "base": "B",
+               "faces": [6], "value": 1, "join": "Nope"}], "join"),
+            ([{"type": "Part::Box", "name": "B",
+               "properties": {"Length": 10, "Width": 10, "Height": 10}},
+              {"type": "Part::Thickness", "name": "T", "base": "B",
+               "faces": [6], "value": 1, "properties": {"Foo": 1}}],
+             "not properties")):
+        try:
+            docformat.synthesize(os.path.join(OUT, "bad_th.FCStd"), bad)
+        except ValueError as exc:
+            assert token in str(exc), (token, exc)
+        else:
+            raise AssertionError("expected ValueError for %r" % token)
+    for badcall in (
+            lambda: docformat.thickness("", "B", [6], 1.0),
+            lambda: docformat.thickness("T", "", [6], 1.0),
+            lambda: docformat.thickness("T", "B", [6], 0)):
+        try:
+            badcall()
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("expected ValueError from thickness generator")
+    print("docformat Part::Thickness: box side 10 shelled to a 1mm wall (top "
+          "face open) -> valid solid volume %g, no binary member, round-trips "
+          "identically; 9 synthesize + 3 generator guards hold" %
+          round(th_vol, 3))
+
     # ---- summarize: decompile a file back to a synthesize spec (round-trip) - #
     # author a document spanning every type the authoring layer writes -- a
     # parametric primitive, a placed/rotated primitive, a 2-way boolean, an
