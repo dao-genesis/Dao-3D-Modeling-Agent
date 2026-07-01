@@ -748,6 +748,45 @@ def main():
           "%.1f/%.1f/%.1f, integer Polygon round-trips (<Integer> serialisation)"
           % (vol["E"], vol["W"], vol["Pr"]))
 
+    # ---- lowest-dimension primitives: Plane (2-D face) / Vertex (0-D point) - #
+    # close the primitive vocabulary at the bottom: a Length x Width planar face
+    # and a single (X,Y,Z) vertex. Both rebuild from their scalars on execute()
+    # (no BREP), so they round-trip byte-identically and their placement survives
+    # a reload -- a Plane is a loft/extrude section or section tool-face, a Vertex
+    # the 0-D construction atom. 地方 / 一者，數之至也.
+    lp_p = os.path.join(OUT, "synth_planevertex.FCStd")
+    docformat.synthesize(lp_p, [
+        {"type": "Part::Plane", "name": "Pl",
+         "properties": {"Length": 8, "Width": 5}},
+        {"type": "Part::Vertex", "name": "Vx",
+         "properties": {"X": 1, "Y": 2, "Z": 3}},
+    ])
+    assert zipfile.ZipFile(lp_p).namelist() == ["Document.xml"]
+    lp_specs = {s["name"]: s for s in docformat.summarize(lp_p)}
+    assert lp_specs["Pl"]["properties"] == {"Length": 8, "Width": 5}, lp_specs["Pl"]
+    assert lp_specs["Vx"]["properties"] == {"X": 1, "Y": 2, "Z": 3}, lp_specs["Vx"]
+    lp_rt = os.path.join(OUT, "synth_planevertex_rt.FCStd")
+    docformat.synthesize(lp_rt, list(lp_specs.values()))
+    assert docformat.fingerprint(lp_p) == docformat.fingerprint(lp_rt)
+    lpd = App.openDocument(lp_p)
+    try:
+        for o in lpd.Objects:
+            o.touch()
+        lpd.recompute(None, True)
+        pl_sh = lpd.getObject("Pl").Shape
+        vx_sh = lpd.getObject("Vx").Shape
+        pl_area = pl_sh.Area
+        pl_ok = pl_sh.isValid() and len(pl_sh.Faces) == 1
+        vx_pt = tuple(round(c, 6) for c in vx_sh.Vertexes[0].Point)
+        vx_ok = vx_sh.isValid() and len(vx_sh.Vertexes) == 1
+    finally:
+        App.closeDocument(lpd.Name)
+    assert pl_ok and abs(pl_area - 40.0) < 1e-6, pl_area
+    assert vx_ok and vx_pt == (1.0, 2.0, 3.0), vx_pt
+    print("docformat primitives-: Plane (8x5 -> area %g, one face) and Vertex "
+          "(-> point %s) author with no BREP and round-trip identically"
+          % (pl_area, vx_pt))
+
     # ---- Sketcher::SketchObject: author a 2D profile from file ----------- #
     # the most upstream authoring surface: draw a closed 10x5 rectangle as four
     # line segments straight into the Part::PropertyGeometryList. The kernel

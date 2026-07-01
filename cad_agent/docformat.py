@@ -1348,6 +1348,18 @@ _PRIMITIVES: "Dict[str, Dict[str, str]]" = {
     "Part::Line": {"X1": "App::PropertyDistance", "Y1": "App::PropertyDistance",
                    "Z1": "App::PropertyDistance", "X2": "App::PropertyDistance",
                    "Y2": "App::PropertyDistance", "Z2": "App::PropertyDistance"},
+    # ``Part::Plane`` is the parametric planar *face*: a ``Length`` x ``Width``
+    # rectangle in its own XY plane, rebuilt from the two scalars on execute() so
+    # (like the circle/line edges) its placement survives a reload. The elementary
+    # 2-D datum -- a section to loft/extrude, or a tool face to section against.
+    # 地方.
+    "Part::Plane": {"Length": "App::PropertyLength", "Width": "App::PropertyLength"},
+    # ``Part::Vertex`` is the parametric *point*: a single vertex at (X,Y,Z),
+    # rebuilt from the three coordinates on execute(). The 0-dimensional atom of
+    # the shape hierarchy -- a construction reference or a degenerate section.
+    # 一者，數之至也.
+    "Part::Vertex": {"X": "App::PropertyDistance", "Y": "App::PropertyDistance",
+                     "Z": "App::PropertyDistance"},
 }
 # Scalar FreeCAD property types serialise as a single ``<Float>`` child.
 _FLOAT_PROP_TYPES = {"App::PropertyLength", "App::PropertyAngle",
