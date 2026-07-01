@@ -1483,6 +1483,49 @@ def main():
     print("docformat Part::Extrusion: sketch swept from file -> solid volume %g "
           "(50*7), depends on its profile, round-trips identically" % ex_vol)
 
+    # ---- Part::Extrusion taper: a drafted (splayed) sweep ------------------ #
+    # a concrete-wire base (a Part::RegularPolygon square, circumradius 10, area
+    # 0.5*4*100*sin(90 deg) = 200) swept 7 up with a +10 deg draft: the walls
+    # splay outward along +Z, so the solid is a frustum-like body larger than the
+    # straight 200*7 = 1400. The draft is authored only when non-zero (a plain
+    # extrude stays byte-identical); here it round-trips and the kernel rebuilds a
+    # valid, strictly-larger solid. 大方無隅.
+    tx_p = os.path.join(OUT, "synth_extrude_taper.FCStd")
+    docformat.synthesize(tx_p, [
+        {"type": "Part::RegularPolygon", "name": "Sq",
+         "properties": {"Polygon": 4, "Circumradius": 10}},
+        {"type": "Part::Extrusion", "name": "Ext", "base": "Sq",
+         "length": 7, "taper": 10},
+    ])
+    tx_spec = next(s for s in docformat.summarize(tx_p) if s["name"] == "Ext")
+    assert tx_spec["taper"] == 10, tx_spec
+    tx_rt = os.path.join(OUT, "synth_extrude_taper_rt.FCStd")
+    docformat.synthesize(tx_rt, docformat.summarize(tx_p))
+    assert docformat.fingerprint(tx_p) == docformat.fingerprint(tx_rt)
+    txd = App.openDocument(tx_p)
+    try:
+        for o in txd.Objects:
+            o.touch()
+        txd.recompute(None, True)
+        tx_sh = txd.getObject("Ext").Shape
+        tx_valid = tx_sh.isValid()
+        tx_vol = tx_sh.Volume
+    finally:
+        App.closeDocument(txd.Name)
+    assert tx_valid and tx_vol > 1400.0, (tx_valid, tx_vol)
+    try:
+        docformat.synthesize(os.path.join(OUT, "bad_taper.FCStd"), [
+            {"type": "Part::RegularPolygon", "name": "Sq",
+             "properties": {"Polygon": 4, "Circumradius": 5}},
+            {"type": "Part::Extrusion", "name": "Ex", "base": "Sq",
+             "length": 5, "taper": 90}])
+    except ValueError as exc:
+        assert "within (-90, 90)" in str(exc), exc
+    else:
+        raise AssertionError("expected ValueError for taper >= 90")
+    print("docformat Part::Extrusion taper: 10 deg draft -> valid splayed solid "
+          "vol %g (>1400), draft round-trips, guarded to (-90,90)" % round(tx_vol, 2))
+
     # ---- Part::Revolution: spin a sketch profile into a solid ------------ #
     # the lathe to the extrusion's mill: author a 3x4 rectangle offset from the
     # y-axis (x in [2,5]) + a full revolution about that axis. By Pappus the

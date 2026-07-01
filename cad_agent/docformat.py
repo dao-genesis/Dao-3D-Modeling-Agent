@@ -796,6 +796,10 @@ def summarize(path: str) -> "List[Dict[str, Any]]":
             dir_vec = _vector_spec(props.get("Dir"))
             if dir_vec and dir_vec != _EXTRUDE_DEFAULT_DIR:
                 spec["dir"] = dir_vec
+            taper = props.get("TaperAngle", {}).get("value")
+            if (isinstance(taper, (int, float)) and not isinstance(taper, bool)
+                    and taper):
+                spec["taper"] = taper
             solid = props.get("Solid", {}).get("value")
             if solid is False:
                 spec["solid"] = False
@@ -2226,8 +2230,12 @@ def _extrusion_properties(parent: ET.Element, spec: "Dict[str, Any]") -> None:
     Six properties carry the feature: ``Base`` (link to the profile), ``Dir`` +
     ``DirMode`` = Custom (enum 0) for an explicit sweep direction, ``LengthFwd``
     for the distance, ``Solid`` to cap the ends, and a bullseye ``FaceMakerClass``
-    so a closed wire becomes a face the sweep can fill. The kernel does the
-    sweep on recompute; the file just declares it.
+    so a closed wire becomes a face the sweep can fill. An optional ``taper``
+    (draft angle in degrees) authors a ``TaperAngle`` so the swept walls splay
+    out (positive) or draw in (negative) along ``Dir`` -- the drafted extrusion
+    of a mould/cast; it is written only when non-zero so a plain extrude stays
+    byte-identical. The kernel does the sweep on recompute; the file just
+    declares it.
     """
     bp = ET.SubElement(parent, "Property",
                        {"name": "Base", "type": "App::PropertyLink"})
@@ -2245,6 +2253,11 @@ def _extrusion_properties(parent: ET.Element, spec: "Dict[str, Any]") -> None:
     lp = ET.SubElement(parent, "Property",
                        {"name": "LengthFwd", "type": "App::PropertyDistance"})
     ET.SubElement(lp, "Float", {"value": "%.16f" % float(spec["length"])})
+    taper = spec.get("taper")
+    if taper:
+        tp = ET.SubElement(parent, "Property",
+                           {"name": "TaperAngle", "type": "App::PropertyAngle"})
+        ET.SubElement(tp, "Float", {"value": "%.16f" % float(taper)})
     solid = spec.get("solid", True)
     sp = ET.SubElement(parent, "Property",
                        {"name": "Solid", "type": "App::PropertyBool"})
@@ -2769,10 +2782,20 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
             if "solid" in spec and not isinstance(spec["solid"], bool):
                 raise ValueError(
                     "synthesize: extrusion %s 'solid' must be a bool" % name)
+            taper = spec.get("taper")
+            if taper is not None and (isinstance(taper, bool)
+                                      or not isinstance(taper, (int, float))):
+                raise ValueError(
+                    "synthesize: extrusion %s 'taper' must be a number "
+                    "(draft angle in degrees)" % name)
+            if isinstance(taper, (int, float)) and abs(taper) >= 90:
+                raise ValueError(
+                    "synthesize: extrusion %s 'taper' must be within "
+                    "(-90, 90) degrees" % name)
             if spec.get("properties"):
                 raise ValueError(
-                    "synthesize: extrusion %s takes base/length/dir/solid, not "
-                    "properties" % name)
+                    "synthesize: extrusion %s takes base/length/dir/solid/taper, "
+                    "not properties" % name)
         elif otype == _REVOLVE_TYPE:
             src = spec.get("source")
             if not isinstance(src, str) or not src.strip():
@@ -3098,7 +3121,9 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                       + (1 if exprs else 0) + (2 if is_bool else 0)
                       + (1 if is_linklist else 0) + (1 if is_sheet else 0)
                       + (3 if is_mirror else 0) + (1 if is_sketch else 0)
-                      + (6 if is_extrude else 0) + (6 if is_revolve else 0)
+                      + (6 if is_extrude else 0)
+                      + (1 if is_extrude and spec.get("taper") else 0)
+                      + (6 if is_revolve else 0)
                       + (4 if is_loft else 0) + (5 if is_sweep else 0)
                       + (3 if is_edge else 0) + (6 if is_thick else 0)
                       + (7 if is_offset else 0) + (3 if is_ruled else 0)
