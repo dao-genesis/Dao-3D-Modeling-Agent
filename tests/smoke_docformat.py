@@ -2122,6 +2122,66 @@ def main():
           "edge (length %g); taper + Left-handed/New-style enums round-trip "
           "identically; 6 generator guards hold" % round(hx_len, 3))
 
+    # ---- Part::Spiral: a flat Archimedean spiral edge (helix's planar sibling) #
+    # three scalars (growth per turn / rotation count / start radius) fix a spiral
+    # edge in the XY plane; like the helix the kernel rebuilds it from these alone
+    # -- no BREP written, the read-only Length left for recompute. A growth-2,
+    # 3-turn, start-radius-5 spiral winds into a valid edge (length 150.922);
+    # round-trips byte-identically. 大道氾兮.
+    sp_p = os.path.join(OUT, "synth_spiral.FCStd")
+    docformat.synthesize(sp_p, [docformat.spiral("Sp", 2, 3, 5)])
+    assert zipfile.ZipFile(sp_p).namelist() == ["Document.xml"]
+    sp_spec = next(s for s in docformat.summarize(sp_p) if s["name"] == "Sp")
+    assert sp_spec["type"] == "Part::Spiral", sp_spec
+    assert sp_spec["growth"] == 2 and sp_spec["rotations"] == 3 \
+        and sp_spec["radius"] == 5, sp_spec
+    sp_rt = os.path.join(OUT, "synth_spiral_rt.FCStd")
+    docformat.synthesize(sp_rt, docformat.summarize(sp_p))
+    assert docformat.fingerprint(sp_p) == docformat.fingerprint(sp_rt)
+    spd = App.openDocument(sp_p)
+    try:
+        for o in spd.Objects:
+            o.touch()
+        spd.recompute(None, True)
+        spsh = spd.getObject("Sp").Shape
+        sp_edges = len(spsh.Edges)
+        sp_len = spsh.Length
+        sp_ok = spsh.isValid()
+    finally:
+        App.closeDocument(spd.Name)
+    assert sp_ok and sp_edges >= 1 and sp_len > 0, (sp_edges, sp_len)
+    # a spiral spun from the centre (radius 0) also recomputes valid.
+    sp0_p = os.path.join(OUT, "synth_spiral0.FCStd")
+    docformat.synthesize(sp0_p, [docformat.spiral("Sp", 1.5, 2)])
+    sp0_spec = next(s for s in docformat.summarize(sp0_p) if s["name"] == "Sp")
+    assert sp0_spec["radius"] == 0, sp0_spec
+    sp0_rt = os.path.join(OUT, "synth_spiral0_rt.FCStd")
+    docformat.synthesize(sp0_rt, docformat.summarize(sp0_p))
+    assert docformat.fingerprint(sp0_p) == docformat.fingerprint(sp0_rt)
+    sp0d = App.openDocument(sp0_p)
+    try:
+        for o in sp0d.Objects:
+            o.touch()
+        sp0d.recompute(None, True)
+        sp0_ok = sp0d.getObject("Sp").Shape.isValid()
+    finally:
+        App.closeDocument(sp0d.Name)
+    assert sp0_ok, "centre-origin spiral must recompute valid"
+    for badcall in (
+            lambda: docformat.spiral("", 2, 3, 5),
+            lambda: docformat.spiral("Sp", 0, 3, 5),
+            lambda: docformat.spiral("Sp", 2, 0, 5),
+            lambda: docformat.spiral("Sp", 2, 3, -1)):
+        try:
+            badcall()
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("expected ValueError from spiral generator")
+    print("docformat Part::Spiral: growth-2 3-turn start-radius-5 spiral -> valid "
+          "edge (length %g); centre-origin spiral round-trips; 4 generator guards "
+          "hold" % round(sp_len, 3))
+
     # ---- summarize: decompile a file back to a synthesize spec (round-trip) - #
     # author a document spanning every type the authoring layer writes -- a
     # parametric primitive, a placed/rotated primitive, a 2-way boolean, an
