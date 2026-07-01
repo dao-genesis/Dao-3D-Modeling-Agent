@@ -1576,6 +1576,58 @@ def main():
     print("docformat Part::Revolution: sketch spun from file -> solid volume %g "
           "(Pappus 2*pi*3.5*12), round-trips identically" % round(rv_vol, 3))
 
+    # ---- Part::Revolution symmetric: balanced +/-Angle/2 lathe cut -------- #
+    # the same x in [2,5] rectangle spun a partial 90 deg about the y-axis. A
+    # plain revolve sweeps 0..90 to one side (its solid lands off the profile
+    # plane, center-of-mass z != 0); symmetric spins +45..-45, so the identical-
+    # volume solid straddles the plane and its center-of-mass z ~ 0. The flag is
+    # authored only when true (a one-sided revolve stays byte-identical) and
+    # round-trips. 大方無隅.
+    def _rev90(sym):
+        p = os.path.join(OUT, "synth_revolve_sym%d.FCStd" % sym)
+        spec = {"type": "Part::Revolution", "name": "Rev", "source": "Sk",
+                "axis": [0, 1, 0], "angle": 90}
+        if sym:
+            spec["symmetric"] = True
+        docformat.synthesize(p, [
+            {"type": "Sketcher::SketchObject", "name": "Sk", "geometry": [
+                {"start": [2, 0], "end": [5, 0]},
+                {"start": [5, 0], "end": [5, 4]},
+                {"start": [5, 4], "end": [2, 4]},
+                {"start": [2, 4], "end": [2, 0]}]}, spec])
+        d = App.openDocument(p)
+        try:
+            for o in d.Objects:
+                o.touch()
+            d.recompute(None, True)
+            sh = d.getObject("Rev").Shape
+            return p, sh.Volume, sh.CenterOfMass.z
+        finally:
+            App.closeDocument(d.Name)
+    rv_one_p, rv_one_vol, rv_one_z = _rev90(0)
+    rv_sym_p, rv_sym_vol, rv_sym_z = _rev90(1)
+    sym_spec = next(s for s in docformat.summarize(rv_sym_p)
+                    if s["name"] == "Rev")
+    assert sym_spec.get("symmetric") is True, sym_spec
+    assert "symmetric" not in next(s for s in docformat.summarize(rv_one_p)
+                                   if s["name"] == "Rev")
+    rv_sym_rt = os.path.join(OUT, "synth_revolve_sym_rt.FCStd")
+    docformat.synthesize(rv_sym_rt, docformat.summarize(rv_sym_p))
+    assert docformat.fingerprint(rv_sym_p) == docformat.fingerprint(rv_sym_rt)
+    assert abs(rv_one_vol - rv_sym_vol) < 1e-6, (rv_one_vol, rv_sym_vol)
+    assert abs(rv_sym_z) < 1e-6 < abs(rv_one_z), (rv_sym_z, rv_one_z)
+    try:
+        docformat.synthesize(os.path.join(OUT, "bad_rv_sym.FCStd"), [
+            {"type": "Part::Revolution", "name": "R", "source": "Sk",
+             "symmetric": 1}])
+    except ValueError as exc:
+        assert "'symmetric' must be a bool" in str(exc), exc
+    else:
+        raise AssertionError("expected ValueError for non-bool symmetric")
+    print("docformat Part::Revolution symmetric: +/-45 balanced cut, same vol "
+          "%g, center-of-mass z ~0 (vs one-sided %g), round-trips, guarded"
+          % (round(rv_sym_vol, 3), round(rv_one_z, 3)))
+
     # ---- Part::Circle: a parametric edge that keeps its placement ---------- #
     # the section-feeding complement to the solid primitives: a full circle of
     # radius 5 authored from file. Unlike a shape-less sketch, a Part::Circle's

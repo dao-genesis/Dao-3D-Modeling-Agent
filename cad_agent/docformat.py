@@ -818,6 +818,8 @@ def summarize(path: str) -> "List[Dict[str, Any]]":
             solid = props.get("Solid", {}).get("value")
             if solid is False:
                 spec["solid"] = False
+            if props.get("Symmetric", {}).get("value") is True:
+                spec["symmetric"] = True
         elif otype == _LOFT_TYPE:
             ll_val = props.get("Sections", {}).get("value")
             spec["sections"] = (list(ll_val["link_list"])
@@ -2274,8 +2276,11 @@ def _revolution_properties(parent: ET.Element, spec: "Dict[str, Any]") -> None:
     Six properties carry the feature: ``Source`` (link to the profile),
     ``Axis`` + ``Base`` for the revolution axis (a direction through a point),
     ``Angle`` (degrees) for the sweep, ``Solid`` to cap it, and a bullseye
-    ``FaceMakerClass`` so a closed wire becomes a fillable face. The kernel spins
-    it on recompute; the file just declares it.
+    ``FaceMakerClass`` so a closed wire becomes a fillable face. An optional
+    ``symmetric`` spins the profile half the ``Angle`` to each side of its plane
+    (``+Angle/2 .. -Angle/2``) instead of all one way -- the balanced lathe cut;
+    it is written only when true so a plain one-sided revolve stays
+    byte-identical. The kernel spins it on recompute; the file just declares it.
     """
     sp = ET.SubElement(parent, "Property",
                        {"name": "Source", "type": "App::PropertyLink"})
@@ -2302,6 +2307,10 @@ def _revolution_properties(parent: ET.Element, spec: "Dict[str, Any]") -> None:
     op = ET.SubElement(parent, "Property",
                        {"name": "Solid", "type": "App::PropertyBool"})
     ET.SubElement(op, "Bool", {"value": "true" if solid else "false"})
+    if spec.get("symmetric"):
+        yp = ET.SubElement(parent, "Property",
+                           {"name": "Symmetric", "type": "App::PropertyBool"})
+        ET.SubElement(yp, "Bool", {"value": "true"})
     fp = ET.SubElement(parent, "Property",
                        {"name": "FaceMakerClass", "type": "App::PropertyString"})
     ET.SubElement(fp, "String", {"value": _FACEMAKER})
@@ -2826,10 +2835,14 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
             if "solid" in spec and not isinstance(spec["solid"], bool):
                 raise ValueError(
                     "synthesize: revolution %s 'solid' must be a bool" % name)
+            if "symmetric" in spec and not isinstance(spec["symmetric"], bool):
+                raise ValueError(
+                    "synthesize: revolution %s 'symmetric' must be a bool"
+                    % name)
             if spec.get("properties"):
                 raise ValueError(
                     "synthesize: revolution %s takes source/axis/base/angle/"
-                    "solid, not properties" % name)
+                    "solid/symmetric, not properties" % name)
         elif otype == _LOFT_TYPE:
             sections = spec.get("sections")
             if (not isinstance(sections, list) or len(sections) < 2
@@ -3124,6 +3137,7 @@ def synthesize(path: str, objects: "List[Dict[str, Any]]",
                       + (6 if is_extrude else 0)
                       + (1 if is_extrude and spec.get("taper") else 0)
                       + (6 if is_revolve else 0)
+                      + (1 if is_revolve and spec.get("symmetric") else 0)
                       + (4 if is_loft else 0) + (5 if is_sweep else 0)
                       + (3 if is_edge else 0) + (6 if is_thick else 0)
                       + (7 if is_offset else 0) + (3 if is_ruled else 0)
