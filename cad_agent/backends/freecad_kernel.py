@@ -327,6 +327,11 @@ def _build_handlers(state):
         handlers.update(freecad_percept.register(state))
     except Exception as exc:  # structural perception is optional
         sys.stderr.write("percept load failed: %r\n" % (exc,))
+    try:
+        import freecad_project
+        handlers.update(freecad_project.register(state))
+    except Exception as exc:  # whole-project awareness is optional
+        sys.stderr.write("project load failed: %r\n" % (exc,))
     return handlers
 
 

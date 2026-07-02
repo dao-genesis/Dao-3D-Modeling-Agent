@@ -7,13 +7,14 @@ FreeCAD's native 3D view and tree. The human keeps full manual control at all
 times — this panel only ever *adds* to the same shared document and undo stack.
 """
 import json
-import traceback
+import threading
 
 import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtCore, QtWidgets
 
 import dao_agent
+import dao_api
 import dao_llm
 import dao_prompts
 import dao_sessions
@@ -57,14 +58,23 @@ _ASM_DEMO = json.dumps([
 
 
 class DAOPanel(QtWidgets.QWidget):
+    # emitted (possibly from worker/HTTP threads) to run one tool call on the
+    # main GUI thread; the payload dict carries a threading.Event to sync on.
+    actRequested = QtCore.Signal(object)
+
     def __init__(self, parent=None):
         super(DAOPanel, self).__init__(parent)
         self.engine = DAOEngine()
         self.conv = dao_sessions.create("FreeCAD \u4f1a\u8bdd")
+        self._worker = None
+        self._api = None
         self._build_ui()
+        self.actRequested.connect(self._on_act_request,
+                                  QtCore.Qt.QueuedConnection)
         self._say("dao", "道法自然。我已接入当前 FreeCAD 文档。"
                           "用中文/英文描述你的意图，或点下方快捷指令；"
                           "你手动建的对象我也能引用，AI 的每步都可 Ctrl+Z 撤销。")
+        self._maybe_start_api()
 
     # -- ui ----------------------------------------------------------------- #
     def _build_ui(self):
@@ -118,6 +128,22 @@ class DAOPanel(QtWidgets.QWidget):
             chips.addWidget(b, i // 2, i % 2)
         lay.addLayout(chips)
 
+        # -- AI IDE status bar: model badge + activity + stop ------------- #
+        status = QtWidgets.QHBoxLayout()
+        self.status_lbl = QtWidgets.QLabel()
+        self.status_lbl.setStyleSheet("QLabel{color:#8b98a9;font-size:11px;}")
+        self.stop_btn = QtWidgets.QPushButton("\u25a0 \u505c\u6b62")
+        self.stop_btn.setStyleSheet(
+            "QPushButton{background:#7f1d1d;color:#fecaca;border:none;"
+            "border-radius:6px;padding:2px 10px;font-size:11px;}"
+            "QPushButton:hover{background:#991b1b;}")
+        self.stop_btn.clicked.connect(self._stop_llm)
+        self.stop_btn.hide()
+        status.addWidget(self.status_lbl, 1)
+        status.addWidget(self.stop_btn)
+        lay.addLayout(status)
+        self._set_status(idle=True)
+
         row = QtWidgets.QHBoxLayout()
         self.input = QtWidgets.QLineEdit()
         self.input.setPlaceholderText("例如：box 20x10x5 / cut hole from plate / fillet it radius 2")
@@ -134,13 +160,53 @@ class DAOPanel(QtWidgets.QWidget):
         row.addWidget(send)
         lay.addLayout(row)
 
-    # -- chat --------------------------------------------------------------- #
+    # -- chat (AI-IDE bubbles) ---------------------------------------------- #
+    def _set_status(self, idle=True, text=None):
+        cfg = dao_llm.load_config()
+        model = cfg["model"] if dao_llm.configured(cfg) else "\u672a\u914d\u7f6e\u6a21\u578b"
+        api = " \u00b7 API:%s" % cfg.get("api_port", dao_api.DEFAULT_PORT) \
+            if self._api is not None else ""
+        state = text or ("\u5c31\u7eea" if idle else "\u601d\u8003\u4e2d\u2026")
+        self.status_lbl.setText("\u25cf %s \u00b7 %s%s" % (model, state, api))
+
     def _say(self, who, text):
-        color = {"you": "#7dd3fc", "dao": "#a7f3d0", "err": "#fca5a5",
-                 "sys": "#94a3b8"}.get(who, "#d7dde6")
-        label = {"you": "你", "dao": "DAO", "err": "错误", "sys": "·"}.get(who, who)
+        """Render one chat bubble, AI-IDE style: user right/blue, DAO left/
+        dark card, system + errors as thin captions."""
+        if who == "you":
+            html = ('<table width="100%%"><tr><td width="18%%"></td>'
+                    '<td style="background:#1d4ed8;color:#eff6ff;'
+                    'border-radius:10px;padding:6px 10px;">%s</td></tr>'
+                    '</table>' % text)
+        elif who == "dao":
+            html = ('<table width="100%%"><tr>'
+                    '<td style="background:#1b2430;color:#d1fae5;'
+                    'border-radius:10px;padding:6px 10px;">'
+                    '<span style="color:#34d399;"><b>DAO</b></span>'
+                    '&nbsp; %s</td><td width="18%%"></td></tr>'
+                    '</table>' % text)
+        elif who == "err":
+            html = ('<div style="color:#fca5a5;padding:2px 4px;">'
+                    '\u26a0 %s</div>' % text)
+        else:
+            html = ('<div style="color:#8b98a9;font-size:11px;'
+                    'padding:1px 4px;">%s</div>' % text)
+        self.log.append(html)
+        self.log.verticalScrollBar().setValue(self.log.verticalScrollBar().maximum())
+
+    def _tool_card(self, rec):
+        """Collaped tool-call card: one line per call, monospace, \u2713/\u2717."""
+        if rec.get("ok"):
+            body = ('<span style="color:#34d399;">\u2713</span> '
+                    '<b>%s</b> <span style="color:#8b98a9;">%s</span>'
+                    % (rec["tool"], _fmt(rec.get("data", {}))))
+        else:
+            body = ('<span style="color:#f87171;">\u2717</span> '
+                    '<b>%s</b> <span style="color:#fca5a5;">%s</span>'
+                    % (rec["tool"], rec.get("error")))
         self.log.append(
-            '<span style="color:%s"><b>%s</b> &nbsp;%s</span>' % (color, label, text))
+            '<div style="background:#0d1117;border:1px solid #2a3340;'
+            'border-radius:6px;padding:3px 8px;font-family:Consolas,monospace;'
+            'font-size:11px;color:#d7dde6;">%s</div>' % body)
         self.log.verticalScrollBar().setValue(self.log.verticalScrollBar().maximum())
 
     def _send(self):
@@ -187,6 +253,54 @@ class DAOPanel(QtWidgets.QWidget):
             self._say("sys", "AI \u8bbe\u7f6e\u5df2\u4fdd\u5b58\uff1a%s @ %s"
                       % (dao_llm.load_config()["model"],
                          dao_llm.load_config()["base_url"]))
+            self._maybe_start_api()
+            self._set_status(idle=True)
+
+    # -- reverse-access API (cloud agents plug in; see AGENT_ACCESS.md) ---- #
+    def _maybe_start_api(self):
+        cfg = dao_llm.load_config()
+        if self._api is not None:
+            self._api.stop()
+            self._api = None
+        if not cfg.get("api_enabled"):
+            return
+        try:
+            self.engine._ensure_doc()
+            self._api = dao_api.DaoAPI(
+                self._threadsafe_actor, sorted(self.engine.handlers),
+                port=int(cfg.get("api_port", dao_api.DEFAULT_PORT))).start()
+            self._say("sys", "Agent API \u5df2\u542f\u52a8\uff1a"
+                      "http://127.0.0.1:%d\uff08\u89c1 AGENT_ACCESS.md\uff09"
+                      % self._api.port)
+        except Exception as exc:
+            self._say("err", "Agent API \u542f\u52a8\u5931\u8d25: %s" % exc)
+
+    def _threadsafe_actor(self, tool, args):
+        """Run one tool call on the GUI thread, callable from any thread."""
+        if QtCore.QThread.currentThread() is self.thread():
+            return self._llm_actor(tool, args)
+        req = {"tool": tool, "args": args,
+               "event": threading.Event(), "result": None, "error": None}
+        self.actRequested.emit(req)
+        if not req["event"].wait(timeout=300):
+            raise TimeoutError("GUI thread did not answer within 300s")
+        if req["error"] is not None:
+            raise req["error"]
+        return req["result"]
+
+    @QtCore.Slot(object)
+    def _on_act_request(self, req):
+        try:
+            req["result"] = self._llm_actor(req["tool"], req["args"])
+        except Exception as exc:
+            req["error"] = exc
+        finally:
+            req["event"].set()
+        rec = ({"tool": req["tool"], "ok": True, "data": req["result"]}
+               if req["error"] is None else
+               {"tool": req["tool"], "ok": False, "error": str(req["error"])})
+        self._tool_card(rec)
+        self._refresh_view()
 
     def _llm_actor(self, tool, args):
         """Execute one LLM tool call on the live document (own undo step)."""
@@ -203,36 +317,48 @@ class DAOPanel(QtWidgets.QWidget):
         return data if isinstance(data, dict) else {"value": data}
 
     def _run_llm(self, text):
-        cfg = dao_llm.load_config()
-        tools = self.engine.ops()
-        agent = dao_llm.LLMAgent(
-            self._llm_actor, cfg=cfg,
-            system_prompt=dao_prompts.system_prompt(
-                cfg.get("system_prompt_id", "default"), tools))
-
-        def on_event(kind, payload):
-            if kind == "say":
-                self._say("dao", payload)
-            elif kind == "action":
-                if payload.get("ok"):
-                    self._say("sys", "%s \u2192 %s"
-                              % (payload["tool"], _fmt(payload.get("data", {}))))
-                else:
-                    self._say("err", "%s \u2717 %s"
-                              % (payload["tool"], payload.get("error")))
-            Gui.updateGui()
-
-        try:
-            out = agent.ask(text, history=self.conv.get("messages", []),
-                            on_event=on_event)
-        except Exception as exc:
-            self._say("err", "LLM: %s" % exc)
-            App.Console.PrintWarning("DAO LLM: %s\n" % traceback.format_exc())
+        """AI IDE turn: the model thinks in a worker thread (UI stays live);
+        every tool call is marshaled back to the GUI thread and rendered as a
+        card the moment it runs; \u25a0 \u505c\u6b62 cancels at the next step."""
+        if self._worker is not None and self._worker.isRunning():
+            self._say("err", "\u4e0a\u4e00\u8f6e\u8fd8\u5728\u8fdb\u884c\uff0c"
+                             "\u5148 \u25a0 \u505c\u6b62\u6216\u7a0d\u5019")
             return
+        cfg = dao_llm.load_config()
+        self.engine._ensure_doc()
+        worker = _LLMWorker(
+            self._threadsafe_actor, cfg,
+            dao_prompts.system_prompt(cfg.get("system_prompt_id", "default"),
+                                      sorted(self.engine.handlers)),
+            text, list(self.conv.get("messages", [])))
+        worker.said.connect(lambda t: self._say("dao", t))
+        worker.failed.connect(self._on_turn_failed)
+        worker.finished_turn.connect(self._on_turn_done)
+        self._worker = worker
+        self.stop_btn.show()
+        self._set_status(idle=False)
+        worker.start()
+
+    def _stop_llm(self):
+        if self._worker is not None:
+            self._worker.cancel()
+            self._set_status(idle=False, text="\u6b63\u5728\u505c\u6b62\u2026")
+
+    @QtCore.Slot(str)
+    def _on_turn_failed(self, msg):
+        self._say("err", "LLM: %s" % msg)
+        App.Console.PrintWarning("DAO LLM: %s\n" % msg)
+        self.stop_btn.hide()
+        self._set_status(idle=True)
+
+    @QtCore.Slot(object)
+    def _on_turn_done(self, out):
         self.conv["messages"] = out["messages"]
         dao_sessions.save_messages(self.conv["id"], out["messages"])
         self._reload_convs()
         self._refresh_view()
+        self.stop_btn.hide()
+        self._set_status(idle=True)
 
     def _run(self, text):
         self._say("you", text)
@@ -419,6 +545,55 @@ def _fmt_selection(sel):
     return "; ".join(out)
 
 
+class _LLMWorker(QtCore.QThread):
+    """Runs one conversational turn off the GUI thread. Tool calls hop back
+    to the main thread through the panel's thread-safe actor; the network
+    round-trips happen out here so FreeCAD never freezes mid-thought."""
+
+    said = QtCore.Signal(str)
+    failed = QtCore.Signal(str)
+    finished_turn = QtCore.Signal(object)
+
+    def __init__(self, actor, cfg, system_prompt, text, history):
+        super(_LLMWorker, self).__init__()
+        self._actor = actor
+        self._cfg = cfg
+        self._system_prompt = system_prompt
+        self._text = text
+        self._history = history
+        self._cancel = threading.Event()
+
+    def cancel(self):
+        self._cancel.set()
+
+    def run(self):
+        def transport(cfg, messages):
+            if self._cancel.is_set():
+                raise RuntimeError("\u5df2\u7531\u7528\u6237\u505c\u6b62")
+            return dao_llm.http_transport(cfg, messages)
+
+        def actor(tool, args):
+            if self._cancel.is_set():
+                raise RuntimeError("\u5df2\u7531\u7528\u6237\u505c\u6b62")
+            return self._actor(tool, args)
+
+        agent = dao_llm.LLMAgent(actor, cfg=self._cfg,
+                                 system_prompt=self._system_prompt,
+                                 transport=transport)
+
+        def on_event(kind, payload):
+            if kind == "say":
+                self.said.emit(payload)
+
+        try:
+            out = agent.ask(self._text, history=self._history,
+                            on_event=on_event)
+        except Exception as exc:
+            self.failed.emit("%s: %s" % (type(exc).__name__, exc))
+            return
+        self.finished_turn.emit(out)
+
+
 class SettingsDialog(QtWidgets.QDialog):
     """AI IDE settings — provider/model routing plus prompt management, the
     same knobs a Devin-Desktop-style IDE exposes, persisted as plain JSON."""
@@ -457,6 +632,15 @@ class SettingsDialog(QtWidgets.QDialog):
         self.prompt_id.setPlaceholderText("自定义提示词 id，如 my_style")
         form.addRow("保存为 id", self.prompt_id)
 
+        self.api_enabled = QtWidgets.QCheckBox(
+            "\u542f\u7528 Agent API\uff08\u4f9b\u4e91\u7aef Agent \u53cd\u5411"
+            "\u63a5\u5165\uff0c\u89c1 AGENT_ACCESS.md\uff09")
+        self.api_enabled.setChecked(bool(cfg.get("api_enabled")))
+        form.addRow(self.api_enabled)
+        self.api_port = QtWidgets.QLineEdit(
+            str(cfg.get("api_port", dao_api.DEFAULT_PORT)))
+        form.addRow("API \u7aef\u53e3", self.api_port)
+
         btns = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
         btns.accepted.connect(self._save)
@@ -471,12 +655,19 @@ class SettingsDialog(QtWidgets.QDialog):
         if body and new_id:
             dao_prompts.save(new_id, new_id, body)
             pid = new_id
-        dao_llm.save_config({
+        cfg = dao_llm.load_config()
+        cfg.update({
             "base_url": self.base_url.text().strip(),
             "api_key": self.api_key.text().strip(),
             "model": self.model.text().strip(),
             "system_prompt_id": pid,
+            "api_enabled": self.api_enabled.isChecked(),
         })
+        try:
+            cfg["api_port"] = int(self.api_port.text().strip())
+        except ValueError:
+            pass
+        dao_llm.save_config(cfg)
         self.accept()
 
 

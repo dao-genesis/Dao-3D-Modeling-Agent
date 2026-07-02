@@ -19,7 +19,29 @@ Design (mirrors mature AI IDEs — Devin Desktop / Windsurf / Cursor):
 import json
 import os
 import re
+import ssl
 import urllib.request
+
+_CA_PATHS = ("/etc/ssl/certs/ca-certificates.crt",   # Debian/Ubuntu
+             "/etc/pki/tls/certs/ca-bundle.crt",     # RHEL/Fedora
+             "/etc/ssl/cert.pem")                    # macOS/BSD
+
+
+def _ssl_context():
+    """An HTTPS context that works even in bundled Pythons (AppImage/conda)
+    whose default CA store is empty: prefer certifi, then the env override,
+    then well-known system bundles, then the platform default."""
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        pass
+    cafile = os.environ.get("SSL_CERT_FILE")
+    if not cafile:
+        cafile = next((p for p in _CA_PATHS if os.path.exists(p)), None)
+    if cafile:
+        return ssl.create_default_context(cafile=cafile)
+    return ssl.create_default_context()
 
 # --------------------------------------------------------------------------- #
 # configuration (provider routing)
@@ -90,7 +112,9 @@ def http_transport(cfg, messages):
     if cfg.get("api_key"):
         headers["Authorization"] = "Bearer " + cfg["api_key"]
     req = urllib.request.Request(url, data=body, headers=headers, method="POST")
-    with urllib.request.urlopen(req, timeout=cfg.get("timeout", 120)) as resp:
+    ctx = _ssl_context() if url.startswith("https") else None
+    with urllib.request.urlopen(req, timeout=cfg.get("timeout", 120),
+                                context=ctx) as resp:
         out = json.loads(resp.read().decode("utf-8"))
     return out["choices"][0]["message"]["content"]
 
