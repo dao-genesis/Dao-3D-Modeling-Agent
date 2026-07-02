@@ -7,12 +7,16 @@ FreeCAD's native 3D view and tree. The human keeps full manual control at all
 times — this panel only ever *adds* to the same shared document and undo stack.
 """
 import json
+import traceback
 
 import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtCore, QtWidgets
 
 import dao_agent
+import dao_llm
+import dao_prompts
+import dao_sessions
 from dao_engine import DAOEngine
 
 DOCK_NAME = "DAO_AI_Panel"
@@ -56,6 +60,7 @@ class DAOPanel(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super(DAOPanel, self).__init__(parent)
         self.engine = DAOEngine()
+        self.conv = dao_sessions.create("FreeCAD \u4f1a\u8bdd")
         self._build_ui()
         self._say("dao", "道法自然。我已接入当前 FreeCAD 文档。"
                           "用中文/英文描述你的意图，或点下方快捷指令；"
@@ -66,6 +71,32 @@ class DAOPanel(QtWidgets.QWidget):
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(6, 6, 6, 6)
         lay.setSpacing(6)
+
+        # -- AI IDE top bar: conversation switcher + settings ------------- #
+        top = QtWidgets.QHBoxLayout()
+        self.conv_box = QtWidgets.QComboBox()
+        self.conv_box.setStyleSheet(
+            "QComboBox{background:#0d1117;color:#e6edf3;border:1px solid "
+            "#2f3d4f;border-radius:6px;padding:3px 6px;}")
+        self._reload_convs()
+        self.conv_box.currentIndexChanged.connect(self._switch_conv)
+        newc = QtWidgets.QPushButton("\uff0b")
+        newc.setFixedWidth(28)
+        newc.setToolTip("\u65b0\u5efa\u4f1a\u8bdd")
+        newc.clicked.connect(self._new_conv)
+        gear = QtWidgets.QPushButton("\u2699")
+        gear.setFixedWidth(28)
+        gear.setToolTip("AI \u8bbe\u7f6e\uff1a\u6a21\u578b\u8def\u7531 / \u63d0\u793a\u8bcd\u7ba1\u7406")
+        gear.clicked.connect(self._settings)
+        for b in (newc, gear):
+            b.setStyleSheet(
+                "QPushButton{background:#1b2430;color:#cfe2ff;border:1px "
+                "solid #2f3d4f;border-radius:6px;padding:3px;}"
+                "QPushButton:hover{background:#243246;}")
+        top.addWidget(self.conv_box, 1)
+        top.addWidget(newc)
+        top.addWidget(gear)
+        lay.addLayout(top)
 
         self.log = QtWidgets.QTextEdit()
         self.log.setReadOnly(True)
@@ -118,6 +149,91 @@ class DAOPanel(QtWidgets.QWidget):
             self.input.clear()
             self._run(text)
 
+    # -- AI IDE: conversations / settings ------------------------------- #
+    def _reload_convs(self):
+        self.conv_box.blockSignals(True)
+        self.conv_box.clear()
+        self._conv_ids = []
+        for c in dao_sessions.list_all():
+            self.conv_box.addItem("%s (%d)" % (c["title"], c["count"]))
+            self._conv_ids.append(c["id"])
+        if getattr(self, "conv", None) and self.conv["id"] in self._conv_ids:
+            self.conv_box.setCurrentIndex(self._conv_ids.index(self.conv["id"]))
+        self.conv_box.blockSignals(False)
+
+    def _switch_conv(self, idx):
+        if 0 <= idx < len(self._conv_ids):
+            loaded = dao_sessions.load(self._conv_ids[idx])
+            if loaded:
+                self.conv = loaded
+                self.log.clear()
+                for m in loaded.get("messages", []):
+                    if m["role"] == "user" and \
+                            not m["content"].startswith("TOOL_RESULTS:"):
+                        self._say("you", m["content"])
+                    elif m["role"] == "assistant":
+                        env = dao_llm.parse_envelope(m["content"])
+                        if env["say"]:
+                            self._say("dao", env["say"])
+
+    def _new_conv(self):
+        self.conv = dao_sessions.create("FreeCAD \u4f1a\u8bdd")
+        self.log.clear()
+        self._reload_convs()
+
+    def _settings(self):
+        dlg = SettingsDialog(self)
+        if dlg.exec_():
+            self._say("sys", "AI \u8bbe\u7f6e\u5df2\u4fdd\u5b58\uff1a%s @ %s"
+                      % (dao_llm.load_config()["model"],
+                         dao_llm.load_config()["base_url"]))
+
+    def _llm_actor(self, tool, args):
+        """Execute one LLM tool call on the live document (own undo step)."""
+        doc = self.engine._ensure_doc()
+        fn = self.engine.handlers.get(tool)
+        if fn is None:
+            raise KeyError("unknown op: %s" % tool)
+        doc.openTransaction("DAO AI: %s" % tool)
+        try:
+            data = fn(args)
+        finally:
+            doc.commitTransaction()
+            doc.recompute()
+        return data if isinstance(data, dict) else {"value": data}
+
+    def _run_llm(self, text):
+        cfg = dao_llm.load_config()
+        tools = self.engine.ops()
+        agent = dao_llm.LLMAgent(
+            self._llm_actor, cfg=cfg,
+            system_prompt=dao_prompts.system_prompt(
+                cfg.get("system_prompt_id", "default"), tools))
+
+        def on_event(kind, payload):
+            if kind == "say":
+                self._say("dao", payload)
+            elif kind == "action":
+                if payload.get("ok"):
+                    self._say("sys", "%s \u2192 %s"
+                              % (payload["tool"], _fmt(payload.get("data", {}))))
+                else:
+                    self._say("err", "%s \u2717 %s"
+                              % (payload["tool"], payload.get("error")))
+            Gui.updateGui()
+
+        try:
+            out = agent.ask(text, history=self.conv.get("messages", []),
+                            on_event=on_event)
+        except Exception as exc:
+            self._say("err", "LLM: %s" % exc)
+            App.Console.PrintWarning("DAO LLM: %s\n" % traceback.format_exc())
+            return
+        self.conv["messages"] = out["messages"]
+        dao_sessions.save_messages(self.conv["id"], out["messages"])
+        self._reload_convs()
+        self._refresh_view()
+
     def _run(self, text):
         self._say("you", text)
         low = text.strip().lower()
@@ -139,6 +255,11 @@ class DAOPanel(QtWidgets.QWidget):
             return
         if low in ("assembly demo", "装配演示", "asm demo"):
             text = _ASM_DEMO
+        elif dao_llm.configured() and not text.lstrip().startswith(("[", "{")):
+            # AI IDE mode: a configured model drives the conversation; the
+            # local planner remains the offline fallback and JSON passthrough.
+            self._run_llm(text)
+            return
         had_objects = bool(App.ActiveDocument and App.ActiveDocument.Objects)
         try:
             note, results = self.engine.run(text)
@@ -296,6 +417,67 @@ def _fmt_selection(sel):
         sub = ("/" + ",".join(s["subs"])) if s.get("subs") else ""
         out.append("%s%s" % (s.get("label") or s.get("object"), sub))
     return "; ".join(out)
+
+
+class SettingsDialog(QtWidgets.QDialog):
+    """AI IDE settings — provider/model routing plus prompt management, the
+    same knobs a Devin-Desktop-style IDE exposes, persisted as plain JSON."""
+
+    def __init__(self, parent=None):
+        super(SettingsDialog, self).__init__(parent)
+        self.setWindowTitle("DAO AI 设置")
+        self.setMinimumWidth(460)
+        cfg = dao_llm.load_config()
+        form = QtWidgets.QFormLayout(self)
+
+        self.base_url = QtWidgets.QLineEdit(cfg["base_url"])
+        self.api_key = QtWidgets.QLineEdit(cfg["api_key"])
+        self.api_key.setEchoMode(QtWidgets.QLineEdit.Password)
+        self.model = QtWidgets.QLineEdit(cfg["model"])
+        form.addRow("Base URL（任意 OpenAI 兼容端点）", self.base_url)
+        form.addRow("API Key", self.api_key)
+        form.addRow("模型", self.model)
+
+        self.prompt_box = QtWidgets.QComboBox()
+        self._prompt_ids = []
+        current = cfg.get("system_prompt_id", "default")
+        for pid, p in sorted(dao_prompts.load_all().items()):
+            self.prompt_box.addItem("%s (%s)" % (p["name"], pid))
+            self._prompt_ids.append(pid)
+        if current in self._prompt_ids:
+            self.prompt_box.setCurrentIndex(self._prompt_ids.index(current))
+        form.addRow("系统提示词", self.prompt_box)
+
+        self.prompt_body = QtWidgets.QPlainTextEdit()
+        self.prompt_body.setPlaceholderText(
+            "编辑后以新 id 保存为自定义提示词（留空则使用所选提示词原文）")
+        self.prompt_body.setFixedHeight(110)
+        form.addRow("自定义提示词内容", self.prompt_body)
+        self.prompt_id = QtWidgets.QLineEdit()
+        self.prompt_id.setPlaceholderText("自定义提示词 id，如 my_style")
+        form.addRow("保存为 id", self.prompt_id)
+
+        btns = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        btns.accepted.connect(self._save)
+        btns.rejected.connect(self.reject)
+        form.addRow(btns)
+
+    def _save(self):
+        pid = self._prompt_ids[self.prompt_box.currentIndex()] \
+            if self._prompt_ids else "default"
+        body = self.prompt_body.toPlainText().strip()
+        new_id = self.prompt_id.text().strip()
+        if body and new_id:
+            dao_prompts.save(new_id, new_id, body)
+            pid = new_id
+        dao_llm.save_config({
+            "base_url": self.base_url.text().strip(),
+            "api_key": self.api_key.text().strip(),
+            "model": self.model.text().strip(),
+            "system_prompt_id": pid,
+        })
+        self.accept()
 
 
 def ensure_panel():
