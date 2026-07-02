@@ -523,7 +523,9 @@ class _ChatInput(QtWidgets.QPlainTextEdit):
     def _autosize(self):
         fm = self.fontMetrics()
         lines = min(max(self.document().blockCount(), 1), 4)
-        self.setFixedHeight(fm.lineSpacing() * lines + 16)
+        pad = 2 * int(self.document().documentMargin()) + \
+            2 * self.frameWidth() + 12  # 12 = stylesheet padding (6 top+bottom)
+        self.setFixedHeight(fm.lineSpacing() * lines + pad)
 
     def keyPressEvent(self, ev):
         if ev.key() in (QtCore.Qt.Key_Return, QtCore.Qt.Key_Enter) and \
