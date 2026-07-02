@@ -192,6 +192,14 @@ def main():
     assert not r.ok, "should reject a malformed shell selector"
     print("shell selector ok")
 
+    # --- filleted union: describe must survive fillet seam edges ---
+    r = s.act("solid.fillet", {"name": "pshaft", "radius": 2})
+    assert r.ok
+    r = s.act("percept.describe", {"object": "pshaft"})
+    assert r.ok, "percept.describe must survive fillet edges: %s" % r
+    assert r.data["description"]
+    print("fillet describe ok")
+
     # --- guards ---
     r = s.act("percept.topology", {"object": "nonexistent"})
     assert not r.ok, "should reject nonexistent object"

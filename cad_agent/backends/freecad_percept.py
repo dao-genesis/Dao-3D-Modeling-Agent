@@ -72,7 +72,12 @@ def _surface_info(face):
 
 
 def _curve_info(edge):
-    c = edge.Curve
+    # some OCC edges (e.g. seam/degenerate edges left by fillets) raise
+    # "TypeError: undefined curve type" on .Curve access; report what we can.
+    try:
+        c = edge.Curve
+    except Exception:
+        return {"kind": "unknown", "length": _round(edge.Length)}
     kind = type(c).__name__
     d = {"kind": kind.lower(), "length": _round(edge.Length)}
     if kind == "Circle":
