@@ -322,6 +322,11 @@ def _build_handlers(state):
         handlers.update(freecad_bop.register(state))
     except Exception as exc:  # BOPTools is optional
         sys.stderr.write("bop load failed: %r\n" % (exc,))
+    try:
+        import freecad_percept
+        handlers.update(freecad_percept.register(state))
+    except Exception as exc:  # structural perception is optional
+        sys.stderr.write("percept load failed: %r\n" % (exc,))
     return handlers
 
 
