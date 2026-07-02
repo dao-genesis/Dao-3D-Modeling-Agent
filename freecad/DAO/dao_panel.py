@@ -103,7 +103,17 @@ class DAOPanel(QtWidgets.QWidget):
                 "QPushButton{background:#1b2430;color:#cfe2ff;border:1px "
                 "solid #2f3d4f;border-radius:6px;padding:3px;}"
                 "QPushButton:hover{background:#243246;}")
+        chips_btn = QtWidgets.QPushButton("\u26a1")
+        chips_btn.setFixedWidth(28)
+        chips_btn.setCheckable(True)
+        chips_btn.setToolTip("\u5feb\u6377\u6307\u4ee4")
+        chips_btn.setStyleSheet(
+            "QPushButton{background:#1b2430;color:#cfe2ff;border:1px "
+            "solid #2f3d4f;border-radius:6px;padding:3px;}"
+            "QPushButton:hover{background:#243246;}"
+            "QPushButton:checked{background:#2563eb;color:white;}")
         top.addWidget(self.conv_box, 1)
+        top.addWidget(chips_btn)
         top.addWidget(newc)
         top.addWidget(gear)
         lay.addLayout(top)
@@ -115,7 +125,11 @@ class DAOPanel(QtWidgets.QWidget):
             "font-family:Consolas,monospace;font-size:12px;}")
         lay.addWidget(self.log, 1)
 
-        chips = QtWidgets.QGridLayout()
+        # Quick chips live behind the \u26a1 toggle so the conversation owns
+        # the panel by default, like any AI IDE.
+        self.chips_panel = QtWidgets.QWidget()
+        chips = QtWidgets.QGridLayout(self.chips_panel)
+        chips.setContentsMargins(0, 0, 0, 0)
         chips.setSpacing(4)
         for i, c in enumerate(_QUICK):
             b = QtWidgets.QPushButton(c)
@@ -126,7 +140,9 @@ class DAOPanel(QtWidgets.QWidget):
                 "QPushButton:hover{background:#243246;}")
             b.clicked.connect(lambda _=False, t=c: self._run(t))
             chips.addWidget(b, i // 2, i % 2)
-        lay.addLayout(chips)
+        self.chips_panel.hide()
+        chips_btn.toggled.connect(self.chips_panel.setVisible)
+        lay.addWidget(self.chips_panel)
 
         # -- AI IDE status bar: model badge + activity + stop ------------- #
         status = QtWidgets.QHBoxLayout()
@@ -145,12 +161,15 @@ class DAOPanel(QtWidgets.QWidget):
         self._set_status(idle=True)
 
         row = QtWidgets.QHBoxLayout()
-        self.input = QtWidgets.QLineEdit()
-        self.input.setPlaceholderText("例如：box 20x10x5 / cut hole from plate / fillet it radius 2")
+        self.input = _ChatInput()
+        self.input.setPlaceholderText(
+            "\u63cf\u8ff0\u4f60\u7684\u610f\u56fe\uff0cEnter \u53d1\u9001\uff0c"
+            "Shift+Enter \u6362\u884c\uff1b\u9009\u4e2d 3D \u5bf9\u8c61\u540e"
+            "\u53ef\u76f4\u63a5\u8bf4\u201c\u628a\u5b83\u2026\u201d")
         self.input.setStyleSheet(
-            "QLineEdit{background:#0d1117;color:#e6edf3;border:1px solid #2f3d4f;"
-            "border-radius:6px;padding:6px;}")
-        self.input.returnPressed.connect(self._send)
+            "QPlainTextEdit{background:#0d1117;color:#e6edf3;border:1px solid "
+            "#2f3d4f;border-radius:6px;padding:6px;}")
+        self.input.submitted.connect(self._send)
         send = QtWidgets.QPushButton("发送")
         send.setStyleSheet(
             "QPushButton{background:#2563eb;color:white;border:none;border-radius:6px;"
@@ -195,14 +214,17 @@ class DAOPanel(QtWidgets.QWidget):
 
     def _tool_card(self, rec):
         """Collaped tool-call card: one line per call, monospace, \u2713/\u2717."""
+        args = _fmt_args(rec.get("args") or {})
         if rec.get("ok"):
             body = ('<span style="color:#34d399;">\u2713</span> '
-                    '<b>%s</b> <span style="color:#8b98a9;">%s</span>'
-                    % (rec["tool"], _fmt(rec.get("data", {}))))
+                    '<b>%s</b><span style="color:#607086;">%s</span> '
+                    '<span style="color:#8b98a9;">%s</span>'
+                    % (rec["tool"], args, _fmt(rec.get("data", {}))))
         else:
             body = ('<span style="color:#f87171;">\u2717</span> '
-                    '<b>%s</b> <span style="color:#fca5a5;">%s</span>'
-                    % (rec["tool"], rec.get("error")))
+                    '<b>%s</b><span style="color:#607086;">%s</span> '
+                    '<span style="color:#fca5a5;">%s</span>'
+                    % (rec["tool"], args, rec.get("error")))
         self.log.append(
             '<div style="background:#0d1117;border:1px solid #2a3340;'
             'border-radius:6px;padding:3px 8px;font-family:Consolas,monospace;'
@@ -210,7 +232,7 @@ class DAOPanel(QtWidgets.QWidget):
         self.log.verticalScrollBar().setValue(self.log.verticalScrollBar().maximum())
 
     def _send(self):
-        text = self.input.text().strip()
+        text = self.input.toPlainText().strip()
         if text:
             self.input.clear()
             self._run(text)
@@ -296,9 +318,11 @@ class DAOPanel(QtWidgets.QWidget):
             req["error"] = exc
         finally:
             req["event"].set()
-        rec = ({"tool": req["tool"], "ok": True, "data": req["result"]}
+        rec = ({"tool": req["tool"], "args": req["args"], "ok": True,
+                "data": req["result"]}
                if req["error"] is None else
-               {"tool": req["tool"], "ok": False, "error": str(req["error"])})
+               {"tool": req["tool"], "args": req["args"], "ok": False,
+                "error": str(req["error"])})
         self._tool_card(rec)
         self._refresh_view()
 
@@ -325,11 +349,19 @@ class DAOPanel(QtWidgets.QWidget):
                              "\u5148 \u25a0 \u505c\u6b62\u6216\u7a0d\u5019")
             return
         cfg = dao_llm.load_config()
-        self.engine._ensure_doc()
+        doc = self.engine._ensure_doc()
+        self._objs_before = len(doc.Objects)
+        sel = _selection_context()
+        if sel:
+            self._say("sys", "\u5df2\u9644\u5e26\u5f53\u524d\u9009\u4e2d\uff1a%s" % sel)
+            text = "[\u7528\u6237\u5f53\u524d\u5728 3D \u89c6\u56fe\u9009\u4e2d\uff1a%s]\n%s" % (sel, text)
+        prompt = dao_prompts.system_prompt(
+            cfg.get("system_prompt_id", "default"),
+            sorted(self.engine.handlers))
+        prompt += ("\nAlways answer `say` in the same language the user "
+                   "writes in (\u4e2d\u6587\u7528\u6237\u7528\u4e2d\u6587\u56de\u7b54).")
         worker = _LLMWorker(
-            self._threadsafe_actor, cfg,
-            dao_prompts.system_prompt(cfg.get("system_prompt_id", "default"),
-                                      sorted(self.engine.handlers)),
+            self._threadsafe_actor, cfg, prompt,
             text, list(self.conv.get("messages", [])))
         worker.said.connect(lambda t: self._say("dao", t))
         worker.failed.connect(self._on_turn_failed)
@@ -356,7 +388,10 @@ class DAOPanel(QtWidgets.QWidget):
         self.conv["messages"] = out["messages"]
         dao_sessions.save_messages(self.conv["id"], out["messages"])
         self._reload_convs()
-        self._refresh_view()
+        doc = App.ActiveDocument
+        grew = doc is not None and \
+            len(doc.Objects) > getattr(self, "_objs_before", 0)
+        self._refresh_view(fit=grew)
         self.stop_btn.hide()
         self._set_status(idle=True)
 
@@ -470,6 +505,54 @@ class DAOPanel(QtWidgets.QWidget):
                 Gui.SendMsgToActiveView("ViewFit")
             except Exception:
                 pass
+
+
+class _ChatInput(QtWidgets.QPlainTextEdit):
+    """AI-IDE composer: Enter sends, Shift+Enter inserts a newline, and the
+    box grows with content up to four lines."""
+
+    submitted = QtCore.Signal()
+
+    def __init__(self, parent=None):
+        super(_ChatInput, self).__init__(parent)
+        self.setTabChangesFocus(True)
+        self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+        self.textChanged.connect(self._autosize)
+        self._autosize()
+
+    def _autosize(self):
+        fm = self.fontMetrics()
+        lines = min(max(self.document().blockCount(), 1), 4)
+        self.setFixedHeight(fm.lineSpacing() * lines + 16)
+
+    def keyPressEvent(self, ev):
+        if ev.key() in (QtCore.Qt.Key_Return, QtCore.Qt.Key_Enter) and \
+                not ev.modifiers() & QtCore.Qt.ShiftModifier:
+            self.submitted.emit()
+            return
+        super(_ChatInput, self).keyPressEvent(ev)
+
+
+def _selection_context():
+    """The human's live 3D selection, phrased for the model (labels + sub-
+    elements), so \u201c\u628a\u5b83\u5012\u89d2\u201d resolves naturally."""
+    try:
+        sel = Gui.Selection.getSelectionEx()
+    except Exception:
+        return ""
+    parts = []
+    for s in sel[:6]:
+        subs = ",".join(s.SubElementNames) if s.SubElementNames else ""
+        parts.append(s.Object.Name + (("(%s)" % subs) if subs else ""))
+    return "; ".join(parts)
+
+
+def _fmt_args(args):
+    if not isinstance(args, dict) or not args:
+        return ""
+    bits = ["%s=%s" % (k, v) for k, v in list(args.items())[:4]
+            if not isinstance(v, (dict, list))]
+    return "(%s)" % ", ".join(bits) if bits else ""
 
 
 _PARAM_KEYS = ("pin_r", "shaft_r", "bore_r", "hole_r", "radius", "bcr", "n")
