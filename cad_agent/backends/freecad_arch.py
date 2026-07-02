@@ -36,6 +36,15 @@ def _shape_summary(obj):
 def register(state):
     import Arch
 
+    def _lookup(name):
+        # Arch objects keep an internal Name ("Wall") distinct from the label
+        # the caller assigned ("w_north"); resolve either, label preferred.
+        obj = state.doc.getObject(name)
+        if obj is not None:
+            return obj
+        matches = state.doc.getObjectsByLabel(name)
+        return matches[0] if matches else None
+
     def wall(a):
         length = a.get("length", 4000)
         width = a.get("width", 200)
@@ -43,7 +52,7 @@ def register(state):
         name = a.get("name")
         base_name = a.get("base")
         if base_name:
-            base_obj = state.doc.getObject(base_name)
+            base_obj = _lookup(base_name)
             if base_obj is None:
                 raise ValueError("bim.wall: no such base object %r" % base_name)
             w = Arch.makeWall(base_obj, width=width, height=height)
@@ -71,7 +80,7 @@ def register(state):
             raise ValueError("bim.floor 'members' must be a list of object names")
         objs = []
         for m in members:
-            obj = state.doc.getObject(m)
+            obj = _lookup(m)
             if obj is None:
                 raise ValueError("bim.floor: no such object %r" % m)
             objs.append(obj)
@@ -89,7 +98,7 @@ def register(state):
             raise ValueError("bim.building 'members' must be a list of object names")
         objs = []
         for m in members:
-            obj = state.doc.getObject(m)
+            obj = _lookup(m)
             if obj is None:
                 raise ValueError("bim.building: no such object %r" % m)
             objs.append(obj)
@@ -107,7 +116,7 @@ def register(state):
             raise ValueError("bim.site 'members' must be a list of object names")
         objs = []
         for m in members:
-            obj = state.doc.getObject(m)
+            obj = _lookup(m)
             if obj is None:
                 raise ValueError("bim.site: no such object %r" % m)
             objs.append(obj)
@@ -124,8 +133,8 @@ def register(state):
         child_name = a.get("child")
         if not isinstance(parent_name, str) or not isinstance(child_name, str):
             raise ValueError("bim.add 'parent' and 'child' must be object name strings")
-        parent = state.doc.getObject(parent_name)
-        child = state.doc.getObject(child_name)
+        parent = _lookup(parent_name)
+        child = _lookup(child_name)
         if parent is None:
             raise ValueError("bim.add: no such parent %r" % parent_name)
         if child is None:

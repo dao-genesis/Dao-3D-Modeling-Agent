@@ -68,6 +68,14 @@ def main():
     # --- guards: bad inputs ---
     r = s.act("bim.floor", {"members": ["nonexistent_object"]})
     assert not r.ok, "bim.floor should reject nonexistent member"
+
+    # --- members resolvable by label (Arch internal Name differs) ---
+    r = s.act("bim.wall", {"name": "lbl_wall", "length": 500, "width": 20,
+                           "height": 200})
+    assert r.ok and r.data["label"] == "lbl_wall"
+    r = s.act("bim.floor", {"members": ["lbl_wall"], "name": "lbl_floor"})
+    assert r.ok, "bim.floor must resolve members by label: %s" % r
+    print("label lookup ok:", r.data)
     r = s.act("bim.add", {"parent": "nope", "child": wall2_name})
     assert not r.ok, "bim.add should reject nonexistent parent"
     print("guards ok: bad members/parent rejected")

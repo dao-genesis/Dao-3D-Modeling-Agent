@@ -80,6 +80,16 @@ def main():
         expected_vol, r.data["volume"])
     print("extrude:", r.data["name"], "vol:", r.data["volume"])
 
+    # --- extrude with out/dir aliases; solid.* ops adopt the result ---
+    r = s.act("wire.extrude", {"wire": sq_name, "dir": [0, 0, 20],
+                               "out": "wblock"})
+    assert r.ok and r.data["name"] == "wblock", \
+        "wire.extrude must honour out/dir aliases: %s" % r
+    r = s.act("solid.measure", {"name": "wblock"})
+    assert r.ok, "solid.* should adopt a wire-produced solid: %s" % r
+    assert abs(r.data["volume"] - 100 * 100 * 20) < 1
+    print("cross-module adopt ok:", r.data["volume"])
+
     # --- circle wire ---
     r = s.act("wire.circle", {"radius": 25, "name": "circ"})
     assert r.ok, "wire.circle failed: %s" % r

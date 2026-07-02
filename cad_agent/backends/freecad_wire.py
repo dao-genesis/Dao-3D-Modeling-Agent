@@ -188,12 +188,12 @@ def register(state):
             raise ValueError("wire.extrude: no such object %r" % obj_name)
         shape = obj.Shape
         wire = shape if isinstance(shape, Part.Wire) else Part.Wire(shape.Edges)
-        direction = _vec(a.get("direction", [0, 0, 10]))
+        direction = _vec(a.get("direction", a.get("dir", [0, 0, 10])))
         if not wire.isClosed():
             raise ValueError("wire.extrude: wire must be closed to produce a solid")
         face = Part.Face(wire)
         solid = face.extrude(direction)
-        name = a.get("name", obj_name + "_extruded")
+        name = a.get("name", a.get("out", obj_name + "_extruded"))
         out = state.doc.addObject("Part::Feature", name)
         out.Shape = solid
         state.doc.recompute()

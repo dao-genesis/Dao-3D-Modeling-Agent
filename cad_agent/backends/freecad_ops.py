@@ -559,7 +559,19 @@ def register(state):
         # also consume the parametric feature tree's result.
         oname = state.shapes.get(name) or state.bodies.get(name)
         if not oname:
-            raise KeyError("no such solid: %s" % name)
+            # cross-module fallback: other tool groups (wire.*, bim.*, ...)
+            # add document objects that carry solids without registering in
+            # the solid.* namespace; adopt them by Name or Label.
+            cand = doc.getObject(name)
+            if cand is None:
+                labelled = doc.getObjectsByLabel(name)
+                cand = labelled[0] if labelled else None
+            if cand is not None and hasattr(cand, "Shape") \
+                    and getattr(cand.Shape, "Solids", None):
+                state.shapes[name] = cand.Name
+                oname = cand.Name
+            else:
+                raise KeyError("no such solid: %s" % name)
         obj = doc.getObject(oname)
         if obj is None:
             raise KeyError("solid object missing: %s" % name)
