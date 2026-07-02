@@ -1,5 +1,5 @@
 trimesh>=4.12.2
-numpy>=1.20
+numpy>=2.2.6
 manifold3d>=3.5.2
 Pillow>=12.3.0
 rtree>=1.4.1
