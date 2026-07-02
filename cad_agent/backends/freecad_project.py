@@ -48,7 +48,8 @@ def _object_entry(obj, with_features=True):
     d = {"name": obj.Name, "label": getattr(obj, "Label", ""),
          "type": obj.TypeId,
          "visible": bool(getattr(getattr(obj, "ViewObject", None),
-                                 "Visibility", True)),
+                                 "Visibility", True))
+         and bool(getattr(obj, "Visibility", True)),
          "depends_on": sorted({o.Name for o in getattr(obj, "OutList", [])}),
          "used_by": sorted({o.Name for o in getattr(obj, "InList", [])})}
     pl = _placement(obj)
@@ -197,7 +198,12 @@ def register(state):
         with_features = bool(a.get("features", True))
         objects = [_object_entry(o, with_features) for o in doc.Objects]
         shaped = [o for o in objects if "faces" in o]
-        solids = [o for o in objects if o.get("solids")]
+        # Hidden objects are consumed boolean operands (the substrate hides
+        # them, mirroring FreeCAD's own Part booleans): keep them listed but
+        # out of the live-geometry census so they cannot raise phantom
+        # interference against the result they were absorbed into.
+        solids = [o for o in objects
+                  if o.get("solids") and o.get("visible", True)]
         relations = []
         if len(solids) >= 2 and a.get("relations", True):
             try:

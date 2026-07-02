@@ -723,14 +723,21 @@ def register(state):
                 "solid.shell needs 'open_faces': face indices, a selector "
                 "string like 'zmax'/'xmin', or {'axis': 'z', 'side': 'max'} "
                 "(a solid cannot be hollowed without an opening)")
+        if isinstance(open_faces, (list, tuple)) and len(open_faces) == 1 \
+                and isinstance(open_faces[0], (str, dict)):
+            open_faces = open_faces[0]
         if isinstance(open_faces, (str, dict)):
             if isinstance(open_faces, str):
                 sel = open_faces.strip().lower()
+                sel = {"top": "zmax", "bottom": "zmin", "left": "xmin",
+                       "right": "xmax", "front": "ymin",
+                       "back": "ymax"}.get(sel, sel)
                 if len(sel) != 4 or sel[0] not in "xyz" or \
                         sel[1:] not in ("max", "min"):
                     raise ValueError(
-                        "solid.shell face selector must look like 'zmax' or "
-                        "'xmin' (got %r)" % open_faces)
+                        "solid.shell face selector must look like 'zmax'/"
+                        "'xmin' or 'top'/'bottom'/'left'/'right'/'front'/"
+                        "'back' (got %r)" % open_faces)
                 ax, side = sel[0], sel[1:]
             else:
                 ax = str(open_faces.get("axis", "")).lower()
@@ -752,6 +759,11 @@ def register(state):
                 raise ValueError(
                     "solid.shell: no face lies on the %s%s side of the solid"
                     % (ax, side))
+        if any(not isinstance(i, int) or isinstance(i, bool)
+               for i in open_faces):
+            raise ValueError(
+                "open_faces must be integer face indices or one selector "
+                "('top', 'zmax', ...); got %r" % (open_faces,))
         bad = [i for i in open_faces if i < 0 or i >= nf]
         if bad:
             raise ValueError("open_faces %s out of range (solid has %d faces 0..%d)"
@@ -857,14 +869,24 @@ def register(state):
         ne = len(shape.Edges)
         if not idxs:
             return shape.Edges
-        # 'edges' must be a list of integer indices; a bare string (e.g. "all")
-        # or floats otherwise leak a raw TypeError ("'<' not supported between
-        # instances of 'str' and 'int'") deep inside the range check. Reject it
-        # with actionable guidance and point at the omit-for-all-edges default.
-        if isinstance(idxs, (str, bytes)) or not isinstance(idxs, (list, tuple)):
+        # Semantic selectors let a language model say what a human means
+        # ("the four vertical edges") without guessing OCC edge indices.
+        if isinstance(idxs, str):
+            picked = _edges_by_selector(shape, idxs)
+            if picked is None:
+                raise ValueError(
+                    "edges must be a list of integer indices (e.g. [0, 3, 5]) "
+                    "or one of 'vertical'/'horizontal'/'top'/'bottom'; omit "
+                    "'edges' to select all edges. got %r" % (idxs,))
+            if not picked:
+                raise ValueError(
+                    "no edge on this solid matches selector %r" % (idxs,))
+            return picked
+        if isinstance(idxs, bytes) or not isinstance(idxs, (list, tuple)):
             raise ValueError(
-                "edges must be a list of integer indices (e.g. [0, 3, 5]); omit "
-                "'edges' to select all edges. got %r" % (idxs,))
+                "edges must be a list of integer indices (e.g. [0, 3, 5]) or a "
+                "selector string ('vertical', 'top', ...); omit 'edges' to "
+                "select all edges. got %r" % (idxs,))
         if any(isinstance(i, bool) or not isinstance(i, int) for i in idxs):
             raise ValueError(
                 "edges must be integer indices (e.g. [0, 3, 5]); omit 'edges' "
@@ -874,6 +896,33 @@ def register(state):
             raise ValueError("edge indices %s out of range (shape has %d edges 0..%d)"
                              % (bad, ne, ne - 1))
         return [shape.Edges[i] for i in idxs]
+
+    def _edges_by_selector(shape, sel):
+        """Edges by meaning: 'vertical'/'horizontal' by direction, 'top'/
+        'bottom' by lying on the z extreme. Returns None for unknown words."""
+        sel = sel.strip().lower()
+        bb = shape.BoundBox
+        tol = 1e-6 * max(1.0, bb.DiagonalLength)
+        picked = []
+        for e in shape.Edges:
+            if sel in ("vertical", "horizontal"):
+                if len(e.Vertexes) < 2:
+                    continue
+                d = e.Vertexes[-1].Point.sub(e.Vertexes[0].Point)
+                if d.Length < tol:
+                    continue
+                frac = abs(d.z) / d.Length
+                if (sel == "vertical") == (frac > 0.999):
+                    picked.append(e)
+            elif sel == "top":
+                if e.BoundBox.ZMin >= bb.ZMax - tol:
+                    picked.append(e)
+            elif sel == "bottom":
+                if e.BoundBox.ZMax <= bb.ZMin + tol:
+                    picked.append(e)
+            else:
+                return None
+        return picked
 
     def op_fillet(a):
         if "name" not in a or "radius" not in a:

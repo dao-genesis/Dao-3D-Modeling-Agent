@@ -36,7 +36,7 @@ def register(state):
 
     def area(a):
         """Measure the area of a face sub-element (e.g. 'Face1') on an object."""
-        obj_name = a.get("object")
+        obj_name = a.get("object") or a.get("name")
         sub = a.get("sub", "")
         if not isinstance(obj_name, str) or not obj_name:
             raise ValueError("measure.area 'object' must be an object name string")
@@ -49,7 +49,7 @@ def register(state):
 
     def length(a):
         """Measure the length of an edge sub-element (e.g. 'Edge1')."""
-        obj_name = a.get("object")
+        obj_name = a.get("object") or a.get("name")
         sub = a.get("sub", "")
         if not isinstance(obj_name, str) or not obj_name:
             raise ValueError("measure.length 'object' must be an object name string")
@@ -62,7 +62,7 @@ def register(state):
 
     def radius(a):
         """Measure the radius of a circular edge or cylindrical face."""
-        obj_name = a.get("object")
+        obj_name = a.get("object") or a.get("name")
         sub = a.get("sub", "")
         if not isinstance(obj_name, str) or not obj_name:
             raise ValueError("measure.radius 'object' must be an object name string")
@@ -75,7 +75,7 @@ def register(state):
 
     def volume(a):
         """Measure the volume of a whole solid."""
-        obj_name = a.get("object")
+        obj_name = a.get("object") or a.get("name")
         if not isinstance(obj_name, str) or not obj_name:
             raise ValueError("measure.volume 'object' must be an object name string")
         _get_obj(obj_name)
@@ -87,7 +87,7 @@ def register(state):
 
     def com(a):
         """Measure the center of mass of a solid."""
-        obj_name = a.get("object")
+        obj_name = a.get("object") or a.get("name")
         if not isinstance(obj_name, str) or not obj_name:
             raise ValueError("measure.com 'object' must be an object name string")
         _get_obj(obj_name)

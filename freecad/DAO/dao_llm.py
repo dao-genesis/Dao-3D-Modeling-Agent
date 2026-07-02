@@ -197,14 +197,23 @@ class LLMAgent:
         self.transport = transport or http_transport
 
     def ask(self, user_text, history=None, on_event=None):
-        """Run one user turn to completion. Returns the full transcript:
-        ``{"say": [...], "actions": [...], "messages": [...]}`` where
-        ``messages`` is the updated history to persist."""
+        """Run one user turn to completion, then close the perception loop:
+        read ``project.state`` back and, if the model's work left diagnosed
+        issues, feed them in for corrective rounds. Returns the transcript:
+        ``{"say": [...], "actions": [...], "verify": {...}, "messages": [...]}``
+        where ``messages`` is the updated history to persist."""
         emit = on_event or (lambda kind, payload: None)
         messages = [{"role": "system", "content": self.system_prompt}]
         messages.extend(history or [])
         messages.append({"role": "user", "content": user_text})
         says, actions = [], []
+        self._loop(messages, says, actions, emit)
+        verify = self._verify(messages, says, actions, emit)
+        # history to persist excludes the system prompt (rebuilt each turn)
+        return {"say": says, "actions": actions, "verify": verify,
+                "messages": messages[1:]}
+
+    def _loop(self, messages, says, actions, emit):
         for _step in range(int(self.cfg.get("max_steps", 12))):
             reply = self.transport(self.cfg, messages)
             messages.append({"role": "assistant", "content": reply})
@@ -219,9 +228,9 @@ class LLMAgent:
                 tool, args = call["tool"], call.get("args") or {}
                 try:
                     data = self.actor(tool, args)
-                    rec = {"tool": tool, "ok": True, "data": data}
+                    rec = {"tool": tool, "ok": True, "args": args, "data": data}
                 except Exception as exc:
-                    rec = {"tool": tool, "ok": False,
+                    rec = {"tool": tool, "ok": False, "args": args,
                            "error": "%s: %s" % (type(exc).__name__, exc)}
                 results.append(rec)
                 actions.append(rec)
@@ -232,5 +241,33 @@ class LLMAgent:
                     results, ensure_ascii=False, default=str)})
             if env["done"]:
                 break
-        # history to persist excludes the system prompt (rebuilt each turn)
-        return {"say": says, "actions": actions, "messages": messages[1:]}
+
+    _READONLY = ("percept.", "measure.", "project.", "doc.", "analyze.")
+
+    def _verify(self, messages, says, actions, emit):
+        """The closed loop: after acting, *look* — one ``project.state`` call
+        holds the whole model like a source file. Diagnosed issues go back to
+        the model for correction (a bounded number of rounds)."""
+        if not any(a["ok"] and not a["tool"].startswith(self._READONLY)
+                   for a in actions):
+            return None
+        verify = None
+        for _round in range(int(self.cfg.get("verify_rounds", 1)) + 1):
+            try:
+                st = self.actor("project.state", {"features": False})
+            except Exception as exc:
+                return {"ok": None, "error": str(exc)}
+            verify = {"ok": bool(st.get("ok", True)),
+                      "issues": st.get("issues") or []}
+            emit("verify", verify)
+            if verify["ok"] or _round >= int(self.cfg.get("verify_rounds", 1)):
+                break
+            messages.append({
+                "role": "user",
+                "content": "POST_TURN_VERIFY: project.state reports these "
+                           "issues in the model you just touched: %s\n"
+                           "Fix them with tools, then set done=true." %
+                           json.dumps(verify["issues"], ensure_ascii=False,
+                                      default=str)})
+            self._loop(messages, says, actions, emit)
+        return verify

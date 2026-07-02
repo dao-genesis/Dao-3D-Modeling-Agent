@@ -388,6 +388,15 @@ class DAOPanel(QtWidgets.QWidget):
         self.conv["messages"] = out["messages"]
         dao_sessions.save_messages(self.conv["id"], out["messages"])
         self._reload_convs()
+        verify = out.get("verify")
+        if verify is not None:
+            if verify.get("ok"):
+                self._say("sys", "回读校验 ✓ 模型健康（project.state OK）")
+            elif verify.get("ok") is False:
+                self._say("sys", "回读校验 ✗ 遗留 %d 个问题：%s" % (
+                    len(verify["issues"]),
+                    "; ".join("%s(%s)" % (i.get("kind"), i.get("object"))
+                              for i in verify["issues"][:4])))
         doc = App.ActiveDocument
         grew = doc is not None and \
             len(doc.Objects) > getattr(self, "_objs_before", 0)

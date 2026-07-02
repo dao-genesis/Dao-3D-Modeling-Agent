@@ -177,4 +177,5 @@ class DaoAPI:
         with self._lock:
             out = agent.ask(text, history=body.get("history") or [])
         return 200, {"say": out["say"], "actions": out["actions"],
+                     "verify": out.get("verify"),
                      "messages": out["messages"]}

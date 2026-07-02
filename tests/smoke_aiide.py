@@ -111,6 +111,9 @@ def main():
     fed = seen["messages"][1][-1]["content"]
     assert fed.startswith("TOOL_RESULTS:") and "12000" in fed
     assert "say" in events and "action" in events
+    # the perception loop closed: a mutating turn ends with a state readback
+    assert "verify" in events
+    assert out["verify"] == {"ok": True, "issues": []}
     print("agent loop ok:", out["say"])
 
     # turn 2 (with history): a failing call is fed back for self-correction
@@ -126,6 +129,28 @@ def main():
     assert "ghost" in seen["messages"][1][-1]["content"]
     assert len(out2["messages"]) > len(out["messages"])
     print("self-correction feedback ok")
+
+    # turn 3: the post-turn verify catches interference the model left behind
+    # and drives a corrective round until project.state reads healthy again.
+    transport, seen = _scripted([
+        json.dumps({"say": "adding a clashing block", "done": True, "calls": [
+            {"tool": "solid.box",
+             "args": {"name": "clash", "length": 20, "width": 20,
+                      "height": 20, "pos": [10, 10, 0]}},
+        ]}),
+        json.dumps({"say": "removing the clash", "done": True, "calls": [
+            {"tool": "solid.delete", "args": {"name": "clash"}},
+        ]}),
+    ])
+    agent.transport = transport
+    out3 = agent.ask("add a block")
+    assert out3["verify"]["ok"] is True, out3["verify"]
+    feedback = seen["messages"][1][-1]["content"]
+    assert feedback.startswith("POST_TURN_VERIFY:") and \
+        "interference" in feedback
+    assert [a["tool"] for a in out3["actions"]] == \
+        ["solid.box", "solid.delete"]
+    print("post-turn verify closure ok")
 
     print("AIIDE SMOKE OK", s.summary())
     shutil.rmtree(_TMP, ignore_errors=True)
