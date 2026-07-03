@@ -65,6 +65,8 @@ print(api("GET", "/api/project/brief")["data"]["markdown"])
 
 完整清单以 `GET /api/tools` 实时返回为准（软编码，随内核演化自动增长）。
 
+`param.sketch/pad/pocket/revolve/groove` 除标准 `profile` 字典外，也接受平铺自然拼写：`{"shape":"rectangle","width":30,"height":20}`、`{"shape":"circle","radius":3,"at":[x,y]}`、顶层 `rect/circle/polygon` 键；`param.pad/pocket` 还可用 `{"sketch":"名称"}` 复用已有草图。
+
 常见叫法自动归一执行（无需精确记名）：`solid.fuse→solid.union`、`solid.subtract/difference→solid.cut`、`solid.intersect(ion)→solid.common`、`solid.move→solid.translate`、`asm.instance/insert/component→asm.add`、`asm.translate→asm.move`、`asm.constrain→asm.align` 等；返回体 `data.alias` 标注原始叫法，`tool` 为归一后的正名。
 
 ## 五、/api/chat 的模型路由

@@ -370,6 +370,29 @@ def main():
                                "path": {"helix": "x"}}), "helix")
     print("param empty-body, gear-arg and nested-profile guards ok")
 
+    # 20) natural spellings: flat shape args coerce to profiles, and features
+    # can reuse a sketch made earlier with param.sketch.
+    assert s.act("param.body", {"name": "Nat"}).ok
+    r = s.act("param.pad", {"body": "Nat", "feature": "NatPlate",
+                            "shape": "rectangle", "width": 30, "height": 20,
+                            "length": 5})
+    assert r.ok, r.error
+    assert abs(r.data["volume"] - 30 * 20 * 5) < 1e-3, r.data
+    r = s.act("param.pocket", {"body": "Nat", "feature": "NatHole",
+                               "shape": "circle", "radius": 3, "at": [5, 5],
+                               "through": True})
+    assert r.ok, r.error
+    assert abs(r.data["volume"] - (3000 - math.pi * 9 * 5)) < 1.0, r.data
+    sk = s.act("param.sketch", {"body": "Nat", "name": "reuse_sk",
+                                "profile": {"circle": 2, "at": [-5, -5]}})
+    assert sk.ok, sk.error
+    r = s.act("param.pocket", {"body": "Nat", "feature": "ReuseHole",
+                               "sketch": "reuse_sk", "through": True})
+    assert r.ok, r.error
+    _bad(s.act("param.pad", {"body": "Nat", "feature": "NoSk",
+                             "sketch": "ghost_sk", "length": 5}), "no such sketch")
+    print("natural shape args + sketch reuse ok")
+
     print("PARAM SMOKE OK", s.summary())
     k.shutdown()
 
