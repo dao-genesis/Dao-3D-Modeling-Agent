@@ -28,6 +28,9 @@ import time
 
 import freecad_percept as _pc
 
+_SCAFFOLDING = {"App::Origin", "App::Plane", "App::Line",
+                "App::OriginGroupExtension"}
+
 
 def _round(x, n=4):
     return round(float(x), n)
@@ -289,7 +292,11 @@ def register(state):
     def project_state(a):
         doc = state.doc
         with_features = bool(a.get("features", True))
-        objects = [_object_entry(o, with_features) for o in doc.Objects]
+        # Origin plumbing (App::Origin and its datum planes/axes) is FreeCAD
+        # scaffolding, not design content: keep it out of the census so state
+        # and diff report only what the designer actually modelled.
+        objects = [_object_entry(o, with_features) for o in doc.Objects
+                   if o.TypeId not in _SCAFFOLDING]
         shaped = [o for o in objects if "faces" in o]
         # Hidden objects are consumed boolean operands (the substrate hides
         # them, mirroring FreeCAD's own Part booleans): keep them listed but

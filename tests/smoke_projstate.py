@@ -105,6 +105,20 @@ def main():
     assert r.ok, r.error
     assert "newpart" in r.data["added"], r.data
 
+    # Origin scaffolding (assembly datum planes/axes) stays out of the census
+    r = s.act("asm.create", {"name": "Rig"})
+    assert r.ok, r.error
+    r = s.act("asm.add", {"body": "newpart", "name": "np_i"})
+    assert r.ok, r.error
+    r = s.act("project.state", {})
+    assert r.ok, r.error
+    types = {o["type"] for o in r.data["objects"]}
+    assert not types & {"App::Origin", "App::Plane", "App::Line"}, types
+    r = s.act("project.diff", {"base": "grown"})
+    assert r.ok, r.error
+    assert not any(n.endswith(("_Plane", "_Axis")) or n == "Origin"
+                   for n in r.data["added"]), r.data["added"]
+
     # guards: unknown snapshot names are refused with guidance
     r = s.act("project.diff", {"base": "nope"})
     assert not r.ok and "project.snapshot" in (r.error or ""), r.error
