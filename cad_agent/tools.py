@@ -21,9 +21,15 @@ _SYNONYMS = {
     "solid.difference": "solid.cut",
     "solid.intersect": "solid.common",
     "solid.intersection": "solid.common",
+    "solid.move": "solid.translate",
     "doc.export": "solid.export",
     "measure.bbox": "solid.measure",
     "measure.interference": "solid.interference",
+    "asm.instance": "asm.add",
+    "asm.insert": "asm.add",
+    "asm.component": "asm.add",
+    "asm.translate": "asm.move",
+    "asm.constrain": "asm.align",
 }
 
 
@@ -119,10 +125,13 @@ class ToolRegistry:
     def call(self, name: str, args: Optional[Dict[str, Any]] = None) -> ToolResult:
         args = args or {}
         tool = self._tools.get(name)
+        alias = None
         if tool is None:
             syn = _SYNONYMS.get(name)
-            close = [syn] if syn and syn in self._tools else \
-                difflib.get_close_matches(name, self._tools, n=3, cutoff=0.5)
+            if syn is not None and syn in self._tools:
+                alias, name, tool = name, syn, self._tools[syn]
+        if tool is None:
+            close = difflib.get_close_matches(name, self._tools, n=3, cutoff=0.5)
             if not close and "." in name:
                 grp = name.split(".", 1)[0] + "."
                 close = sorted(t for t in self._tools if t.startswith(grp))[:5]
@@ -136,6 +145,8 @@ class ToolRegistry:
             result = ToolResult(ok=False, error=f"{type(exc).__name__}: {exc}")
         result.tool = name
         result.args = args
+        if alias is not None:
+            result.data["alias"] = alias
         result.elapsed_ms = (time.perf_counter() - start) * 1000.0
         return result
 
