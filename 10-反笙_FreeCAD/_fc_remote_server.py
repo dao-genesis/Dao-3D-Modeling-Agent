@@ -711,6 +711,221 @@ def _handle_import_file(body):
     return _exec_in_gui_thread(_fn)
 
 
+# ─── 整窗路由: 全部 FreeCAD UI → 网页 ────────────────────────────────────────
+
+def _keycode(QtGui, s):
+    try:
+        k = QtGui.QKeySequence(s)[0]
+        return k.toCombined() if hasattr(k, "toCombined") else int(k)
+    except Exception:
+        return 0
+
+
+def _qt():
+    try:
+        from PySide2 import QtCore, QtGui, QtWidgets
+    except ImportError:
+        from PySide import QtCore, QtGui, QtWidgets
+    return QtCore, QtGui, QtWidgets
+
+
+def _handle_window(query):
+    """GET /window — 整个 FreeCAD 主窗口(含菜单/对话框等弹层)帧捕获."""
+    scale = float(query.get("scale", ["1"])[0])
+    fmt = query.get("fmt", ["jpg"])[0].lower()
+    quality = int(query.get("q", ["70"])[0])
+
+    def _fn():
+        import FreeCADGui as Gui
+        QtCore, QtGui, QtWidgets = _qt()
+        mw = Gui.getMainWindow()
+        pix = mw.grab()
+        origin = mw.mapToGlobal(QtCore.QPoint(0, 0))
+        painter = QtGui.QPainter(pix)
+        for w in QtWidgets.QApplication.topLevelWidgets():
+            if w is mw or not w.isVisible() or w.width() <= 1:
+                continue
+            off = w.mapToGlobal(QtCore.QPoint(0, 0)) - origin
+            painter.drawPixmap(off, w.grab())
+        painter.end()
+        w0, h0 = pix.width(), pix.height()
+        if scale != 1:
+            pix = pix.scaledToWidth(int(w0 * scale), QtCore.Qt.SmoothTransformation)
+        buf = QtCore.QBuffer()
+        buf.open(QtCore.QBuffer.WriteOnly)
+        if fmt == "png":
+            pix.save(buf, "PNG")
+        else:
+            pix.save(buf, "JPG", quality)
+        data = bytes(buf.data())
+        buf.close()
+        return {"ok": True, "format": fmt, "window_width": w0, "window_height": h0,
+                "width": pix.width(), "height": pix.height(),
+                "data": base64.b64encode(data).decode("ascii")}
+    return _exec_in_gui_thread(_fn)
+
+
+_MOUSE_BUTTONS_DOWN = set()
+
+
+def _handle_input(body):
+    """POST /input — 鼠键事件回注入 FreeCAD Qt 本体(坐标为主窗口内坐标).
+
+    {"type":"mouse_move|mouse_down|mouse_up|dblclick|wheel|key_down|key_up|text",
+     "x":..,"y":..,"button":"left|right|middle","delta":120,"key":"Return",
+     "text":"abc","modifiers":["ctrl","shift","alt"]}
+    """
+    def _fn():
+        import FreeCADGui as Gui
+        QtCore, QtGui, QtWidgets = _qt()
+        Qt = QtCore.Qt
+        mw = Gui.getMainWindow()
+        etype = body.get("type", "")
+        mods = Qt.KeyboardModifiers()
+        for m in body.get("modifiers", []):
+            mods |= {"ctrl": Qt.ControlModifier, "shift": Qt.ShiftModifier,
+                     "alt": Qt.AltModifier, "meta": Qt.MetaModifier}.get(m, Qt.NoModifier)
+
+        if etype in ("mouse_move", "mouse_down", "mouse_up", "dblclick", "wheel"):
+            x, y = int(body.get("x", 0)), int(body.get("y", 0))
+            gp = mw.mapToGlobal(QtCore.QPoint(x, y))
+            container = QtWidgets.QApplication.activePopupWidget()
+            if container is None:
+                for tlw in QtWidgets.QApplication.topLevelWidgets():
+                    if (tlw is not mw and tlw.isVisible() and tlw.isWindow()
+                            and tlw.geometry().contains(gp)):
+                        container = tlw
+                        break
+            if container is None:
+                container = mw
+            child = container.childAt(container.mapFromGlobal(gp))
+            target = child or container
+            lp = target.mapFromGlobal(gp)
+            btn_name = body.get("button", "left")
+            btn = {"left": Qt.LeftButton, "right": Qt.RightButton,
+                   "middle": Qt.MiddleButton}.get(btn_name, Qt.LeftButton)
+
+            if etype == "wheel":
+                # QGraphicsView(Quarter 3D 视口)须收在视图本体而非 viewport
+                parent = target.parentWidget()
+                if isinstance(parent, QtWidgets.QGraphicsView) and target is parent.viewport():
+                    target = parent
+                    lp = target.mapFromGlobal(gp)
+                delta = int(body.get("delta", 120))
+                ev = QtGui.QWheelEvent(
+                    QtCore.QPointF(lp), QtCore.QPointF(gp),
+                    QtCore.QPoint(0, 0), QtCore.QPoint(0, delta),
+                    Qt.NoButton, mods, Qt.NoScrollPhase, False)
+                QtWidgets.QApplication.postEvent(target, ev)
+                return {"ok": True, "type": etype, "target": target.__class__.__name__}
+
+            if etype == "mouse_down":
+                _MOUSE_BUTTONS_DOWN.add(btn_name)
+                qev, evbtn = QtCore.QEvent.MouseButtonPress, btn
+            elif etype == "mouse_up":
+                _MOUSE_BUTTONS_DOWN.discard(btn_name)
+                qev, evbtn = QtCore.QEvent.MouseButtonRelease, btn
+            elif etype == "dblclick":
+                qev, evbtn = QtCore.QEvent.MouseButtonDblClick, btn
+            else:
+                qev, evbtn = QtCore.QEvent.MouseMove, Qt.NoButton
+
+            buttons = Qt.MouseButtons()
+            for b in _MOUSE_BUTTONS_DOWN:
+                buttons |= {"left": Qt.LeftButton, "right": Qt.RightButton,
+                            "middle": Qt.MiddleButton}[b]
+            ev = QtGui.QMouseEvent(qev, QtCore.QPointF(lp), QtCore.QPointF(gp),
+                                   evbtn, buttons, mods)
+            QtWidgets.QApplication.postEvent(target, ev)
+            return {"ok": True, "type": etype, "target": target.__class__.__name__}
+
+        if etype in ("key_down", "key_up", "text"):
+            target = (QtWidgets.QApplication.activePopupWidget()
+                      or QtWidgets.QApplication.focusWidget()
+                      or mw.focusWidget() or mw)
+            if etype == "text":
+                for ch in body.get("text", ""):
+                    key = _keycode(QtGui, ch) if ch.strip() else Qt.Key_Space
+                    QtWidgets.QApplication.postEvent(
+                        target, QtGui.QKeyEvent(QtCore.QEvent.KeyPress, key, mods, ch))
+                    QtWidgets.QApplication.postEvent(
+                        target, QtGui.QKeyEvent(QtCore.QEvent.KeyRelease, key, mods, ch))
+                return {"ok": True, "type": "text"}
+            name = body.get("key", "")
+            special = {"Return": Qt.Key_Return, "Enter": Qt.Key_Enter, "Tab": Qt.Key_Tab,
+                       "Escape": Qt.Key_Escape, "Backspace": Qt.Key_Backspace,
+                       "Delete": Qt.Key_Delete, "Up": Qt.Key_Up, "Down": Qt.Key_Down,
+                       "Left": Qt.Key_Left, "Right": Qt.Key_Right, "Home": Qt.Key_Home,
+                       "End": Qt.Key_End, "PageUp": Qt.Key_PageUp, "PageDown": Qt.Key_PageDown,
+                       "Space": Qt.Key_Space, "F1": Qt.Key_F1}
+            key = special.get(name) or _keycode(QtGui, name)
+            text = name if len(name) == 1 else ""
+            qev = QtCore.QEvent.KeyPress if etype == "key_down" else QtCore.QEvent.KeyRelease
+            QtWidgets.QApplication.postEvent(
+                target, QtGui.QKeyEvent(qev, key, mods, text))
+            return {"ok": True, "type": etype, "key": name}
+
+        return {"ok": False, "error": "unknown input type: %s" % etype}
+    return _exec_in_gui_thread(_fn)
+
+
+# ─── DAO 智体桥: 235+ 工具面 + AI 对话 ───────────────────────────────────────
+
+_dao_engine = None
+
+
+def _get_engine():
+    global _dao_engine
+    if _dao_engine is None:
+        dao_dir = str(SCRIPT_DIR.parent / "freecad" / "DAO")
+        if dao_dir not in sys.path:
+            sys.path.insert(0, dao_dir)
+        import dao_engine
+        _dao_engine = dao_engine.DAOEngine()
+    return _dao_engine
+
+
+def _handle_tools():
+    """GET /tools — DAO 全工具面(solid./param./asm./gui./doc. …)."""
+    def _fn():
+        eng = _get_engine()
+        return {"ok": True, "ops": eng.ops(), "count": len(eng.ops())}
+    return _exec_in_gui_thread(_fn, timeout=60)
+
+
+def _handle_tool(body):
+    """POST /tool — 直接调用单个 DAO 工具 {"op":"solid.box","args":{...}}."""
+    op = body.get("op", "")
+    args = body.get("args", {})
+    if not op:
+        return {"ok": False, "error": "op required"}
+
+    def _fn():
+        eng = _get_engine()
+        eng._ensure_doc()
+        fn = eng.handlers.get(op)
+        if fn is None:
+            return {"ok": False, "error": "unknown op: %s" % op}
+        data = fn(args)
+        if not isinstance(data, dict):
+            data = {"value": data}
+        return {"ok": True, "op": op, "data": data}
+    return _exec_in_gui_thread(_fn, timeout=120)
+
+
+def _handle_agent(body):
+    """POST /agent — AI 对话式建模 {"text":"造一个 80x80x120 的盒子"}."""
+    text = body.get("text", "")
+    if not text:
+        return {"ok": False, "error": "text required"}
+
+    def _fn():
+        eng = _get_engine()
+        note, results = eng.run(text)
+        return {"ok": True, "note": note, "results": results}
+    return _exec_in_gui_thread(_fn, timeout=300)
+
+
 # ─── HTTP Request Handler ────────────────────────────────────────────────────
 
 class FreeCADRemoteHandler(BaseHTTPRequestHandler):
@@ -778,6 +993,10 @@ class FreeCADRemoteHandler(BaseHTTPRequestHandler):
                 self._json_response(_handle_selection())
             elif path == "/screenshot":
                 self._json_response(_handle_screenshot())
+            elif path == "/window":
+                self._json_response(_handle_window(parse_qs(parsed.query)))
+            elif path == "/tools":
+                self._json_response(_handle_tools())
             elif path == "/ui" or path.startswith("/ui/"):
                 self._ui_response(path)
             else:
@@ -828,6 +1047,12 @@ class FreeCADRemoteHandler(BaseHTTPRequestHandler):
                 self._json_response(_handle_techdraw(body))
             elif path == "/fem":
                 self._json_response(_handle_fem(body))
+            elif path == "/input":
+                self._json_response(_handle_input(body))
+            elif path == "/tool":
+                self._json_response(_handle_tool(body))
+            elif path == "/agent":
+                self._json_response(_handle_agent(body))
             else:
                 self._json_response({"ok": False, "error": "not found"}, 404)
         except Exception as e:
@@ -836,8 +1061,9 @@ class FreeCADRemoteHandler(BaseHTTPRequestHandler):
 
 # ─── Server Lifecycle ─────────────────────────────────────────────────────────
 
-_server = None
-_timer = None
+if "_server" not in globals():
+    _server = None
+    _timer = None
 
 
 def start_server(port=None, host=None):
@@ -911,9 +1137,10 @@ def stop_server():
     print("[RemoteServer] Stopped.")
 
 
-# ─── Auto-start when executed ─────────────────────────────────────────────────
+# ─── Auto-start when executed (热重载时若已运行则跳过) ───────────────────────
 try:
-    start_server()
+    if _server is None:
+        start_server()
 except Exception as e:
     print(f"[RemoteServer] FATAL: {e}")
     traceback.print_exc()
