@@ -185,7 +185,14 @@ def _build_handlers(state):
             if obj is None:
                 raise ValueError("gui.select: no document object named %r" % (n,))
             Gui.Selection.addSelection(state.doc.Name, n)
-        _pump()
+        # Selection propagates through deferred Qt events; under load a single
+        # pump can return before the observer catches up. Pump until the whole
+        # requested set is visible (bounded), so callers never read a torn set.
+        for _ in range(20):
+            _pump()
+            got = {o.Name for o in Gui.Selection.getSelection()}
+            if got >= set(names):
+                break
         return {"selected": [o.Name for o in Gui.Selection.getSelection()]}
 
     def selection(a):
