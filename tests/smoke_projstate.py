@@ -66,15 +66,53 @@ def main():
     with open(path, "r", encoding="utf-8") as f:
         assert "circular_pattern" in f.read()
 
-    # heal the clash -> the project must report healthy again.
+    # snapshot the clashing state, then heal the clash -> the diff must show
+    # the move and the interference resolving (the model's `git diff`).
+    r = s.act("project.snapshot", {"label": "before"})
+    assert r.ok, r.error
+    assert r.data["ok"] is False, r.data
+
     r = s.act("solid.translate", {"name": "clash", "vector": [50, 0, 0]})
     assert r.ok, r.error
     r = s.act("project.state", {})
     assert r.ok, r.error
     assert r.data["ok"] is True, r.data["issues"]
 
-    print("smoke_projstate: whole-project awareness closed loop OK")
+    r = s.act("project.diff", {"base": "before"})
+    assert r.ok, r.error
+    d = r.data
+    assert not d["identical"], d
+    moved = [c for c in d["changed"] if c["object"] == "clash"]
+    assert moved and "moved" in moved[0], d["changed"]
+    assert any(i["kind"] == "interference" for i in d["issues_resolved"]), d
+    assert not d["issues_new"], d["issues_new"]
+    assert "已解决" in d["markdown"] and "moved" in d["markdown"], d["markdown"]
+
+    # a fresh snapshot diffed against live must be identical
+    r = s.act("project.snapshot", {"label": "after"})
+    assert r.ok, r.error
+    r = s.act("project.diff", {"base": "after"})
+    assert r.ok, r.error
+    assert r.data["identical"], r.data
+
+    # snapshot-to-snapshot diff: adding a part shows up as `added`
+    r = s.act("solid.box", {"name": "newpart", "length": 5, "width": 5,
+                            "height": 5, "pos": [200, 0, 0]})
+    assert r.ok, r.error
+    r = s.act("project.snapshot", {"label": "grown"})
+    assert r.ok, r.error
+    r = s.act("project.diff", {"base": "after", "target": "grown"})
+    assert r.ok, r.error
+    assert "newpart" in r.data["added"], r.data
+
+    # guards: unknown snapshot names are refused with guidance
+    r = s.act("project.diff", {"base": "nope"})
+    assert not r.ok and "project.snapshot" in (r.error or ""), r.error
+    r = s.act("project.diff", {"base": "after", "target": "nope"})
+    assert not r.ok, r.error
+
+    print("smoke_projstate: whole-project awareness + diff closed loop OK")
 
 
-if __name__ == "__main__":
+if __name__ in ("__main__", "smoke_projstate"):
     main()

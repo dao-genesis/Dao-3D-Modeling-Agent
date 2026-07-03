@@ -16,6 +16,11 @@ rendered for a mind.
   reading the project.
 - ``project.save_brief``  persist the brief to disk so any out-of-process
   agent can pick it up.
+- ``project.snapshot`` / ``project.diff``  the model's ``git diff``: snapshot
+  the current truth under a label, then later diff the live model against it
+  (or one label against another) — objects added/removed, volume/placement/
+  feature drift, issues appearing or resolving. A code agent reads diffs to
+  see what a change really did; now the CAD agent does the same.
 
 不出於戶，以知天下。 Runs inside freecadcmd (headless) and in the GUI.
 """
@@ -190,8 +195,96 @@ def _brief_md(st):
     return "\n".join(lines)
 
 
+def _issue_key(i):
+    return (i.get("kind"), i.get("object"), i.get("detail", ""))
+
+
+def _diff_states(old, new, tol=1e-3):
+    o_objs = {o["name"]: o for o in old.get("objects", [])}
+    n_objs = {o["name"]: o for o in new.get("objects", [])}
+    added = sorted(set(n_objs) - set(o_objs))
+    removed = sorted(set(o_objs) - set(n_objs))
+    changed = []
+    for name in sorted(set(o_objs) & set(n_objs)):
+        a, b = o_objs[name], n_objs[name]
+        delta = {}
+        va, vb = a.get("volume"), b.get("volume")
+        if va is not None and vb is not None and abs(va - vb) > tol:
+            delta["volume"] = {"from": va, "to": vb,
+                               "delta": _round(vb - va)}
+        pa = (a.get("placement") or {}).get("pos")
+        pb = (b.get("placement") or {}).get("pos")
+        if pa and pb and any(abs(x - y) > tol for x, y in zip(pa, pb)):
+            delta["moved"] = {"from": pa, "to": pb}
+        fa = ((a.get("features") or {}).get("counts")) or {}
+        fb = ((b.get("features") or {}).get("counts")) or {}
+        if fa != fb:
+            delta["features"] = {
+                k: {"from": fa.get(k, 0), "to": fb.get(k, 0)}
+                for k in sorted(set(fa) | set(fb))
+                if fa.get(k, 0) != fb.get(k, 0)}
+        if a.get("faces") is not None and b.get("faces") is not None \
+                and a["faces"] != b["faces"]:
+            delta["faces"] = {"from": a["faces"], "to": b["faces"]}
+        if a.get("visible", True) != b.get("visible", True):
+            delta["visible"] = {"from": a.get("visible", True),
+                                "to": b.get("visible", True)}
+        if delta:
+            delta["object"] = name
+            changed.append(delta)
+    old_issues = {_issue_key(i) for i in old.get("issues", [])}
+    new_issues = {_issue_key(i) for i in new.get("issues", [])}
+    return {
+        "added": added, "removed": removed, "changed": changed,
+        "issues_new": [i for i in new.get("issues", [])
+                       if _issue_key(i) not in old_issues],
+        "issues_resolved": [i for i in old.get("issues", [])
+                            if _issue_key(i) not in new_issues],
+        "identical": (not added and not removed and not changed
+                      and old_issues == new_issues),
+    }
+
+
+def _diff_md(d):
+    if d["identical"]:
+        return "无变化 — 模型与快照一致。"
+    lines = []
+    for n in d["added"]:
+        lines.append("+ 新增 %s" % n)
+    for n in d["removed"]:
+        lines.append("- 移除 %s" % n)
+    for c in d["changed"]:
+        parts = []
+        if "volume" in c:
+            parts.append("volume %g -> %g (%+g mm^3)"
+                         % (c["volume"]["from"], c["volume"]["to"],
+                            c["volume"]["delta"]))
+        if "moved" in c:
+            parts.append("moved %s -> %s" % (c["moved"]["from"],
+                                             c["moved"]["to"]))
+        if "features" in c:
+            parts.append("features " + ", ".join(
+                "%s %d->%d" % (k, v["from"], v["to"])
+                for k, v in c["features"].items()))
+        if "faces" in c:
+            parts.append("faces %d->%d" % (c["faces"]["from"],
+                                           c["faces"]["to"]))
+        if "visible" in c:
+            parts.append("visible %s->%s" % (c["visible"]["from"],
+                                             c["visible"]["to"]))
+        lines.append("~ %s: %s" % (c["object"], "; ".join(parts)))
+    for i in d["issues_new"]:
+        lines.append("! 新问题 %s `%s` %s" % (i.get("kind"),
+                                              i.get("object"),
+                                              i.get("detail", "")))
+    for i in d["issues_resolved"]:
+        lines.append("✓ 已解决 %s `%s`" % (i.get("kind"), i.get("object")))
+    return "\n".join(lines)
+
+
 def register(state):
     percept = _pc.register(state)
+    snapshots = {}
 
     def project_state(a):
         doc = state.doc
@@ -237,6 +330,40 @@ def register(state):
                 "issues": st["issues"],
                 "object_count": st["meta"]["object_count"]}
 
+    def project_snapshot(a):
+        label = a.get("label", "last")
+        if not isinstance(label, str) or not label:
+            raise ValueError("project.snapshot 'label' must be a string")
+        st = project_state(a)
+        snapshots[label] = st
+        return {"label": label, "ok": st["ok"],
+                "object_count": st["meta"]["object_count"],
+                "solid_count": st["meta"]["solid_count"],
+                "issues": st["issues"]}
+
+    def project_diff(a):
+        base = a.get("base", "last")
+        if not isinstance(base, str) or base not in snapshots:
+            raise ValueError(
+                "project.diff 'base' must name an existing snapshot "
+                "(have: %s); take one first with project.snapshot"
+                % (sorted(snapshots) or "none"))
+        old = snapshots[base]
+        target = a.get("target")
+        if target is not None:
+            if not isinstance(target, str) or target not in snapshots:
+                raise ValueError(
+                    "project.diff 'target' must name an existing snapshot "
+                    "(have: %s)" % (sorted(snapshots) or "none"))
+            new = snapshots[target]
+        else:
+            new = project_state(a)
+        d = _diff_states(old, new)
+        d["base"] = base
+        d["target"] = target or "(live)"
+        d["markdown"] = _diff_md(d)
+        return d
+
     def save_brief(a):
         path = a.get("path")
         if not isinstance(path, str) or not path:
@@ -250,4 +377,6 @@ def register(state):
         "project.state": project_state,
         "project.brief": project_brief,
         "project.save_brief": save_brief,
+        "project.snapshot": project_snapshot,
+        "project.diff": project_diff,
     }
