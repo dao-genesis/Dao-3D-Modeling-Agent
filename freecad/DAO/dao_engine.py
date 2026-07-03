@@ -86,7 +86,9 @@ def _build_handlers(state):
     for name, fn in freecad_ops.register(state).items():
         handlers["solid." + name] = fn
     for modname in ("freecad_parametric", "freecad_assembly",
-                    "freecad_perceive", "freecad_advanced"):
+                    "freecad_perceive", "freecad_advanced",
+                    "freecad_measure", "freecad_percept",
+                    "freecad_project"):
         try:
             mod = importlib.import_module(modname)
             handlers.update(mod.register(state))

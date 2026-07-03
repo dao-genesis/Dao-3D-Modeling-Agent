@@ -37,6 +37,12 @@ def main():
     # stack block on top of base -> no clash, block sits at z = base top
     r = s.act("asm.stack", {"base": "base", "top": "block", "gap": 0})
     print("after stack block pos:", r.data["placement"])
+    p0 = list(r.data["placement"])
+    # 'a'/'b' aliases (asm.align's argument shape) and a dx nudge off-centre
+    r = s.act("asm.stack", {"a": "base", "b": "block", "dx": 5})
+    assert r.ok, r.error
+    assert abs(r.data["placement"][0] - (p0[0] + 5)) < 1e-6, r.data
+    assert s.act("asm.stack", {"a": "base", "b": "block"}).ok  # recentre
     r = s.act("asm.interference", {})
     print("post-stack clashes:", r.data["clash_count"], r.data["clashes"])
     assert r.data["clash_count"] == 0, r.data["clashes"]
@@ -209,6 +215,23 @@ def main():
     clashing = _overlap(0.0)              # unphased -> tooth meets tooth
     assert meshed < 1e-6, ("phased gears should not overlap", meshed)
     assert clashing > meshed, ("unphased gears should clash", clashing)
+
+    # reverse inference reads assembly components at their PLACED pose: two
+    # gear-blank cylinders whose masters both sit at the origin (coaxial
+    # there) mesh externally at the working centre distance as instances.
+    assert p.act("solid.cylinder", {"name": "bk1", "radius": 18,
+                                    "height": 8}).ok
+    assert p.act("solid.cylinder", {"name": "bk2", "radius": 12,
+                                    "height": 8}).ok
+    assert p.act("asm.add", {"name": "blank1", "body": "bk1"}).ok
+    assert p.act("asm.add", {"name": "blank2", "body": "bk2"}).ok
+    assert p.act("asm.place", {"name": "blank2", "pos": [30, 0, 0]}).ok
+    gm = p.act("solid.gearmesh", {"parts": ["blank1", "blank2"]})
+    assert gm.ok, gm.error
+    assert gm.data["meshes"] == 1, gm.data
+    assert gm.data["mesh_list"][0]["type"] == "external", gm.data
+    assert abs(gm.data["mesh_list"][0]["center_distance"] - 30) < 1e-3, gm.data
+    print("placed gearmesh:", gm.data["mesh_list"][0])
     print("gear pair center dist:", dist, "meshed overlap:", round(meshed, 4),
           "unphased overlap:", round(clashing, 1))
 

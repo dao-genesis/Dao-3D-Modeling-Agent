@@ -9,9 +9,22 @@ here the "editor" is FreeCAD.
 """
 from __future__ import annotations
 
+import difflib
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
+
+# What agents commonly call a tool vs. what this registry names it.
+_SYNONYMS = {
+    "solid.fuse": "solid.union",
+    "solid.subtract": "solid.cut",
+    "solid.difference": "solid.cut",
+    "solid.intersect": "solid.common",
+    "solid.intersection": "solid.common",
+    "doc.export": "solid.export",
+    "measure.bbox": "solid.measure",
+    "measure.interference": "solid.interference",
+}
 
 
 @dataclass
@@ -107,7 +120,15 @@ class ToolRegistry:
         args = args or {}
         tool = self._tools.get(name)
         if tool is None:
-            return ToolResult(ok=False, error=f"unknown tool: {name}", tool=name, args=args)
+            syn = _SYNONYMS.get(name)
+            close = [syn] if syn and syn in self._tools else \
+                difflib.get_close_matches(name, self._tools, n=3, cutoff=0.5)
+            if not close and "." in name:
+                grp = name.split(".", 1)[0] + "."
+                close = sorted(t for t in self._tools if t.startswith(grp))[:5]
+            hint = f" — did you mean: {', '.join(close)}?" if close else ""
+            return ToolResult(ok=False, error=f"unknown tool: {name}{hint}",
+                              tool=name, args=args)
         start = time.perf_counter()
         try:
             result = tool.handler(args)

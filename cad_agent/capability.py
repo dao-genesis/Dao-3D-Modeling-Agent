@@ -61,6 +61,7 @@ PREFIX_DOMAIN: Dict[str, Optional[str]] = {
     "resource": None, "doc": None, "view": None, "out": None,
     "reflect": None, "gui": None, "bim": "Arch", "wire": "DraftGeomUtils",
     "measure": "Measure", "bop": "BOPTools", "percept": None,
+    "project": None,
 }
 
 # A kernel module is rarely used under its own bare name: PartDesign is reached

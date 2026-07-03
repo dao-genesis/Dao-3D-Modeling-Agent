@@ -292,20 +292,30 @@ def register(state):
                 "placement": [_round(x) for x in link.Placement.Base]}
 
     def op_stack(a):
-        """Stack ``top`` onto the +Z face of ``base`` with an optional gap."""
-        bb = _global_shape(a["base"]).BoundBox
-        top_link = _comp(a["top"])
-        tb = _global_shape(a["top"]).BoundBox
+        """Stack ``top`` onto the +Z face of ``base`` with an optional gap.
+        ``a``/``b`` are accepted as aliases so the argument shape matches the
+        sibling mate ``asm.align``."""
+        base = a.get("base") or a.get("a")
+        top = a.get("top") or a.get("b")
+        if not base or not top:
+            raise ValueError(
+                "asm.stack needs 'base' and 'top' component names "
+                "(aliases: 'a'/'b')")
+        bb = _global_shape(base).BoundBox
+        top_link = _comp(top)
+        tb = _global_shape(top).BoundBox
         gap = _num(a, "gap", 0, "gap")
         # shift top so its ZMin sits on base ZMax (+gap), centered in XY on base
-        dx = (bb.XMin + bb.XMax) / 2 - (tb.XMin + tb.XMax) / 2
-        dy = (bb.YMin + bb.YMax) / 2 - (tb.YMin + tb.YMax) / 2
+        dx = (bb.XMin + bb.XMax) / 2 - (tb.XMin + tb.XMax) / 2 \
+            + _num(a, "dx", 0, "dx")
+        dy = (bb.YMin + bb.YMax) / 2 - (tb.YMin + tb.YMax) / 2 \
+            + _num(a, "dy", 0, "dy")
         dz = bb.ZMax + gap - tb.ZMin
         p = top_link.Placement
         p.Base = p.Base + V(dx, dy, dz)
         top_link.Placement = p
         doc.recompute()
-        return {"component": a["top"], "placement": list(top_link.Placement.Base)}
+        return {"component": top, "placement": list(top_link.Placement.Base)}
 
     # ---- analysis -------------------------------------------------------- #
     def _bb_overlap(ba, bb, tol=1e-6):
