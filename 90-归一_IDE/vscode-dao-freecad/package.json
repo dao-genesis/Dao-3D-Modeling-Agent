@@ -6,11 +6,12 @@
   "publisher": "dao",
   "engines": { "vscode": "^1.75.0" },
   "categories": ["Visualization", "Other"],
-  "activationEvents": ["onCommand:dao-freecad.open", "onCustomEditor:dao-freecad.fcstd"],
+  "activationEvents": ["onCommand:dao-freecad.open", "onCommand:dao-freecad.openWindow", "onCustomEditor:dao-freecad.fcstd"],
   "main": "./extension.js",
   "contributes": {
     "commands": [
       { "command": "dao-freecad.open", "title": "DAO FreeCAD: 打开归一工作台" },
+      { "command": "dao-freecad.openWindow", "title": "DAO FreeCAD: 整窗归一（软件本体全 UI 路由为单网页）" },
       { "command": "dao-freecad.openFile", "title": "DAO FreeCAD: 在工作台中打开当前 FCStd/STEP/STL" }
     ],
     "configuration": {
