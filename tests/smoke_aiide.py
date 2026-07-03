@@ -113,7 +113,9 @@ def main():
     assert "say" in events and "action" in events
     # the perception loop closed: a mutating turn ends with a state readback
     assert "verify" in events
-    assert out["verify"] == {"ok": True, "issues": []}
+    assert out["verify"]["ok"] is True and out["verify"]["issues"] == []
+    # the turn diff shows what the turn actually did (the model's git diff)
+    assert "plate" in out["verify"]["diff"]["added"], out["verify"]
     print("agent loop ok:", out["say"])
 
     # turn 2 (with history): a failing call is fed back for self-correction
@@ -145,6 +147,9 @@ def main():
     agent.transport = transport
     out3 = agent.ask("add a block")
     assert out3["verify"]["ok"] is True, out3["verify"]
+    # net effect of the whole turn (add clash + delete clash) is no change
+    d3 = out3["verify"].get("diff") or {}
+    assert "clash" not in d3.get("added", []), d3
     feedback = seen["messages"][1][-1]["content"]
     assert feedback.startswith("POST_TURN_VERIFY:") and \
         "interference" in feedback
@@ -156,5 +161,5 @@ def main():
     shutil.rmtree(_TMP, ignore_errors=True)
 
 
-if __name__ == "__main__":
+if __name__ in ("__main__", "smoke_aiide"):
     main()

@@ -390,8 +390,20 @@ class DAOPanel(QtWidgets.QWidget):
         self._reload_convs()
         verify = out.get("verify")
         if verify is not None:
+            diff = verify.get("diff") or {}
+            delta = ""
+            if diff and (diff.get("added") or diff.get("removed")
+                         or diff.get("changed")):
+                bits = []
+                if diff.get("added"):
+                    bits.append("+%d" % len(diff["added"]))
+                if diff.get("removed"):
+                    bits.append("-%d" % len(diff["removed"]))
+                if diff.get("changed"):
+                    bits.append("~%d" % len(diff["changed"]))
+                delta = "，本轮变更 " + "/".join(bits)
             if verify.get("ok"):
-                self._say("sys", "回读校验 ✓ 模型健康（project.state OK）")
+                self._say("sys", "回读校验 ✓ 模型健康（project.state OK%s）" % delta)
             elif verify.get("ok") is False:
                 self._say("sys", "回读校验 ✗ 遗留 %d 个问题：%s" % (
                     len(verify["issues"]),

@@ -207,8 +207,9 @@ class LLMAgent:
         messages.extend(history or [])
         messages.append({"role": "user", "content": user_text})
         says, actions = [], []
+        snapped = self._snapshot_turn()
         self._loop(messages, says, actions, emit)
-        verify = self._verify(messages, says, actions, emit)
+        verify = self._verify(messages, says, actions, emit, snapped)
         # history to persist excludes the system prompt (rebuilt each turn)
         return {"say": says, "actions": actions, "verify": verify,
                 "messages": messages[1:]}
@@ -243,11 +244,24 @@ class LLMAgent:
                 break
 
     _READONLY = ("percept.", "measure.", "project.", "doc.", "analyze.")
+    _TURN_SNAP = "__turn__"
 
-    def _verify(self, messages, says, actions, emit):
+    def _snapshot_turn(self):
+        """Baseline the model before the turn so the post-turn verify can
+        report *what changed* (project.diff), not just whether issues remain."""
+        try:
+            self.actor("project.snapshot",
+                       {"label": self._TURN_SNAP, "features": False})
+            return True
+        except Exception:
+            return False
+
+    def _verify(self, messages, says, actions, emit, snapped=False):
         """The closed loop: after acting, *look* — one ``project.state`` call
-        holds the whole model like a source file. Diagnosed issues go back to
-        the model for correction (a bounded number of rounds)."""
+        holds the whole model like a source file, and ``project.diff`` against
+        the pre-turn snapshot shows what this turn really did. Diagnosed
+        issues go back to the model for correction (a bounded number of
+        rounds)."""
         if not any(a["ok"] and not a["tool"].startswith(self._READONLY)
                    for a in actions):
             return None
@@ -259,6 +273,19 @@ class LLMAgent:
                 return {"ok": None, "error": str(exc)}
             verify = {"ok": bool(st.get("ok", True)),
                       "issues": st.get("issues") or []}
+            if snapped:
+                try:
+                    d = self.actor("project.diff",
+                                   {"base": self._TURN_SNAP,
+                                    "features": False})
+                    verify["diff"] = {
+                        "added": d.get("added") or [],
+                        "removed": d.get("removed") or [],
+                        "changed": [c.get("object") for c in
+                                    (d.get("changed") or [])],
+                        "markdown": d.get("markdown", "")}
+                except Exception:
+                    pass
             emit("verify", verify)
             if verify["ok"] or _round >= int(self.cfg.get("verify_rounds", 1)):
                 break
