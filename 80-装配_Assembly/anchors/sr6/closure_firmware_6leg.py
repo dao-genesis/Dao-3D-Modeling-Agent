@@ -42,6 +42,9 @@ def recv_to_world(p):
 
 MAIN_PIV_RECV  = {"L": np.array([-59.48, 0.0, 0.0]),  "R": np.array([59.48, 0.0, 0.0])}
 PITCH_PIV_RECV = {"L": np.array([-61.0, -14.23, 53.13]), "R": np.array([61.0, -14.23, 53.13])}
+PITCH_SHAFT_X  = {"L": -15.5, "R": 15.5}   # inboard-mounted pitch servo axles
+PITCH_SHAFT_Y  = 45.0                       # firmware: 45 horiz from main pivot
+                                            # = the frame pitch-window centre
 
 
 def solve_arm(shaft, pivot, arm, link, theta_hint=0.0):
@@ -92,11 +95,13 @@ def legs():
             hint = 0.0 if ysign > 0 else math.pi
             th, tip, res, ok = solve_arm(shaft, piv, MAIN_ARM, MAIN_LINK, hint)
             out.append((f"main-{side}-{nm}", shaft, tip, piv, MAIN_LINK, th, res, ok))
-    # 2 pitch legs: pitch pivot is now on +Y; firmware places the pitch shaft
-    # 8.12mm beyond it (servo-frame horizontal -8.124 from a 61.25mm shaft).
+    # 2 pitch legs.  The pitch servos mount inboard on the frame walls with
+    # axles pointing toward the centreline (PDF p.22), so the shafts sit at
+    # x = -+15.5; the axle is the pitch-window centre, 45mm horizontally from
+    # the main pivot (firmware SetPitchServo) at the common shaft height.
     for side in ("L", "R"):
         ppiv = recv_to_world(PITCH_PIV_RECV[side])
-        shaft = np.array([MAIN_PIV_RECV[side][0], 61.25, SHAFT_Z])
+        shaft = np.array([PITCH_SHAFT_X[side], PITCH_SHAFT_Y, SHAFT_Z])
         th, tip, res, ok = solve_arm(shaft, ppiv, PITCH_ARM, PITCH_LINK, 0.6)
         out.append((f"pitch-{side}", shaft, tip, ppiv, PITCH_LINK, th, res, ok))
     return out
