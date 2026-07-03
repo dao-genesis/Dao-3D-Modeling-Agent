@@ -10,10 +10,15 @@ import os
 
 import numpy as np
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection  # noqa: E402
+def _plt():
+    """Import matplotlib lazily: pulling pyplot into a *GUI* FreeCAD process
+    wedges Qt event processing (Gui.updateGui never returns), so the import
+    must only happen when a view.* render op actually runs -- headless."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+    return plt, Poly3DCollection
 
 _VIEWS = {
     "iso": (28, -60), "front": (0, -90), "top": (89, -90),
@@ -129,6 +134,7 @@ def register(state):
             return {"rendered": False, "reason": "no solids to render"}
 
         elev, azim = _VIEWS.get(view, _VIEWS["iso"])
+        plt, Poly3DCollection = _plt()
         fig = plt.figure(figsize=(size / 100.0, size / 100.0), dpi=100)
         ax = fig.add_subplot(111, projection="3d")
         palette = ["#4f8cc9", "#c97f4f", "#69b36b", "#b36bb0", "#b0b36b"]
@@ -175,6 +181,7 @@ def register(state):
         if not objs:
             return {"rendered": False, "reason": "no solids"}
         order = ["iso", "front", "top", "right"]
+        plt, Poly3DCollection = _plt()
         fig = plt.figure(figsize=(size / 100.0, size / 100.0), dpi=100)
         palette = ["#4f8cc9", "#c97f4f", "#69b36b", "#b36bb0", "#b0b36b"]
         meshes = [(lbl, _tris(s, tol)) for lbl, s in objs]
