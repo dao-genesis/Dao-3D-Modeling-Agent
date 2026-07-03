@@ -39,6 +39,20 @@ def test_unknown_tool():
     assert not r.ok and "unknown tool" in r.error
 
 
+def test_synonym_resolves_transparently():
+    reg = ToolRegistry()
+    reg.register("solid.union", lambda a: ToolResult.success(v=1))
+    r = reg.call("solid.fuse", {"a": "x", "b": "y"})
+    assert r.ok and r.data["v"] == 1
+    assert r.tool == "solid.union" and r.data["alias"] == "solid.fuse"
+
+
+def test_synonym_without_target_falls_back_to_hint():
+    reg = ToolRegistry()
+    r = reg.call("solid.fuse", {})
+    assert not r.ok and "unknown tool" in r.error
+
+
 def test_handler_exception_is_caught():
     reg = ToolRegistry()
 
