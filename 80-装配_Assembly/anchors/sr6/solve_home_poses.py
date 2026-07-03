@@ -158,9 +158,12 @@ def solve_all():
         poses[name] = {"stl": stl, "T": np.asarray(T).tolist(),
                        "fit_residual_mm": res, "interface": iface or {}}
 
-    # --- static shell: authored in the world frame (frame/base/lid STLs) ----
-    for nm in ("Base", "LFrame", "RFrame", "Lid"):
-        put(nm, f"{nm}.stl", np.eye(4), 0.0)
+    # --- shell: print-frame STLs closed onto the world by their bolt pattern
+    # (shell_poses.py: frames rotated vertical inside the base, body +15mm y) --
+    from shell_poses import shell_poses, verify as verify_shell
+    assert verify_shell(), "shell bolt pattern does not close"
+    for nm, T in shell_poses().items():
+        put(nm, f"{nm}.stl", T, 0.0)
 
     # --- receiver: Kabsch-proven home pose (closure_kabsch, RMS 0.014mm) ----
     Trec = np.eye(4)
