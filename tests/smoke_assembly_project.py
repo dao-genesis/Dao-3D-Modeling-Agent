@@ -105,6 +105,12 @@ def main():
     assert clash["clash_count"] == 0, clash
     assert clash["pairs_checked"] == 15, clash      # C(6,2)
 
+    # whole-project readback is assembly-aware: part masters parked at the
+    # origin are App::Link prototypes, not live geometry, so they must not
+    # raise phantom interference against each other or the placed instances.
+    st = act("project.state", {"features": False})
+    assert st["ok"] is True, st["issues"]
+
     # ---- whole-stack mass properties consume the placed solids ------------ #
     total_v = v_plate + 3 * v_wash + v_bolt + v_nut
     m = act("asm.measure", {"density": RHO,

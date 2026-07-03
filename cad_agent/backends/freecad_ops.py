@@ -3566,9 +3566,22 @@ def register(state):
         """
         names = a.get("parts") or list(state.shapes.keys())
         tol = _num(a, "tol", 1e-2, "tol")
+
+        def _placed(n):
+            # an assembly component meshes at its *placed* pose; its part-
+            # studio master sits at the origin and would read as coaxial.
+            rec = getattr(state, "components", {}).get(n)
+            if rec:
+                link = doc.getObject(rec["link"])
+                src = doc.getObject(rec["src"])
+                shp = src.Shape.copy()
+                shp.Placement = link.Placement.multiply(src.Placement)
+                return shp
+            return _get(n).Shape
+
         parts = []
         for n in names:
-            cyls = _cyl_axes(_get(n).Shape)
+            cyls = _cyl_axes(_placed(n))
             if cyls:
                 parts.append((n, max(cyls, key=lambda c: c["radius"])))
         meshes = []

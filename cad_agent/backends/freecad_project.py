@@ -202,8 +202,18 @@ def register(state):
         # them, mirroring FreeCAD's own Part booleans): keep them listed but
         # out of the live-geometry census so they cannot raise phantom
         # interference against the result they were absorbed into.
+        # Likewise, a part master instanced into an assembly via App::Link is
+        # a prototype parked at the origin: the placed Link carries the live
+        # geometry, so the master stays listed but out of the census.
+        link_srcs = set()
+        for obj in doc.Objects:
+            if obj.TypeId == "App::Link":
+                lo = getattr(obj, "LinkedObject", None)
+                if lo is not None:
+                    link_srcs.add(lo.Name)
         solids = [o for o in objects
-                  if o.get("solids") and o.get("visible", True)]
+                  if o.get("solids") and o.get("visible", True)
+                  and o["name"] not in link_srcs]
         relations = []
         if len(solids) >= 2 and a.get("relations", True):
             try:
