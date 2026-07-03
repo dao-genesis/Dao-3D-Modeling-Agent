@@ -1,11 +1,16 @@
 name: Auto-merge clean PRs
 
 # 道法自然 · 无为而无不为：无冲突的 PR 自动合并，有冲突的留待人工解决。
-# 触发：PR 开启/更新/重开/转就绪 时自动判定；亦可手动 workflow_dispatch 扫描全部开放 PR。
+# 触发：PR 开启/更新/重开/转就绪 时自动判定；定时扫描兜底（每 6 小时），
+# 确保滞留的可合并 PR 不依赖任何人工触发；亦可手动 workflow_dispatch。
+# 若配置了 DAO_PAT 密钥，则用它合并（可合入改动 .github/workflows/ 的 PR，
+# 如 dependabot 的 action 升级）；否则回退到 GITHUB_TOKEN。
 
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review]
+  schedule:
+    - cron: '23 */6 * * *'
   workflow_dispatch:
 
 permissions:
@@ -21,18 +26,20 @@ jobs:
     runs-on: ubuntu-latest
     if: >
       github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
       (github.event.pull_request.draft == false &&
        github.event.pull_request.head.repo.full_name == github.repository)
     steps:
       - name: Merge mergeable PR(s)
         uses: actions/github-script@v9
         with:
+          github-token: ${{ secrets.DAO_PAT || secrets.GITHUB_TOKEN }}
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
 
             let numbers = [];
-            if (context.eventName === 'workflow_dispatch') {
+            if (context.eventName !== 'pull_request_target') {
               const prs = await github.paginate(github.rest.pulls.list, {
                 owner, repo, state: 'open', per_page: 100,
               });
