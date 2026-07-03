@@ -15,7 +15,10 @@ Endpoints (JSON in/out; ``Authorization: Bearer <token>`` on all but health):
 - ``POST /api/batch``         ``{"calls": [{"tool","args"}...]}`` -> results
 - ``GET  /api/project``       whole-project state (the closed-loop eye)
 - ``GET  /api/project/brief`` the same truth as readable markdown
-- ``POST /api/chat``          ``{"text"}`` -> run the configured LLM agent
+- ``POST /api/chat``          ``{"text"}`` -> run the configured LLM agent;
+  add ``"stream": true`` for Server-Sent Events: each ``say`` / ``action`` /
+  ``verify`` event arrives the moment it happens (an AI-IDE watching the
+  turn live), closing with one ``done`` event carrying the full result.
 
 Embeddable anywhere an actor exists: inside the FreeCAD GUI (the panel starts
 it on a toggle) or around a headless kernel session in tests/CI. The token is
@@ -133,6 +136,8 @@ class DaoAPI:
                     text = body.get("text")
                     if not isinstance(text, str) or not text:
                         return self._reply(400, {"error": "'text' required"})
+                    if body.get("stream"):
+                        return api.chat_stream(text, body, self)
                     return self._reply(*api.chat(text, body))
                 return self._reply(404, {"error": "unknown path"})
 
@@ -162,20 +167,55 @@ class DaoAPI:
                      "data": data if isinstance(data, dict)
                      else {"value": data}}
 
-    def chat(self, text, body):
+    def _agent(self, body):
+        """(agent, None) from config + per-request overrides, or (None, error)."""
         cfg = dao_llm.load_config()
         for k in ("model", "base_url", "api_key", "max_steps"):
             if body.get(k) is not None:
                 cfg[k] = body[k]
         if not dao_llm.configured(cfg):
-            return 400, {"error": "no model configured; POST base_url/"
-                                  "api_key/model or set them in config"}
-        agent = dao_llm.LLMAgent(
+            return None, {"error": "no model configured; POST base_url/"
+                                   "api_key/model or set them in config"}
+        return dao_llm.LLMAgent(
             lambda t, a: self.actor(t, a), cfg=cfg,
             system_prompt=dao_prompts.system_prompt(
-                cfg.get("system_prompt_id", "default"), self.tools))
+                cfg.get("system_prompt_id", "default"), self.tools)), None
+
+    @staticmethod
+    def _result(out):
+        return {"say": out["say"], "actions": out["actions"],
+                "verify": out.get("verify"), "messages": out["messages"]}
+
+    def chat(self, text, body):
+        agent, err = self._agent(body)
+        if agent is None:
+            return 400, err
         with self._lock:
             out = agent.ask(text, history=body.get("history") or [])
-        return 200, {"say": out["say"], "actions": out["actions"],
-                     "verify": out.get("verify"),
-                     "messages": out["messages"]}
+        return 200, self._result(out)
+
+    def chat_stream(self, text, body, handler):
+        """Run one turn, pushing SSE frames as the agent speaks and acts."""
+        agent, err = self._agent(body)
+        if agent is None:
+            handler._reply(400, err)
+            return
+        handler.send_response(200)
+        handler.send_header("Content-Type", "text/event-stream")
+        handler.send_header("Cache-Control", "no-cache")
+        handler.end_headers()
+
+        def emit(kind, payload):
+            frame = "event: %s\ndata: %s\n\n" % (
+                kind, json.dumps(payload, ensure_ascii=False, default=str))
+            handler.wfile.write(frame.encode("utf-8"))
+            handler.wfile.flush()
+
+        with self._lock:
+            try:
+                out = agent.ask(text, history=body.get("history") or [],
+                                on_event=emit)
+                emit("done", self._result(out))
+            except Exception as exc:
+                emit("error", {"error": "%s: %s"
+                               % (type(exc).__name__, exc)})

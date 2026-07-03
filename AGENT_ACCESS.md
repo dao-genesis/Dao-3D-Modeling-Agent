@@ -27,7 +27,7 @@
 | POST | `/api/batch` | `{"calls":[{"tool","args"}...], "stop_on_error":true}` → `{"results":[...]}` |
 | GET | `/api/project` | **项目全貌**结构化 JSON：对象/尺寸/体积/特征/依赖/参数表/空间关系/健康诊断 |
 | GET | `/api/project/brief` | 同一真相渲染为 markdown——像读源码一样读整个模型 |
-| POST | `/api/chat` | `{"text":"建一个法兰盘"}` → 用已配置的 LLM 驱动完整工具循环，返回 `{say,actions,messages}` |
+| POST | `/api/chat` | `{"text":"建一个法兰盘"}` → 用已配置的 LLM 驱动完整工具循环，返回 `{say,actions,verify,messages}`；加 `"stream":true` 则以 SSE 实时推送 `say`/`action`/`verify` 事件，末帧 `done` 携带完整结果（AI IDE 级实时旁观一回合） |
 
 ## 三、推荐工作流（如何像人一样做项目）
 

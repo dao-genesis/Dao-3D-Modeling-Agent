@@ -114,6 +114,36 @@ def main():
         assert out["say"] == ["measuring", "done"], out
         assert out["actions"] and out["actions"][0]["ok"], out
         print("chat loop over the wire ok")
+
+        # streaming chat: the same turn as SSE -- say/action frames arrive
+        # as events and one final done frame carries the full result.
+        script = iter([
+            json.dumps({"say": "measuring", "done": False, "calls": [
+                {"tool": "solid.measure", "args": {"name": "plate"}}]}),
+            json.dumps({"say": "done", "done": True, "calls": []}),
+        ])
+        dao_llm.LLMAgent = _Scripted
+        try:
+            req = urllib.request.Request(
+                "http://127.0.0.1:%d/api/chat" % p,
+                data=json.dumps({"text": "measure plate",
+                                 "stream": True}).encode("utf-8"),
+                headers={"Content-Type": "application/json",
+                         "Authorization": "Bearer test-token"},
+                method="POST")
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                assert resp.headers.get("Content-Type") == "text/event-stream"
+                raw = resp.read().decode("utf-8")
+        finally:
+            dao_llm.LLMAgent = real_agent
+        frames = [f for f in raw.split("\n\n") if f.strip()]
+        kinds = [f.split("\n", 1)[0].split(": ", 1)[1] for f in frames]
+        assert kinds[0] == "say" and "action" in kinds, kinds
+        assert kinds[-1] == "done", kinds
+        done = json.loads(frames[-1].split("\ndata: ", 1)[1])
+        assert done["say"] == ["measuring", "done"], done
+        assert done["actions"] and done["actions"][0]["ok"], done
+        print("streaming chat (SSE) ok:", kinds)
     finally:
         api.stop()
     print("smoke_api: reverse-access surface OK")
