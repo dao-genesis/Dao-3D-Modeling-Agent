@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DAO · FreeCAD 归一工作台</title>
+<style>
+:root{--bg:#1e1e1e;--panel:#252526;--border:#3c3c3c;--fg:#d4d4d4;--dim:#8a8a8a;--acc:#0e639c;--ok:#4ec9b0;--err:#f48771}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--fg);font:13px/1.5 "Segoe UI",system-ui,sans-serif}
+#app{display:grid;height:100%;grid-template-rows:36px 1fr 180px;grid-template-columns:230px 1fr 250px;
+ grid-template-areas:"bar bar bar" "tree view props" "cons cons cons"}
+#bar{grid-area:bar;display:flex;align-items:center;gap:6px;padding:0 8px;background:var(--panel);border-bottom:1px solid var(--border)}
+#bar .dot{width:9px;height:9px;border-radius:50%;background:var(--err)}
+#bar .dot.on{background:var(--ok)}
+#bar button,select{background:#333;color:var(--fg);border:1px solid var(--border);border-radius:3px;padding:2px 8px;cursor:pointer;font-size:12px}
+#bar button:hover{background:var(--acc)}
+#tree{grid-area:tree;overflow:auto;background:var(--panel);border-right:1px solid var(--border);padding:6px}
+#tree h3,#props h3{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin:4px 0 6px}
+.node{padding:2px 4px;border-radius:3px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.node:hover{background:#2a2d2e}.node.sel{background:var(--acc)}
+.node .t{color:var(--dim);font-size:11px;margin-left:4px}
+#view{grid-area:view;position:relative;overflow:hidden;background:#111;display:flex;align-items:center;justify-content:center}
+#shot{max-width:100%;max-height:100%;user-select:none;-webkit-user-drag:none;cursor:grab}
+#hint{position:absolute;bottom:6px;left:8px;color:var(--dim);font-size:11px;pointer-events:none}
+#props{grid-area:props;overflow:auto;background:var(--panel);border-left:1px solid var(--border);padding:6px}
+#props table{width:100%;border-collapse:collapse;font-size:11px}
+#props td{padding:2px 4px;border-bottom:1px solid #2d2d2d;vertical-align:top;word-break:break-all}
+#props td:first-child{color:#9cdcfe;white-space:nowrap}
+#cons{grid-area:cons;display:flex;flex-direction:column;background:var(--panel);border-top:1px solid var(--border)}
+#log{flex:1;overflow:auto;padding:6px 8px;font:12px/1.45 Consolas,monospace;white-space:pre-wrap}
+#log .in{color:#dcdcaa}#log .out{color:var(--fg)}#log .er{color:var(--err)}
+#inrow{display:flex;border-top:1px solid var(--border)}
+#inrow select{border:none;border-right:1px solid var(--border);border-radius:0}
+#inrow input{flex:1;background:#1b1b1b;border:none;outline:none;color:var(--fg);padding:6px 8px;font:12px Consolas,monospace}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="bar">
+    <span class="dot" id="dot"></span><b>DAO·FreeCAD</b><span id="st" style="color:var(--dim)">连接中…</span>
+    <span style="flex:1"></span>
+    <select id="wb" title="工作台"></select>
+    <button data-v="fit_all">适合</button><button data-v="isometric">等轴</button>
+    <button data-v="front">前</button><button data-v="top">顶</button><button data-v="right">右</button>
+    <button data-v="zoom_in">＋</button><button data-v="zoom_out">－</button>
+    <button id="refresh">⟳</button>
+  </div>
+  <div id="tree"><h3>模型树</h3><div id="treebody"></div></div>
+  <div id="view"><img id="shot" alt=""><div id="hint">拖拽旋转 · 滚轮缩放 · 双击适合窗口</div></div>
+  <div id="props"><h3>属性</h3><div id="propbody" style="color:var(--dim)">选中对象查看属性</div></div>
+  <div id="cons">
+    <div id="log"></div>
+    <div id="inrow">
+      <select id="mode"><option value="py">Python</option><option value="cmd">GUI命令</option></select>
+      <input id="cmd" placeholder="Python 代码（回车执行；FreeCAD as App / FreeCADGui as Gui 已可用）" autocomplete="off">
+    </div>
+  </div>
+</div>
+<script>
+const qs=new URLSearchParams(location.search);
+const API=qs.get('api')||location.origin;
+const $=id=>document.getElementById(id);
+async function api(m,p,body){const r=await fetch(API+p,{method:m,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});return r.json()}
+function logln(cls,txt){const d=document.createElement('div');d.className=cls;d.textContent=txt;$('log').appendChild(d);$('log').scrollTop=1e9}
+
+/* ── viewport: live screenshot + orbit ── */
+let busy=false,dirty=true;
+async function shot(){if(busy)return;busy=true;try{const d=await api('GET','/screenshot');if(d.ok)$('shot').src='data:image/png;base64,'+d.data;}catch(e){}busy=false}
+setInterval(()=>{if(dirty){dirty=false;shot()}},700);
+/* orbit state: azimuth/elevation degrees */
+let az=45,el=-35;
+function dir(){const a=az*Math.PI/180,e=el*Math.PI/180;
+ return [-Math.cos(e)*Math.cos(a),-Math.cos(e)*Math.sin(a),Math.sin(e)]}
+let drag=null;
+$('shot').addEventListener('mousedown',e=>{drag=[e.clientX,e.clientY];e.preventDefault()});
+window.addEventListener('mouseup',()=>drag=null);
+window.addEventListener('mousemove',async e=>{if(!drag)return;
+ const dx=e.clientX-drag[0],dy=e.clientY-drag[1];
+ if(Math.abs(dx)+Math.abs(dy)<8)return;drag=[e.clientX,e.clientY];
+ az+=dx*0.5;el=Math.max(-89,Math.min(89,el+dy*0.5));
+ await api('POST','/view',{action:'set_camera',position:[0,0,0],direction:dir()});dirty=true});
+$('view').addEventListener('wheel',async e=>{e.preventDefault();
+ await api('POST','/view',{action:e.deltaY<0?'zoom_in':'zoom_out'});dirty=true},{passive:false});
+$('view').addEventListener('dblclick',async()=>{await api('POST','/view',{action:'fit_all'});dirty=true});
+document.querySelectorAll('#bar [data-v]').forEach(b=>b.onclick=async()=>{await api('POST','/view',{action:b.dataset.v});dirty=true});
+$('refresh').onclick=()=>{loadTree();dirty=true};
+
+/* ── status + workbenches ── */
+async function status(){try{const d=await api('GET','/status');
+ $('dot').classList.toggle('on',!!d.ok);
+ $('st').textContent=d.ok?('FreeCAD '+d.freecad_version.slice(0,3).join('.')+' · '+(d.active_document||'无文档')+' · '+d.object_count+' 对象'):'离线';
+ return d.ok}catch(e){$('dot').classList.remove('on');$('st').textContent='离线（等待 FreeCAD 桥接…）';return false}}
+async function loadWb(){try{const d=await api('GET','/workbenches');if(!d.ok)return;
+ $('wb').innerHTML=Object.keys(d.workbenches).sort().map(w=>`<option ${w===d.active?'selected':''}>${w}</option>`).join('')}catch(e){}}
+$('wb').onchange=async()=>{await api('POST','/workbench',{name:$('wb').value});dirty=true};
+
+/* ── model tree + properties ── */
+let selNode=null;
+async function loadTree(){try{const d=await api('GET','/document');const tb=$('treebody');tb.innerHTML='';
+ if(!d.ok||!d.document){tb.innerHTML='<div style="color:var(--dim)">无打开的文档</div>';return}
+ const doc=d.document;
+ const h=document.createElement('div');h.className='node';h.innerHTML=`<b>📄 ${doc.label}</b>`;tb.appendChild(h);
+ doc.objects.forEach(o=>{const n=document.createElement('div');n.className='node';n.style.paddingLeft='16px';
+  n.innerHTML=`${o.label}<span class="t">${o.type.split('::').pop()}</span>`;
+  n.onclick=async()=>{if(selNode)selNode.classList.remove('sel');selNode=n;n.classList.add('sel');
+   await api('POST','/select',{doc:doc.name,obj:o.name});dirty=true;
+   const p=await api('POST','/property',{doc:doc.name,obj:o.name});
+   if(p.ok)$('propbody').innerHTML='<table>'+Object.entries(p.properties).map(([k,v])=>`<tr><td>${k}</td><td>${String(v).replace(/</g,'&lt;')}</td></tr>`).join('')+'</table>'};
+  tb.appendChild(n)})}catch(e){}}
+
+/* ── console ── */
+$('cmd').addEventListener('keydown',async e=>{if(e.key!=='Enter')return;
+ const v=$('cmd').value.trim();if(!v)return;$('cmd').value='';
+ const mode=$('mode').value;logln('in',(mode==='py'?'>>> ':'CMD ')+v);
+ try{const d=mode==='py'?await api('POST','/exec',{code:v}):await api('POST','/run_command',{command:v});
+  logln(d.ok?'out':'er',JSON.stringify(d));dirty=true;loadTree();status()}catch(err){logln('er',String(err))}});
+
+/* ── boot ── */
+(async()=>{if(await status()){await loadWb();await loadTree();dirty=true}
+ setInterval(status,5000);setInterval(loadTree,8000)})();
+</script>
+</body>
+</html>
