@@ -25,6 +25,7 @@
 | GET | `/api/tools` | 全部工具名（`solid.*`、`percept.*`、`project.*`、`asm.*`、`fem.*`、`gui.*`…） |
 | POST | `/api/act` | `{"tool": "solid.box", "args": {"name":"plate","length":40,"width":20,"height":10}}` → `{"ok",data}` |
 | POST | `/api/batch` | `{"calls":[{"tool","args"}...], "stop_on_error":true}` → `{"results":[...]}` |
+| GET | `/api/status` | **实时心跳**（轻量，可每秒轮询）：文档/对象数/当前选择/工作台/撤销深度/错误数（GUI 内走 `gui.status`，headless 回退 `project.brief`） |
 | GET | `/api/project` | **项目全貌**结构化 JSON：对象/尺寸/体积/特征/依赖/参数表/空间关系/健康诊断 |
 | GET | `/api/project/brief` | 同一真相渲染为 markdown——像读源码一样读整个模型 |
 | POST | `/api/chat` | `{"text":"建一个法兰盘"}` → 用已配置的 LLM 驱动完整工具循环，返回 `{say,actions,verify,messages}`；加 `"stream":true` 则以 SSE 实时推送 `say`/`action`/`verify` 事件，末帧 `done` 携带完整结果（AI IDE 级实时旁观一回合） |

@@ -82,6 +82,10 @@ def main():
               token="test-token", expect=400)
         print("unknown tool rejected")
 
+        st = _call(p, "GET", "/api/status", token="test-token")["data"]
+        assert "object_count" in st or "objects" in st, st
+        print("status ok")
+
         st = _call(p, "GET", "/api/project", token="test-token")["data"]
         plate = next(o for o in st["objects"] if o["name"] == "plate")
         assert plate["features"]["counts"].get("through_hole") == 1, plate

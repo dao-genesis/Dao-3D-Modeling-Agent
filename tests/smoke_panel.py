@@ -64,6 +64,9 @@ try:
     assert "resource.search" in panel.engine.handlers, \
         sorted(panel.engine.handlers)[:20]
     P("RESOURCE_OPS_OK")
+    st = panel.engine.handlers["gui.status"]({})
+    assert st["document"] and st["objects"] >= 2, st
+    P("STATUS_OP_OK", st["objects"])
     P("PANEL_SMOKE_PASS")
 except Exception:
     import traceback
@@ -99,6 +102,10 @@ def main():
         env.setdefault("XDG_RUNTIME_DIR", "/tmp/dao-runtime")
         env["DAO_PANEL_OUT"] = out
         env["DAO_REPO"] = REPO
+        # hermetic AI-IDE home: never inherit another test's (or the user's)
+        # model config -- a "configured" LLM would reroute chat turns away
+        # from the offline rule engine this smoke exercises.
+        env["DAO_AIIDE_HOME"] = os.path.join(td, "aiide")
         env["PYTHONUTF8"] = "1"
         try:
             os.makedirs(env["XDG_RUNTIME_DIR"], mode=0o700, exist_ok=True)
@@ -112,7 +119,7 @@ def main():
     assert "PANEL_MOUNTED" in log, log
     assert log.count("TURN_OK") == 4, log
     for marker in ("DATA_TAB_OK", "MGMT_TAB_OK", "RESOURCE_OPS_OK",
-                   "PANEL_SMOKE_PASS"):
+                   "STATUS_OP_OK", "PANEL_SMOKE_PASS"):
         assert marker in log, log
     print("PANEL SMOKE OK")
 
