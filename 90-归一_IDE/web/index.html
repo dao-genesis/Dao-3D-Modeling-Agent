@@ -23,7 +23,12 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font:13px/1.5 "Segoe 
 #view{grid-area:view;position:relative;overflow:hidden;background:#111;display:flex;align-items:center;justify-content:center}
 #shot{max-width:100%;max-height:100%;user-select:none;-webkit-user-drag:none;cursor:grab}
 #hint{position:absolute;bottom:6px;left:8px;color:var(--dim);font-size:11px;pointer-events:none}
-#props{grid-area:props;overflow:auto;background:var(--panel);border-left:1px solid var(--border);padding:6px}
+#props{grid-area:props;display:flex;flex-direction:column;background:var(--panel);border-left:1px solid var(--border);padding:6px;overflow:hidden}
+#propbody{flex:1;overflow:auto;min-height:60px}
+#ai{flex:1.2;display:flex;flex-direction:column;border-top:1px solid var(--border);margin-top:6px;padding-top:4px;min-height:120px}
+#ailog{flex:1;overflow:auto;font-size:11px;line-height:1.5;white-space:pre-wrap}
+#ailog .u{color:#dcdcaa}#ailog .a{color:var(--ok)}#ailog .e{color:var(--err)}
+#aiin{width:100%;background:#1b1b1b;border:1px solid var(--border);border-radius:3px;color:var(--fg);padding:5px 6px;font-size:12px;outline:none;margin-top:4px}
 #props table{width:100%;border-collapse:collapse;font-size:11px}
 #props td{padding:2px 4px;border-bottom:1px solid #2d2d2d;vertical-align:top;word-break:break-all}
 #props td:first-child{color:#9cdcfe;white-space:nowrap}
@@ -45,10 +50,13 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font:13px/1.5 "Segoe 
     <button data-v="front">前</button><button data-v="top">顶</button><button data-v="right">右</button>
     <button data-v="zoom_in">＋</button><button data-v="zoom_out">－</button>
     <button id="refresh">⟳</button>
+    <button onclick="location.href='window.html'" title="FreeCAD 软件本体整体路由为网页">整窗</button>
   </div>
   <div id="tree"><h3>模型树</h3><div id="treebody"></div></div>
   <div id="view"><img id="shot" alt=""><div id="hint">拖拽旋转 · 滚轮缩放 · 双击适合窗口</div></div>
-  <div id="props"><h3>属性</h3><div id="propbody" style="color:var(--dim)">选中对象查看属性</div></div>
+  <div id="props"><h3>属性</h3><div id="propbody" style="color:var(--dim)">选中对象查看属性</div>
+    <div id="ai"><h3>AI 建模副驾</h3><div id="ailog"><span class="a">对话式建模：如 box 20x10x5 / cylinder r=5 h=20 / fillet it radius 2，或 solid.box {"length":10,...}</span></div>
+    <input id="aiin" placeholder="描述建模意图，回车发送 → /agent" autocomplete="off"></div></div>
   <div id="cons">
     <div id="log"></div>
     <div id="inrow">
@@ -115,6 +123,16 @@ $('cmd').addEventListener('keydown',async e=>{if(e.key!=='Enter')return;
  const mode=$('mode').value;logln('in',(mode==='py'?'>>> ':'CMD ')+v);
  try{const d=mode==='py'?await api('POST','/exec',{code:v}):await api('POST','/run_command',{command:v});
   logln(d.ok?'out':'er',JSON.stringify(d));dirty=true;loadTree();status()}catch(err){logln('er',String(err))}});
+
+/* ── AI copilot (/agent) ── */
+function ailn(cls,txt){const d=document.createElement('div');d.className=cls;d.textContent=txt;$('ailog').appendChild(d);$('ailog').scrollTop=1e9}
+$('aiin').addEventListener('keydown',async e=>{if(e.key!=='Enter')return;
+ const v=$('aiin').value.trim();if(!v)return;$('aiin').value='';ailn('u','你: '+v);
+ try{const d=await api('POST','/agent',{text:v});
+  if(d.ok){ailn('a','AI: '+d.note);
+   (d.results||[]).forEach(r=>ailn(r.ok?'a':'e','  · '+r.tool+(r.ok?' ✓':' ✗ '+(r.error||''))));
+  }else ailn('e','AI: '+(d.error||'失败'));
+  dirty=true;loadTree();status()}catch(err){ailn('e',String(err))}});
 
 /* ── boot ── */
 (async()=>{if(await status()){await loadWb();await loadTree();dirty=true}
