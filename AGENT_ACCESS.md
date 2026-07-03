@@ -57,7 +57,7 @@ print(api("GET", "/api/project/brief")["data"]["markdown"])
 ## 四、工具面速览
 
 - `solid.*` 实体建模（box/cylinder/cut/fuse/fillet/translate/measure/…）
-- `project.*` **项目全貌感知**（state / brief / save_brief）——本源闭环
+- `project.*` **项目全貌感知**（state / brief / save_brief / snapshot / diff）——本源闭环；snapshot+diff 即模型的 `git diff`：先 `project.snapshot {label}` 记录基线，改完 `project.diff {base}` 一眼看清增删/位移/体积/特征/问题的全部变化
 - `percept.*` 结构感知（topology/features/section/relations/scene/describe/diff）
 - `param.*` 参数化 · `asm.*` 装配 · `fem.*` 有限元 · `path.*` CAM · `measure.*` 计量
 - `gui.*` 视口之眼（scene/snapshot/selection/perceive，仅 GUI 内可用）
