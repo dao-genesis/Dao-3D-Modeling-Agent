@@ -60,7 +60,7 @@ class Planner:
         self.last_name: Optional[str] = None
 
     def _name(self, prefix: str, text: str) -> str:
-        m = re.search(r"\b(?:name|call(?:ed)?|as)\s+([A-Za-z_]\w*)", text)
+        m = re.search(r"\b(?:named?|call(?:ed)?|as)\s+([A-Za-z_]\w*)", text)
         if m:
             name = m.group(1)
         else:

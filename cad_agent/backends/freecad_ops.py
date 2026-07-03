@@ -7,6 +7,7 @@ and the workhorse for boolean modelling, measurement and interference checks.
 The PartDesign feature-tree (editable, parametric) lives in ``freecad_parametric``.
 """
 
+import difflib
 import hashlib
 import itertools
 import json
@@ -571,7 +572,11 @@ def register(state):
                 state.shapes[name] = cand.Name
                 oname = cand.Name
             else:
-                raise KeyError("no such solid: %s" % name)
+                have = sorted(set(list(state.shapes) + list(state.bodies)))
+                close = difflib.get_close_matches(str(name), have, n=3, cutoff=0.5)
+                hint = " -- did you mean: %s?" % ", ".join(close) if close \
+                    else (" (have: %s)" % ", ".join(have[:8]) if have else "")
+                raise KeyError("no such solid: %s%s" % (name, hint))
         obj = doc.getObject(oname)
         if obj is None:
             raise KeyError("solid object missing: %s" % name)
