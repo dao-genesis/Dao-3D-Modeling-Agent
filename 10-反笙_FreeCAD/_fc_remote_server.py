@@ -143,7 +143,10 @@ def _handle_commands():
     """GET /commands"""
     def _fn():
         import FreeCADGui as Gui
-        from PySide2 import QtWidgets
+        try:
+            from PySide2 import QtWidgets
+        except ImportError:
+            from PySide import QtWidgets
 
         commands = {}
         mw = Gui.getMainWindow()
@@ -396,7 +399,15 @@ def _handle_view(body):
             "left": "viewLeft",
             "right": "viewRight",
             "home": "viewHome",
+            "axonometric": "viewAxonometric",
         }
+
+        if action == "zoom_in":
+            view.zoomIn()
+            return {"ok": True, "action": action}
+        if action == "zoom_out":
+            view.zoomOut()
+            return {"ok": True, "action": action}
 
         fn_name = VIEW_ACTIONS.get(action)
         if fn_name:
@@ -407,9 +418,13 @@ def _handle_view(body):
             # {"action": "set_camera", "position": [x,y,z], "direction": [x,y,z]}
             pos = body.get("position")
             dirn = body.get("direction")
-            if pos and dirn:
+            if dirn:
                 from FreeCAD import Base
-                view.setViewDirection(Base.Vector(*dirn))
+                d = Base.Vector(*dirn)
+                if d.Length < 1e-9:
+                    return {"ok": False, "error": "zero direction"}
+                d.normalize()
+                view.setCameraOrientation(Base.Rotation(Base.Vector(0, 0, -1), d))
                 return {"ok": True, "action": "set_camera"}
 
         if action == "perspective":
@@ -718,6 +733,27 @@ class FreeCADRemoteHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _ui_response(self, path):
+        """GET /ui \u2014 serve the unified single-page IDE frontend."""
+        rel = path[len("/ui"):].lstrip("/") or "index.html"
+        root = os.environ.get("FC_REMOTE_UI") or os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "..", "90-\u5f52\u4e00_IDE", "web")
+        f = os.path.abspath(os.path.join(root, rel))
+        if not f.startswith(os.path.abspath(root)) or not os.path.isfile(f):
+            self._json_response({"ok": False, "error": "ui asset not found", "path": f}, 404)
+            return
+        ctype = {".html": "text/html", ".js": "text/javascript", ".css": "text/css",
+                 ".png": "image/png", ".svg": "image/svg+xml"}.get(os.path.splitext(f)[1], "application/octet-stream")
+        with open(f, "rb") as fp:
+            body = fp.read()
+        self.send_response(200)
+        self.send_header("Content-Type", ctype + ("; charset=utf-8" if ctype.startswith("text") else ""))
+        self._cors()
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_OPTIONS(self):
         self.send_response(204)
         self._cors()
@@ -742,6 +778,8 @@ class FreeCADRemoteHandler(BaseHTTPRequestHandler):
                 self._json_response(_handle_selection())
             elif path == "/screenshot":
                 self._json_response(_handle_screenshot())
+            elif path == "/ui" or path.startswith("/ui/"):
+                self._ui_response(path)
             else:
                 self._json_response({"ok": False, "error": "not found"}, 404)
         except Exception as e:
@@ -832,7 +870,10 @@ def start_server(port=None, host=None):
 
     # Start QTimer for GUI-thread command processing
     try:
-        from PySide2 import QtCore
+        try:
+            from PySide2 import QtCore
+        except ImportError:
+            from PySide import QtCore
         _timer = QtCore.QTimer()
         _timer.timeout.connect(_gui_thread_worker)
         _timer.start(50)  # 50ms polling interval
