@@ -166,6 +166,32 @@ def register(state):
                         "picked": picked})
         return {"selected": out, "count": len(out)}
 
+    def op_status(a):
+        """One cheap call -> the live IDE heartbeat: document, counts,
+        selection, active workbench, undo depth. No tessellation, no render;
+        safe to poll every second from a dashboard or a remote agent."""
+        sel = [s.ObjectName for s in Gui.Selection.getSelectionEx()]
+        errors = 0
+        for o in doc.Objects:
+            try:
+                if any(s in ("Error", "Invalid") for s in o.State):
+                    errors += 1
+            except Exception:
+                pass
+        try:
+            wb = Gui.activeWorkbench().name()
+        except Exception:
+            wb = None
+        return {"document": doc.Name,
+                "path": getattr(doc, "FileName", ""),
+                "objects": len(doc.Objects),
+                "selection": sel,
+                "workbench": wb,
+                "undo_depth": getattr(doc, "UndoCount", 0),
+                "redo_depth": getattr(doc, "RedoCount", 0),
+                "errors": errors,
+                "time": time.strftime("%Y-%m-%d %H:%M:%S")}
+
     def op_errors(a):
         bad = []
         for o in doc.Objects:
@@ -183,5 +209,6 @@ def register(state):
         "gui.fit": op_fit,
         "gui.scene": op_scene,
         "gui.selection": op_selection,
+        "gui.status": op_status,
         "gui.errors": op_errors,
     }

@@ -13,6 +13,8 @@ Endpoints (JSON in/out; ``Authorization: Bearer <token>`` on all but health):
 - ``GET  /api/tools``         every tool name the actor exposes
 - ``POST /api/act``           ``{"tool", "args"}`` -> one op result
 - ``POST /api/batch``         ``{"calls": [{"tool","args"}...]}`` -> results
+- ``GET  /api/status``        cheap live heartbeat (doc/selection/undo),
+  pollable every second
 - ``GET  /api/project``       whole-project state (the closed-loop eye)
 - ``GET  /api/project/brief`` the same truth as readable markdown
 - ``POST /api/chat``          ``{"text"}`` -> run the configured LLM agent;
@@ -99,6 +101,10 @@ class DaoAPI:
                     return self._reply(401, {"error": "bad token"})
                 if self.path == "/api/tools":
                     return self._reply(200, {"tools": sorted(api.tools)})
+                if self.path == "/api/status":
+                    tool = ("gui.status" if "gui.status" in api.tools
+                            else "project.brief")
+                    return self._reply(*api.call(tool, {}))
                 if self.path == "/api/project":
                     return self._reply(*api.call("project.state", {}))
                 if self.path == "/api/project/brief":
