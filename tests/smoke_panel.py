@@ -50,6 +50,20 @@ try:
     names = [o.Name for o in App.ActiveDocument.Objects]
     P("DOC_OBJECTS", ",".join(names))
     assert any("plate" in n for n in names), names
+    # AI-IDE tabs: conversation / data / management
+    assert panel.tabs.count() == 3, panel.tabs.count()
+    panel._refresh_data()
+    data = panel.data_view.toPlainText()
+    assert "plate" in data, data[:400]
+    P("DATA_TAB_OK")
+    panel._refresh_mgmt()
+    mgmt = panel.mgmt_view.toPlainText()
+    assert "Agent API" in mgmt, mgmt[:400]
+    P("MGMT_TAB_OK")
+    # the world's model libraries are part of the in-GUI tool surface
+    assert "resource.search" in panel.engine.handlers, \
+        sorted(panel.engine.handlers)[:20]
+    P("RESOURCE_OPS_OK")
     P("PANEL_SMOKE_PASS")
 except Exception:
     import traceback
@@ -97,7 +111,9 @@ def main():
     print(log.strip())
     assert "PANEL_MOUNTED" in log, log
     assert log.count("TURN_OK") == 4, log
-    assert "PANEL_SMOKE_PASS" in log, log
+    for marker in ("DATA_TAB_OK", "MGMT_TAB_OK", "RESOURCE_OPS_OK",
+                   "PANEL_SMOKE_PASS"):
+        assert marker in log, log
     print("PANEL SMOKE OK")
 
 

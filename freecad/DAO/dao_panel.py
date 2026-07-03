@@ -78,7 +78,21 @@ class DAOPanel(QtWidgets.QWidget):
 
     # -- ui ----------------------------------------------------------------- #
     def _build_ui(self):
-        lay = QtWidgets.QVBoxLayout(self)
+        outer = QtWidgets.QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        self.tabs = QtWidgets.QTabWidget()
+        self.tabs.setDocumentMode(True)
+        self.tabs.setStyleSheet(
+            "QTabWidget::pane{border:0;}"
+            "QTabBar::tab{background:#141a22;color:#8b98a9;padding:5px 14px;"
+            "border:none;font-size:12px;}"
+            "QTabBar::tab:selected{background:#0d1117;color:#e6edf3;"
+            "border-bottom:2px solid #2563eb;}")
+        outer.addWidget(self.tabs)
+
+        chat = QtWidgets.QWidget()
+        lay = QtWidgets.QVBoxLayout(chat)
         lay.setContentsMargins(6, 6, 6, 6)
         lay.setSpacing(6)
 
@@ -178,6 +192,146 @@ class DAOPanel(QtWidgets.QWidget):
         row.addWidget(self.input, 1)
         row.addWidget(send)
         lay.addLayout(row)
+
+        self.tabs.addTab(chat, "\u5bf9\u8bdd")
+        self.tabs.addTab(self._build_data_tab(), "\u6570\u636e")
+        self.tabs.addTab(self._build_mgmt_tab(), "\u7ba1\u7406")
+        self.tabs.currentChanged.connect(self._on_tab_changed)
+
+    # -- data tab: the live-project truth, always current ----------------- #
+    def _build_data_tab(self):
+        w = QtWidgets.QWidget()
+        v = QtWidgets.QVBoxLayout(w)
+        v.setContentsMargins(6, 6, 6, 6)
+        v.setSpacing(6)
+        bar = QtWidgets.QHBoxLayout()
+        self.data_auto = QtWidgets.QCheckBox("\u5b9e\u65f6\u5237\u65b0")
+        self.data_auto.setChecked(True)
+        self.data_auto.setStyleSheet("QCheckBox{color:#8b98a9;font-size:11px;}")
+        refresh = QtWidgets.QPushButton("\u5237\u65b0")
+        refresh.setStyleSheet(
+            "QPushButton{background:#1b2430;color:#cfe2ff;border:1px solid "
+            "#2f3d4f;border-radius:6px;padding:3px 10px;font-size:11px;}"
+            "QPushButton:hover{background:#243246;}")
+        refresh.clicked.connect(self._refresh_data)
+        self.data_stamp = QtWidgets.QLabel("")
+        self.data_stamp.setStyleSheet("QLabel{color:#607086;font-size:10px;}")
+        bar.addWidget(self.data_auto)
+        bar.addWidget(self.data_stamp, 1)
+        bar.addWidget(refresh)
+        v.addLayout(bar)
+        self.data_view = QtWidgets.QPlainTextEdit()
+        self.data_view.setReadOnly(True)
+        self.data_view.setStyleSheet(
+            "QPlainTextEdit{background:#10141b;color:#d7dde6;border:1px solid "
+            "#2a3340;font-family:Consolas,monospace;font-size:11px;}")
+        v.addWidget(self.data_view, 1)
+        self._data_timer = QtCore.QTimer(self)
+        self._data_timer.setInterval(2000)
+        self._data_timer.timeout.connect(self._auto_refresh_data)
+        return w
+
+    def _on_tab_changed(self, idx):
+        if self.tabs.widget(idx) is self.data_view.parentWidget():
+            self._refresh_data()
+            self._data_timer.start()
+        else:
+            self._data_timer.stop()
+        if self.tabs.tabText(idx) == "\u7ba1\u7406":
+            self._refresh_mgmt()
+
+    def _auto_refresh_data(self):
+        if self.data_auto.isChecked() and self.data_view.isVisible():
+            self._refresh_data()
+
+    def _refresh_data(self):
+        try:
+            self.engine._ensure_doc()
+            fn = self.engine.handlers.get("project.brief")
+            if fn is None:
+                self.data_view.setPlainText("project.* \u672a\u52a0\u8f7d")
+                return
+            out = fn({"relations": False})
+            # keep the human's scroll position on live refresh
+            sb = self.data_view.verticalScrollBar()
+            pos = sb.value()
+            self.data_view.setPlainText(out.get("markdown", ""))
+            sb.setValue(min(pos, sb.maximum()))
+            import time as _t
+            self.data_stamp.setText(
+                "%s \u00b7 %d \u5bf9\u8c61%s" % (
+                    _t.strftime("%H:%M:%S"), out.get("object_count", 0),
+                    "" if out.get("ok") else " \u00b7 \u26a0 \u6709\u95ee\u9898"))
+        except Exception as exc:
+            self.data_view.setPlainText("\u72b6\u6001\u83b7\u53d6\u5931\u8d25: %s" % exc)
+
+    # -- management tab: engine / API / sessions at a glance --------------- #
+    def _build_mgmt_tab(self):
+        w = QtWidgets.QWidget()
+        v = QtWidgets.QVBoxLayout(w)
+        v.setContentsMargins(6, 6, 6, 6)
+        v.setSpacing(6)
+        self.mgmt_view = QtWidgets.QPlainTextEdit()
+        self.mgmt_view.setReadOnly(True)
+        self.mgmt_view.setStyleSheet(
+            "QPlainTextEdit{background:#10141b;color:#d7dde6;border:1px solid "
+            "#2a3340;font-family:Consolas,monospace;font-size:11px;}")
+        v.addWidget(self.mgmt_view, 1)
+        bar = QtWidgets.QHBoxLayout()
+        self.api_btn = QtWidgets.QPushButton("\u542f\u52a8 Agent API")
+        self.api_btn.setStyleSheet(
+            "QPushButton{background:#1b2430;color:#cfe2ff;border:1px solid "
+            "#2f3d4f;border-radius:6px;padding:4px 10px;font-size:11px;}"
+            "QPushButton:hover{background:#243246;}")
+        self.api_btn.clicked.connect(self._toggle_api)
+        cfgbtn = QtWidgets.QPushButton("AI \u8bbe\u7f6e\u2026")
+        cfgbtn.setStyleSheet(self.api_btn.styleSheet())
+        cfgbtn.clicked.connect(self._settings)
+        bar.addWidget(self.api_btn)
+        bar.addWidget(cfgbtn)
+        bar.addStretch(1)
+        v.addLayout(bar)
+        return w
+
+    def _toggle_api(self):
+        cfg = dao_llm.load_config()
+        cfg["api_enabled"] = not cfg.get("api_enabled")
+        dao_llm.save_config(cfg)
+        self._maybe_start_api()
+        self._refresh_mgmt()
+
+    def _refresh_mgmt(self):
+        cfg = dao_llm.load_config()
+        try:
+            self.engine._ensure_doc()
+            nops = len(self.engine.handlers)
+        except Exception:
+            nops = 0
+        lines = ["== \u5f15\u64ce ==",
+                 "\u5de5\u5177\u6570: %d" % nops,
+                 "\u6587\u6863: %s" % (App.ActiveDocument.Name
+                                       if App.ActiveDocument else "(\u65e0)"),
+                 "",
+                 "== \u6a21\u578b ==",
+                 "model: %s" % cfg.get("model"),
+                 "base_url: %s" % cfg.get("base_url"),
+                 "\u5df2\u914d\u7f6e: %s" % ("\u662f" if dao_llm.configured()
+                                             else "\u5426\uff08\u672c\u5730\u89c4\u5219\u56de\u9000\uff09"),
+                 "",
+                 "== Agent API =="]
+        if self._api is not None:
+            lines += ["\u72b6\u6001: \u8fd0\u884c\u4e2d http://127.0.0.1:%d"
+                      % self._api.port,
+                      "\u63a5\u5165\u6307\u5357: AGENT_ACCESS.md"]
+            self.api_btn.setText("\u505c\u6b62 Agent API")
+        else:
+            lines += ["\u72b6\u6001: \u672a\u542f\u52a8"]
+            self.api_btn.setText("\u542f\u52a8 Agent API")
+        lines += ["", "== \u4f1a\u8bdd =="]
+        for c in dao_sessions.list_all()[:12]:
+            mark = " \u2190" if c["id"] == self.conv["id"] else ""
+            lines.append("%s (%d)%s" % (c["title"], c["count"], mark))
+        self.mgmt_view.setPlainText("\n".join(lines))
 
     # -- chat (AI-IDE bubbles) ---------------------------------------------- #
     def _set_status(self, idle=True, text=None):
