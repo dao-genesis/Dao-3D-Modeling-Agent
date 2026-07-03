@@ -165,6 +165,45 @@ def _check_profile(profile):
     return profile
 
 
+def _coerce_profile(a):
+    """Accept the canonical ``profile`` dict, or assemble one from the flat
+    spellings agents naturally use: ``rect``/``circle``/``polygon`` as top-level
+    args, or ``shape`` + ``width``/``height``/``radius``/``side``/``points``
+    (with optional ``at``). Everything funnels into the same profile dict the
+    sketch builder already validates."""
+    p = a.get("profile")
+    if p is not None:
+        return _check_profile(p)
+    out = None
+    for k in ("rect", "circle", "polygon"):
+        if k in a:
+            out = {k: a[k]}
+            break
+    if out is None:
+        shape = a.get("shape")
+        shape = shape.lower() if isinstance(shape, str) else shape
+        if shape in ("rect", "rectangle", "box", "square"):
+            w = a.get("width", a.get("w", a.get("side")))
+            h = a.get("height", a.get("h", w))
+            if w is not None:
+                out = {"rect": [w, h]}
+        elif shape in ("circle", "round", "hole", "disc", "disk"):
+            r = a.get("radius", a.get("r"))
+            if r is None and a.get("diameter") is not None:
+                r = float(a["diameter"]) / 2.0
+            if r is not None:
+                out = {"circle": r}
+        elif shape in ("polygon", "poly") and a.get("points") is not None:
+            out = {"polygon": a["points"]}
+        elif shape is None and a.get("radius") is not None:
+            out = {"circle": a["radius"]}
+    if out is None:
+        raise KeyError("profile")
+    if "at" in a and "at" not in out:
+        out["at"] = a["at"]
+    return _check_profile(out)
+
+
 def _pt2(seq, label):
     """Coerce a 2-element [x, y] sequence to floats with a guided error -- a
     bare ``float(seq[0])`` leaks 'could not convert' / 'string indices must be
@@ -451,10 +490,29 @@ def register(state):
         doc.recompute()
         return {"body": name}
 
+    def _existing_sketch(body, name):
+        # Resolve a sketch previously made with param.sketch, by object Name or
+        # Label, so features can reuse it instead of describing a new profile.
+        if not isinstance(name, str) or not name:
+            raise ValueError("'sketch' must name an existing sketch (got %r)" % (name,))
+        obj = doc.getObject(name)
+        if obj is None:
+            hits = [o for o in doc.Objects
+                    if getattr(o, "Label", None) == name
+                    and o.isDerivedFrom("Sketcher::SketchObject")]
+            obj = hits[0] if hits else None
+        if obj is None or not obj.isDerivedFrom("Sketcher::SketchObject"):
+            raise ValueError(
+                "no such sketch: %s -- make one with param.sketch or pass a "
+                "'profile' instead" % name)
+        if obj not in body.Group:
+            body.addObject(obj)
+        return obj
+
     def op_sketch(a):
         body = _body(a["body"])
         feat = a.get("feature", a.get("name", "Sketch"))
-        sk = _profile_sketch(body, a.get("plane", "XY"), a["profile"], feat,
+        sk = _profile_sketch(body, a.get("plane", "XY"), _coerce_profile(a), feat,
                              a.get("name", feat + "_sk"), bodyname=a["body"],
                              offset=float(a.get("offset", 0)))
         return {"sketch": sk.Name, "dof": sk.DoF, "fully_constrained": bool(sk.FullyConstrained)}
@@ -466,12 +524,16 @@ def register(state):
         # Validate every argument BEFORE creating any kernel object: otherwise a
         # late failure (e.g. non-numeric length) leaves a half-built sketch +
         # feature attached as the body tip, corrupting later ops.
-        _check_profile(a["profile"])
+        existing = a.get("sketch")
+        profile = None if existing is not None else _coerce_profile(a)
         offset = _num(a, "offset", 0, "offset")
         length = _num(a, "length", 10, "length") if kind in ("Pad", "Pocket") else None
         angle = _num(a, "angle", 360, "angle") if kind in ("Revolution", "Groove") else None
-        sk = _profile_sketch(body, a.get("plane", "XY"), a["profile"], feat, feat + "_sk",
-                             bodyname=a["body"], offset=offset)
+        if existing is not None:
+            sk = _existing_sketch(body, existing)
+        else:
+            sk = _profile_sketch(body, a.get("plane", "XY"), profile, feat, feat + "_sk",
+                                 bodyname=a["body"], offset=offset)
         sk.Visibility = False
         f = body.newObject("PartDesign::%s" % kind, feat)
         _reg_feature(a["body"], feat, f)
