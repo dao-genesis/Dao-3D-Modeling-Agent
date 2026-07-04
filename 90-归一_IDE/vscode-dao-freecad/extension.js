@@ -13,7 +13,13 @@ const fs = require("fs");
 const path = require("path");
 
 let panel = null;
+let windowPanel = null;
 let fcProc = null;
+let extCtx = null;
+
+// 路径A：用户未装 FreeCAD 时，插件自动下载 AppImage 并解包为内置运行时
+const FREECAD_APPIMAGE_URL =
+  "https://github.com/FreeCAD/FreeCAD/releases/download/1.0.2/FreeCAD_1.0.2-conda-Linux-x86_64-py311.AppImage";
 
 function cfg() { return vscode.workspace.getConfiguration("dao-freecad"); }
 function base() { return `http://127.0.0.1:${cfg().get("port")}`; }
@@ -38,7 +44,52 @@ function findFreeCAD() {
     "C:\\Program Files\\FreeCAD 1.0\\bin\\freecad.exe",
     "/Applications/FreeCAD.app/Contents/MacOS/FreeCAD",
   ];
-  return candidates.find((p) => fs.existsSync(p)) || "freecad";
+  return candidates.find((p) => fs.existsSync(p)) || null;
+}
+
+function runtimeDir() {
+  const d = extCtx ? extCtx.globalStorageUri.fsPath : path.join(process.env.HOME || ".", ".dao-freecad");
+  fs.mkdirSync(d, { recursive: true });
+  return d;
+}
+
+/** 路径A：自动下载 + 解包 FreeCAD AppImage（Linux），用户零安装 */
+async function ensureFreeCADRuntime() {
+  const found = findFreeCAD();
+  if (found) return found;
+  const dir = runtimeDir();
+  const extracted = path.join(dir, "squashfs-root", "usr", "bin", "freecad");
+  if (fs.existsSync(extracted)) return extracted;
+  if (process.platform !== "linux") {
+    vscode.window.showErrorMessage("DAO FreeCAD: 未找到 FreeCAD，请安装后在设置 dao-freecad.freecadPath 指定路径");
+    return null;
+  }
+  const appimage = path.join(dir, "FreeCAD.AppImage");
+  return vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: "DAO FreeCAD: 首次使用，自动下载内置 FreeCAD 运行时…" },
+    async (progress) => {
+      if (!fs.existsSync(appimage)) {
+        progress.report({ message: "下载 AppImage…" });
+        await new Promise((resolve, reject) => {
+          const r = cp.spawn("curl", ["-fL", "--retry", "3", "-o", appimage + ".part", FREECAD_APPIMAGE_URL]);
+          r.on("exit", (c) => (c === 0 ? resolve() : reject(new Error("download failed: " + c))));
+          r.on("error", reject);
+        });
+        fs.renameSync(appimage + ".part", appimage);
+        fs.chmodSync(appimage, 0o755);
+      }
+      progress.report({ message: "解包运行时（免 FUSE）…" });
+      await new Promise((resolve, reject) => {
+        const r = cp.spawn(appimage, ["--appimage-extract"], { cwd: dir });
+        r.on("exit", (c) => (c === 0 ? resolve() : reject(new Error("extract failed: " + c))));
+        r.on("error", reject);
+      });
+      return fs.existsSync(extracted) ? extracted : null;
+    }
+  ).then(
+    (p) => p,
+    (e) => { vscode.window.showErrorMessage("DAO FreeCAD: 内置运行时安装失败 " + e.message); return null; }
+  );
 }
 
 function findServerScript() {
@@ -49,7 +100,9 @@ function findServerScript() {
     if (fs.existsSync(p)) return p;
   }
   const rel = path.join(__dirname, "..", "..", "10-反笙_FreeCAD", "_fc_remote_server.py");
-  return fs.existsSync(rel) ? rel : null;
+  if (fs.existsSync(rel)) return rel;
+  const bundled = path.join(__dirname, "_fc_remote_server.py"); // 随插件内置
+  return fs.existsSync(bundled) ? bundled : null;
 }
 
 async function ensureBridge() {
@@ -59,7 +112,8 @@ async function ensureBridge() {
     vscode.window.showErrorMessage("DAO FreeCAD: 找不到 _fc_remote_server.py（可在设置 dao-freecad.serverScript 指定）");
     return false;
   }
-  const bin = findFreeCAD();
+  const bin = await ensureFreeCADRuntime();
+  if (!bin) return false;
   vscode.window.setStatusBarMessage("DAO FreeCAD: 正在启动 FreeCAD 桥接…", 15000);
   fcProc = cp.spawn(bin, [script], { detached: true, stdio: "ignore", env: { ...process.env, FC_REMOTE_PORT: String(cfg().get("port")) } });
   fcProc.unref();
@@ -71,8 +125,8 @@ async function ensureBridge() {
   return false;
 }
 
-function webviewHtml() {
-  const url = base() + "/ui";
+function webviewHtml(page) {
+  const url = base() + "/ui" + (page ? "/" + page : "");
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${base()} http://localhost:*; style-src 'unsafe-inline';">
 <style>html,body{height:100%;margin:0;overflow:hidden}iframe{width:100%;height:100%;border:0}</style>
@@ -88,6 +142,18 @@ async function openWorkbench() {
   );
   panel.webview.html = webviewHtml();
   panel.onDidDispose(() => { panel = null; });
+}
+
+/** 整窗归一：FreeCAD 软件本体全 UI 路由为中间面板单网页 */
+async function openWholeWindow() {
+  if (!(await ensureBridge())) return;
+  if (windowPanel) { windowPanel.reveal(vscode.ViewColumn.One); return; }
+  windowPanel = vscode.window.createWebviewPanel(
+    "daoFreecadWindow", "☯ FreeCAD 整窗归一", vscode.ViewColumn.One,
+    { enableScripts: true, retainContextWhenHidden: true }
+  );
+  windowPanel.webview.html = webviewHtml("window.html");
+  windowPanel.onDidDispose(() => { windowPanel = null; });
 }
 
 function postJSON(p, body) {
@@ -113,8 +179,10 @@ async function openCurrentFile() {
 }
 
 function activate(context) {
+  extCtx = context;
   context.subscriptions.push(
     vscode.commands.registerCommand("dao-freecad.open", openWorkbench),
+    vscode.commands.registerCommand("dao-freecad.openWindow", openWholeWindow),
     vscode.commands.registerCommand("dao-freecad.openFile", openCurrentFile)
   );
 }
