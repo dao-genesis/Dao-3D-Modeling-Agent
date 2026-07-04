@@ -73,7 +73,12 @@ async function api(m,p,body){const r=await fetch(API+p,{method:m,headers:{'Conte
 function logln(cls,txt){const d=document.createElement('div');d.className=cls;d.textContent=txt;$('log').appendChild(d);$('log').scrollTop=1e9}
 
 /* ── viewport: 内核原生 WebGL(非投屏) — /scene 返回真实 tessellation, 本地 GPU 渲染 ── */
-const canvas=$('gl'),gl=canvas.getContext('webgl',{antialias:true});
+const canvas=$('gl');
+let gl=null;
+for(const t of['webgl','experimental-webgl']){
+ try{gl=canvas.getContext(t,{antialias:true,failIfMajorPerformanceCaveat:false})}catch(e){}
+ if(gl)break}
+if(!gl)$('hint').textContent='⚠ WebGL 不可用：视口已停用（模型树 / 属性 / 控制台 / AI 副驾照常可用）';
 const VS=`attribute vec3 aP;attribute vec3 aN;uniform mat4 uMVP;uniform mat4 uM;varying vec3 vN;varying vec3 vP;
 void main(){gl_Position=uMVP*vec4(aP,1.0);vN=mat3(uM)*aN;vP=(uM*vec4(aP,1.0)).xyz;}`;
 const FS=`precision mediump float;uniform vec3 uColor;uniform float uAlpha;uniform vec3 uEye;varying vec3 vN;varying vec3 vP;
@@ -84,7 +89,7 @@ gl_FragColor=vec4(uColor*(0.25+0.75*min(d,1.0))+spec,uAlpha);}`;
 const VSL=`attribute vec3 aP;uniform mat4 uMVP;void main(){gl_Position=uMVP*vec4(aP,1.0);gl_Position.z-=0.0006*gl_Position.w;}`;
 const FSL=`precision mediump float;uniform vec3 uColor;void main(){gl_FragColor=vec4(uColor,1.0);}`;
 function mkProg(vs,fs){const p=gl.createProgram();for(const[t,s]of[[gl.VERTEX_SHADER,vs],[gl.FRAGMENT_SHADER,fs]]){const sh=gl.createShader(t);gl.shaderSource(sh,s);gl.compileShader(sh);gl.attachShader(p,sh)}gl.linkProgram(p);return p}
-const progM=mkProg(VS,FS),progL=mkProg(VSL,FSL);
+const progM=gl&&mkProg(VS,FS),progL=gl&&mkProg(VSL,FSL);
 /* mat4 helpers (column-major) */
 function mIdent(){return[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]}
 function mMul(a,b){const o=new Array(16);for(let c=0;c<4;c++)for(let r=0;r<4;r++){let s=0;for(let k=0;k<4;k++)s+=a[k*4+r]*b[c*4+k];o[c*4+r]=s}return o}
@@ -101,6 +106,7 @@ function eyePos(){const a=cam.az*Math.PI/180,e=cam.el*Math.PI/180;
 /* scene store: name -> {vbo,nbo,ibo,n,edges:[{vbo,n}],color,alpha,selected} */
 let meshes={},sceneRev=null,bboxMin=null,bboxMax=null;
 function buildObject(o){
+ if(!gl)return;
  const old=meshes[o.name];if(old)freeMesh(old);
  if(!o.vertices||!o.vertices.length){delete meshes[o.name];return}
  const v=new Float32Array(o.vertices),f=new Uint32Array(o.faces||[]);
@@ -122,11 +128,12 @@ function buildObject(o){
   for(let k=0;k<3;k++){bboxMin[k]=Math.min(bboxMin[k],v[i+k]);bboxMax[k]=Math.max(bboxMax[k],v[i+k])}}
  meshes[o.name]=m}
 function freeMesh(m){gl.deleteBuffer(m.vbo);gl.deleteBuffer(m.nbo);gl.deleteBuffer(m.ibo);m.edges.forEach(e=>gl.deleteBuffer(e.vbo))}
-const ext32=gl.getExtension('OES_element_index_uint');
+const ext32=gl&&gl.getExtension('OES_element_index_uint');
 function fitAll(){if(!bboxMin)return;
  cam.target=[(bboxMin[0]+bboxMax[0])/2,(bboxMin[1]+bboxMax[1])/2,(bboxMin[2]+bboxMax[2])/2];
  cam.dist=Math.max(1,Math.hypot(bboxMax[0]-bboxMin[0],bboxMax[1]-bboxMin[1],bboxMax[2]-bboxMin[2])*1.4);draw()}
 function draw(){
+ if(!gl)return;
  const w=$('view').clientWidth,h=$('view').clientHeight;
  if(canvas.width!==w*devicePixelRatio||canvas.height!==h*devicePixelRatio){canvas.width=w*devicePixelRatio;canvas.height=h*devicePixelRatio}
  gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(0.066,0.066,0.066,1);gl.enable(gl.DEPTH_TEST);
@@ -184,6 +191,7 @@ $('view').addEventListener('dblclick',()=>fitAll());
 new ResizeObserver(()=>draw()).observe($('view'));
 /* GPU color-pick: render ids offscreen, read pixel → 选中内核对象 */
 async function pick(e){
+ if(!gl)return;
  const names=Object.keys(meshes);if(!names.length)return;
  const rect=canvas.getBoundingClientRect();
  const px=(e.clientX-rect.left)*devicePixelRatio,py=(e.clientY-rect.top)*devicePixelRatio;
