@@ -15,6 +15,7 @@ API:
   GET  /documents        — 全部打开文档
   GET  /selection        — 当前选择
   GET  /screenshot       — 捕获3D视图截图 (PNG base64)
+  GET  /scene            — 内核原生几何(三角网格+边线, 非像素): ?rev=上次版本&tol=容差
   POST /run_command      — 执行GUI命令 {"command": "Part_Box"}
   POST /exec             — 执行任意Python代码 {"code": "..."}
   POST /ops              — 执行backend ops序列
@@ -278,6 +279,104 @@ def _handle_screenshot():
                     "data": b64, "size": len(b64)}
         return {"ok": False, "error": "screenshot failed"}
     return _exec_in_gui_thread(_fn)
+
+
+def _scene_revision():
+    """Cheap monotonic-ish revision for the active document geometry."""
+    import FreeCAD as App
+    doc = App.ActiveDocument
+    if not doc:
+        return "none"
+    parts = [doc.Name]
+    for obj in doc.Objects:
+        vis = True
+        try:
+            vis = bool(obj.ViewObject.Visibility)
+        except Exception:
+            pass
+        h = ""
+        try:
+            if hasattr(obj, "Shape") and obj.Shape and not obj.Shape.isNull():
+                h = str(obj.Shape.hashCode())
+        except Exception:
+            pass
+        parts.append("%s:%s:%d" % (obj.Name, h, 1 if vis else 0))
+    import hashlib
+    return hashlib.md5("|".join(parts).encode()).hexdigest()[:16]
+
+
+def _handle_scene(query):
+    """GET /scene — native kernel geometry (tessellated meshes + edges), no pixels.
+
+    query: rev=<last revision>  → {"ok":true,"unchanged":true} if nothing moved
+           tol=<tessellation tolerance mm> (default 0.1)
+    """
+    tol = 0.1
+    try:
+        tol = float(query.get("tol", ["0.1"])[0])
+    except Exception:
+        pass
+    last = query.get("rev", [None])[0]
+
+    def _fn():
+        import FreeCAD as App
+        rev = _scene_revision()
+        if last and last == rev:
+            return {"ok": True, "unchanged": True, "rev": rev}
+        doc = App.ActiveDocument
+        if not doc:
+            return {"ok": True, "rev": rev, "document": None, "objects": []}
+        sel = set()
+        try:
+            import FreeCADGui as Gui
+            sel = {s.ObjectName for s in Gui.Selection.getSelectionEx()}
+        except Exception:
+            pass
+        objects = []
+        for obj in doc.Objects:
+            vis = True
+            color = [0.8, 0.8, 0.8]
+            transparency = 0
+            try:
+                vo = obj.ViewObject
+                vis = bool(vo.Visibility)
+                if hasattr(vo, "ShapeColor"):
+                    color = list(vo.ShapeColor)[:3]
+                if hasattr(vo, "Transparency"):
+                    transparency = int(vo.Transparency)
+            except Exception:
+                pass
+            entry = {"name": obj.Name, "label": obj.Label, "type": obj.TypeId,
+                     "visible": vis, "color": color, "transparency": transparency,
+                     "selected": obj.Name in sel}
+            try:
+                shape = None
+                if hasattr(obj, "Shape") and obj.Shape and not obj.Shape.isNull():
+                    shape = obj.Shape
+                if shape is not None and vis:
+                    verts, faces = shape.tessellate(tol)
+                    entry["vertices"] = [round(c, 4) for v in verts for c in (v.x, v.y, v.z)]
+                    entry["faces"] = [i for f in faces for i in f]
+                    edges = []
+                    for e in shape.Edges:
+                        try:
+                            pts = e.discretize(Deflection=max(tol, 0.05))
+                            edges.append([round(c, 4) for p in pts for c in (p.x, p.y, p.z)])
+                        except Exception:
+                            pass
+                    entry["edges"] = edges
+                elif hasattr(obj, "Mesh") and vis:
+                    m = obj.Mesh
+                    entry["vertices"] = [round(c, 4) for p in m.Points for c in (p.x, p.y, p.z)]
+                    entry["faces"] = [i for f in m.Facets for i in f.PointIndices]
+                    entry["edges"] = []
+            except Exception as e:
+                entry["mesh_error"] = str(e)
+            objects.append(entry)
+        return {"ok": True, "rev": rev,
+                "document": {"name": doc.Name, "label": doc.Label, "file": doc.FileName},
+                "objects": objects}
+    return _exec_in_gui_thread(_fn, timeout=60)
 
 
 def _handle_run_command(body):
@@ -1026,6 +1125,8 @@ class FreeCADRemoteHandler(BaseHTTPRequestHandler):
                 self._json_response(_handle_selection())
             elif path == "/screenshot":
                 self._json_response(_handle_screenshot())
+            elif path == "/scene":
+                self._json_response(_handle_scene(parse_qs(parsed.query)))
             elif path == "/window":
                 self._json_response(_handle_window(parse_qs(parsed.query)))
             elif path == "/tools":
