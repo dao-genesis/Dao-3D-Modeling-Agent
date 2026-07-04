@@ -18,7 +18,9 @@ IDE 三板块布局天然成立：左=文件管理，中=FreeCAD 归一工作台
 
 ```
 90-归一_IDE/
-├── web/index.html            # 单网页工作台：模型树 / 实时视口(拖拽轨道+滚轮缩放) /
+├── web/index.html            # 单网页工作台：模型树 / 内核原生 WebGL 视口(GET /scene 真实
+│                             #   tessellation 网格+边线, 本地 GPU 渲染, 非投屏非像素流;
+│                             #   零往返 orbit/pan/zoom, GPU 拾取直选内核对象) /
 │                             # 属性面板 / Python 控制台 / GUI 命令 / 工作台切换
 └── vscode-dao-freecad/       # VS Code 扩展（路径A外壳）
     ├── package.json          # 命令 + 配置（freecadPath / serverScript / port）

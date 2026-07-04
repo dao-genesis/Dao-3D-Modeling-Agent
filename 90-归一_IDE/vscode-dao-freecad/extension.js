@@ -34,17 +34,67 @@ function ping() {
   });
 }
 
+/** 扫描目录下所有 FreeCAD* 安装（任意版本），返回 bin 可执行路径列表 */
+function scanDirForFreeCAD(dir) {
+  const out = [];
+  try {
+    for (const name of fs.readdirSync(dir)) {
+      if (!/freecad/i.test(name)) continue;
+      for (const exe of ["bin\\FreeCAD.exe", "bin\\freecad.exe", "bin/FreeCAD", "bin/freecad",
+                         "usr/bin/freecad", "Contents/MacOS/FreeCAD"]) {
+        const p = path.join(dir, name, exe);
+        if (fs.existsSync(p)) { out.push(p); break; }
+      }
+    }
+  } catch (e) { /* dir absent */ }
+  return out;
+}
+
+/** 通过 PATH（where/which）找 FreeCAD */
+function findOnPath() {
+  const probe = process.platform === "win32" ? ["where", "freecad"] : ["which", "freecad"];
+  try {
+    const r = cp.spawnSync(probe[0], [probe[1]], { encoding: "utf8", timeout: 4000 });
+    const line = (r.stdout || "").split(/\r?\n/).find((l) => l.trim());
+    if (line && fs.existsSync(line.trim())) return line.trim();
+  } catch (e) {}
+  return null;
+}
+
+/** 自动识别本机任意版本/任意路径的 FreeCAD 安装（Windows/Linux/macOS） */
 function findFreeCAD() {
   const c = cfg().get("freecadPath");
   if (c && fs.existsSync(c)) return c;
-  const candidates = [
+
+  const roots = [];
+  if (process.platform === "win32") {
+    for (const env of ["ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"]) {
+      if (process.env[env]) roots.push(process.env[env]);
+    }
+    if (process.env.LOCALAPPDATA) {
+      roots.push(path.join(process.env.LOCALAPPDATA, "Programs"));
+      roots.push(process.env.LOCALAPPDATA); // scoop/conda style
+    }
+    for (const drive of ["C:", "D:", "E:"]) roots.push(drive + "\\");
+  } else {
+    roots.push("/opt", "/usr/lib", process.env.HOME || "");
+  }
+  const scanned = roots.flatMap(scanDirForFreeCAD);
+  if (scanned.length) {
+    // 多版本时取版本号最大的（目录名自然排序倒序）
+    scanned.sort().reverse();
+    return scanned[0];
+  }
+
+  const fixed = [
     path.join(process.env.HOME || "", "squashfs-root/usr/bin/freecad"),
     "/usr/bin/freecad", "/usr/local/bin/freecad", "/snap/bin/freecad",
-    "C:\\Program Files\\FreeCAD 1.1\\bin\\freecad.exe",
-    "C:\\Program Files\\FreeCAD 1.0\\bin\\freecad.exe",
+    "/usr/bin/FreeCAD", "/var/lib/flatpak/exports/bin/org.freecad.FreeCAD",
     "/Applications/FreeCAD.app/Contents/MacOS/FreeCAD",
-  ];
-  return candidates.find((p) => fs.existsSync(p)) || null;
+  ].find((p) => fs.existsSync(p));
+  if (fixed) return fixed;
+
+  return findOnPath();
 }
 
 function runtimeDir() {
