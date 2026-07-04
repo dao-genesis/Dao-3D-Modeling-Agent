@@ -766,6 +766,9 @@ def _handle_window(query):
 
 
 _MOUSE_BUTTONS_DOWN = set()
+# 网页路由时 FreeCAD 窗口非 OS 活动窗口, Qt 不会自动赋予键盘焦点;
+# 故记录最近一次鼠标按下命中的控件, 作为键盘事件的显式目标.
+_LAST_CLICK_TARGET = [None]
 
 
 def _handle_input(body):
@@ -805,12 +808,13 @@ def _handle_input(body):
             btn = {"left": Qt.LeftButton, "right": Qt.RightButton,
                    "middle": Qt.MiddleButton}.get(btn_name, Qt.LeftButton)
 
+            # QGraphicsView(Quarter 3D 视口)鼠标/滚轮事件须收在视图本体而非 viewport
+            parent = target.parentWidget()
+            if isinstance(parent, QtWidgets.QGraphicsView) and target is parent.viewport():
+                target = parent
+                lp = target.mapFromGlobal(gp)
+
             if etype == "wheel":
-                # QGraphicsView(Quarter 3D 视口)须收在视图本体而非 viewport
-                parent = target.parentWidget()
-                if isinstance(parent, QtWidgets.QGraphicsView) and target is parent.viewport():
-                    target = parent
-                    lp = target.mapFromGlobal(gp)
                 delta = int(body.get("delta", 120))
                 ev = QtGui.QWheelEvent(
                     QtCore.QPointF(lp), QtCore.QPointF(gp),
@@ -822,6 +826,15 @@ def _handle_input(body):
             if etype == "mouse_down":
                 _MOUSE_BUTTONS_DOWN.add(btn_name)
                 qev, evbtn = QtCore.QEvent.MouseButtonPress, btn
+                # 合成点击不触发焦点转移(真实点击由 Qt 自动处理), 此处补齐键盘焦点
+                w = target
+                while w is not None and w.focusPolicy() == Qt.NoFocus:
+                    w = w.parentWidget()
+                if w is not None and w.focusPolicy() & Qt.ClickFocus:
+                    w.setFocus(Qt.MouseFocusReason)
+                    _LAST_CLICK_TARGET[0] = w
+                else:
+                    _LAST_CLICK_TARGET[0] = target
             elif etype == "mouse_up":
                 _MOUSE_BUTTONS_DOWN.discard(btn_name)
                 qev, evbtn = QtCore.QEvent.MouseButtonRelease, btn
@@ -840,9 +853,16 @@ def _handle_input(body):
             return {"ok": True, "type": etype, "target": target.__class__.__name__}
 
         if etype in ("key_down", "key_up", "text"):
+            last = _LAST_CLICK_TARGET[0]
+            if last is not None:
+                try:
+                    if not last.isVisible():
+                        last = None
+                except RuntimeError:  # 已销毁
+                    last = _LAST_CLICK_TARGET[0] = None
             target = (QtWidgets.QApplication.activePopupWidget()
                       or QtWidgets.QApplication.focusWidget()
-                      or mw.focusWidget() or mw)
+                      or mw.focusWidget() or last or mw)
             if etype == "text":
                 for ch in body.get("text", ""):
                     key = _keycode(QtGui, ch) if ch.strip() else Qt.Key_Space
@@ -861,6 +881,19 @@ def _handle_input(body):
             key = special.get(name) or _keycode(QtGui, name)
             text = name if len(name) == 1 else ""
             qev = QtCore.QEvent.KeyPress if etype == "key_down" else QtCore.QEvent.KeyRelease
+            # postEvent 直达控件会绕过 QShortcutMap(Del/Ctrl+Z 等动作快捷键),
+            # 且窗口非活动时快捷键不匹配 —— 显式按快捷键触发对应 QAction
+            if etype == "key_down" and target is not None and not QtWidgets.QApplication.activePopupWidget():
+                fw = QtWidgets.QApplication.focusWidget()
+                editing = isinstance(fw, (QtWidgets.QLineEdit, QtWidgets.QTextEdit,
+                                          QtWidgets.QPlainTextEdit, QtWidgets.QAbstractSpinBox))
+                seq = QtGui.QKeySequence(int(mods.value if hasattr(mods, "value") else int(mods)) | int(key))
+                if not (editing and len(name) == 1):
+                    for act in mw.findChildren(QtGui.QAction):
+                        if act.isEnabled() and not act.shortcut().isEmpty() \
+                                and act.shortcut().matches(seq) == QtGui.QKeySequence.ExactMatch:
+                            act.trigger()
+                            return {"ok": True, "type": "shortcut", "action": act.objectName() or act.text()}
             QtWidgets.QApplication.postEvent(
                 target, QtGui.QKeyEvent(qev, key, mods, text))
             return {"ok": True, "type": etype, "key": name}
