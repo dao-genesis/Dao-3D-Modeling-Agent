@@ -35,12 +35,12 @@ const iframe = document.getElementById('vnc');
 const stat = document.getElementById('stat');
 const off = document.getElementById('off');
 
-iframe.src = vncBase + '/vnc.html?autoconnect=1&reconnect=1&reconnect_delay=1000&resize=remote&show_dot=1&bell=0';
+iframe.src = vncBase + '/vnc.html?autoconnect=1&reconnect=1&reconnect_delay=1000&resize=scale&show_dot=1&bell=0';
 
 async function probe(){
   try{
-    const r = await fetch(vncBase + '/vnc.html', {method:'GET', cache:'no-store'});
-    const alive = r.ok;
+    const r = await fetch(vncBase + '/vnc.html', {method:'GET', cache:'no-store', mode:'no-cors'});
+    const alive = r.ok || r.type === 'opaque';
     off.style.display = alive ? 'none' : 'flex';
     stat.textContent = alive ? '在线 · VNC 直连 FreeCAD 本体' : '离线';
   }catch(e){ off.style.display = 'flex'; stat.textContent = '离线'; }

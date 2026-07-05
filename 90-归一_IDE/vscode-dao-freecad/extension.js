@@ -25,7 +25,7 @@ function cfg() { return vscode.workspace.getConfiguration("dao-freecad"); }
 function base() { return `http://127.0.0.1:${cfg().get("port")}`; }
 
 const VNC_DISPLAY = ":99";
-const VNC_RFB_PORT = 5901;
+const VNC_RFB_PORT = 5902;
 const VNC_WEB_PORT = 6080;
 
 function portAlive(port, path_) {
@@ -223,8 +223,16 @@ async function ensureBridge() {
   return false;
 }
 
+function vncWebviewHtml() {
+  const url = `http://127.0.0.1:${VNC_WEB_PORT}/vnc.html?autoconnect=1&reconnect=1&reconnect_delay=1000&resize=scale&show_dot=1&bell=0`;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src http://127.0.0.1:* http://localhost:*; style-src 'unsafe-inline';">
+<style>html,body{height:100%;margin:0;overflow:hidden;background:#111}iframe{width:100%;height:100%;border:0}</style>
+</head><body><iframe src="${url}" allow="clipboard-read; clipboard-write"></iframe></body></html>`;
+}
+
 function webviewHtml(page) {
-  const url = base() + "/ui" + (page ? "/" + page : "");
+  const url = base() + "/ui" + (page ? "/" + page : "") + "?ts=" + Date.now();
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${base()} http://127.0.0.1:* http://localhost:*; style-src 'unsafe-inline';">
 <style>html,body{height:100%;margin:0;overflow:hidden}iframe{width:100%;height:100%;border:0}</style>
@@ -251,7 +259,7 @@ async function openWholeWindow() {
     "daoFreecadWindow", "☯ FreeCAD 整窗归一", vscode.ViewColumn.One,
     { enableScripts: true, retainContextWhenHidden: true }
   );
-  windowPanel.webview.html = webviewHtml("window.html");
+  windowPanel.webview.html = vncWebviewHtml();
   windowPanel.onDidDispose(() => { windowPanel = null; });
 }
 
