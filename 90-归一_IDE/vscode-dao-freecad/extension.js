@@ -266,21 +266,56 @@ async function openWorkbench() {
 }
 
 /** 面板适配：FreeCAD 主窗过大时 xpra 客户端只见局部/留白，按面板可视尺寸收拢主窗 */
+let lastPanelSize = null;
 function fitFreeCADWindow(w, h) {
   if (process.platform !== "linux") return;
-  const size = `${w || 900} ${h || 660}`;
-  cp.exec(
-    `xdotool search --name FreeCAD | while read id; do xdotool windowsize $id ${size}; xdotool windowmove $id 0 0; done`,
+  if (w > 100 && h > 100) lastPanelSize = [w, h];
+  const doFit = (W, H) => cp.exec(
+    `xdotool search --name FreeCAD | while read id; do xdotool windowsize $id ${W} ${H}; xdotool windowmove $id 0 0; done`,
     { env: { ...process.env, DISPLAY: XPRA_DISPLAY }, timeout: 8000 },
     () => {}
   );
+  if (lastPanelSize) return doFit(lastPanelSize[0], lastPanelSize[1]);
+  // 无显式尺寸时以 xpra 虚拟屏当前大小为准(HTML5 客户端会把虚拟屏同步为面板 iframe 尺寸)
+  cp.exec("xdotool getdisplaygeometry",
+    { env: { ...process.env, DISPLAY: XPRA_DISPLAY }, timeout: 8000 },
+    (e, out) => {
+      const m = String(out || "").trim().match(/^(\d+)\s+(\d+)$/);
+      if (m) doFit(m[1], m[2]); else doFit(900, 660);
+    });
+}
+
+// 底层双向适配守护：xpra 虚拟屏(随面板 iframe 实时变化)一变，FreeCAD 主窗即刻贴合
+let fitWatcher = null;
+function startFitWatcher() {
+  if (process.platform !== "linux" || fitWatcher) return;
+  let prev = "";
+  fitWatcher = setInterval(() => {
+    cp.exec("xdotool getdisplaygeometry",
+      { env: { ...process.env, DISPLAY: XPRA_DISPLAY }, timeout: 8000 },
+      (e, out) => {
+        const cur = String(out || "").trim();
+        if (!/^\d+ \d+$/.test(cur)) return;
+        if (cur !== prev) {
+          prev = cur;
+          const [W, H] = cur.split(" ");
+          lastPanelSize = null;
+          cp.exec(
+            `xdotool search --name FreeCAD | while read id; do xdotool windowsize $id ${W} ${H}; xdotool windowmove $id 0 0; done`,
+            { env: { ...process.env, DISPLAY: XPRA_DISPLAY }, timeout: 8000 },
+            () => {}
+          );
+        }
+      });
+  }, 1500);
 }
 
 /** 整窗归一：FreeCAD 软件本体全 UI 经 xpra X11 指令级路由为中间面板单网页 */
 async function openWholeWindow() {
   if (!(await ensureBridge())) return;
   await ensureDisplayRoute();
-  setTimeout(() => fitFreeCADWindow(), 1200);
+  setTimeout(() => fitFreeCADWindow(), 1200); // 兜底；panelSize 消息到达后以面板实际尺寸为准
+  startFitWatcher();
   if (windowPanel) { windowPanel.reveal(vscode.ViewColumn.One); return; }
   windowPanel = vscode.window.createWebviewPanel(
     "daoFreecadWindow", "☯ FreeCAD 整窗归一", vscode.ViewColumn.One,
