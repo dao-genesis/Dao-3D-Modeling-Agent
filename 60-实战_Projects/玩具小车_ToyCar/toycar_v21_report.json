@@ -1,0 +1,203 @@
+{
+ "printability": {
+  "Chassis": {
+   "watertight_solid": true,
+   "volume_mm3": 40047.3,
+   "bbox_mm": [
+    150.0,
+    58.0,
+    22.0
+   ],
+   "min_edge_mm": 1.0,
+   "min_cyl_radius_mm": 2.15,
+   "printable_walls": true,
+   "stl": "/home/ubuntu/Dao-3D-Modeling-Agent/60-实战_Projects/玩具小车_ToyCar/v2_parts/stl/Chassis.stl"
+  },
+  "Motor": {
+   "watertight_solid": true,
+   "volume_mm3": 7882.3,
+   "bbox_mm": [
+    20.0,
+    34.0,
+    20.0
+   ],
+   "min_edge_mm": 6.283,
+   "min_cyl_radius_mm": 1.0,
+   "printable_walls": true,
+   "stl": "/home/ubuntu/Dao-3D-Modeling-Agent/60-实战_Projects/玩具小车_ToyCar/v2_parts/stl/Motor.stl"
+  },
+  "MotorMount": {
+   "watertight_solid": true,
+   "volume_mm3": 939.1,
+   "bbox_mm": [
+    20.0,
+    8.0,
+    22.0
+   ],
+   "min_edge_mm": 8.0,
+   "min_cyl_radius_mm": 10.15,
+   "printable_walls": true,
+   "stl": "/home/ubuntu/Dao-3D-Modeling-Agent/60-实战_Projects/玩具小车_ToyCar/v2_parts/stl/MotorMount.stl"
+  },
+  "Pinion": {
+   "watertight_solid": false,
+   "volume_mm3": 1013.4,
+   "bbox_mm": [
+    6.0,
+    5.0,
+    6.0
+   ],
+   "min_edge_mm": 0.025,
+   "min_cyl_radius_mm": 1.05,
+   "printable_walls": false,
+   "stl": "/home/ubuntu/Dao-3D-Modeling-Agent/60-实战_Projects/玩具小车_ToyCar/v2_parts/stl/Pinion.stl"
+  },
+  "SpurGear": {
+   "watertight_solid": false,
+   "volume_mm3": 46798.4,
+   "bbox_mm": [
+    21.0,
+    5.0,
+    21.0
+   ],
+   "min_edge_mm": 0.047,
+   "min_cyl_radius_mm": 2.15,
+   "printable_walls": false,
+   "stl": "/home/ubuntu/Dao-3D-Modeling-Agent/60-实战_Projects/玩具小车_ToyCar/v2_parts/stl/SpurGear.stl"
+  },
+  "AxleRear": {
+   "watertight_solid": true,
+   "volume_mm3": 1269.2,
+   "bbox_mm": [
+    8.0,
+    92.0,
+    8.0
+   ],
+   "min_edge_mm": 1.5,
+   "min_cyl_radius_mm": 2.0,
+   "printable_walls": true,
+   "stl": "/home/ubuntu/Dao-3D-Modeling-Agent/60-实战_Projects/玩具小车_ToyCar/v2_parts/stl/AxleRear.stl"
+  },
+  "AxleFront": {
+   "watertight_solid": true,
+   "volume_mm3": 1269.2,
+   "bbox_mm": [
+    8.0,
+    92.0,
+    8.0
+   ],
+   "min_edge_mm": 1.5,
+   "min_cyl_radius_mm": 2.0,
+   "printable_walls": true,
+   "stl": "/home/ubuntu/Dao-3D-Modeling-Agent/60-实战_Projects/玩具小车_ToyCar/v2_parts/stl/AxleFront.stl"
+  },
+  "WheelRL": {
+   "watertight_solid": true,
+   "volume_mm3": 14047.0,
+   "bbox_mm": [
+    36.0,
+    14.0,
+    36.0
+   ],
+   "min_edge_mm": 13.509,
+   "min_cyl_radius_mm": 2.15,
+   "printable_walls": true,
+   "stl": "/home/ubuntu/Dao-3D-Modeling-Agent/60-实战_Projects/玩具小车_ToyCar/v2_parts/stl/WheelRL.stl"
+  },
+  "WheelRR": {
+   "watertight_solid": true,
+   "volume_mm3": 14047.0,
+   "bbox_mm": [
+    36.0,
+    14.0,
+    36.0
+   ],
+   "min_edge_mm": 13.509,
+   "min_cyl_radius_mm": 2.15,
+   "printable_walls": true,
+   "stl": "/home/ubuntu/Dao-3D-Modeling-Agent/60-实战_Projects/玩具小车_ToyCar/v2_parts/stl/WheelRR.stl"
+  },
+  "WheelFL": {
+   "watertight_solid": true,
+   "volume_mm3": 14047.0,
+   "bbox_mm": [
+    36.0,
+    14.0,
+    36.0
+   ],
+   "min_edge_mm": 13.509,
+   "min_cyl_radius_mm": 2.15,
+   "printable_walls": true,
+   "stl": "/home/ubuntu/Dao-3D-Modeling-Agent/60-实战_Projects/玩具小车_ToyCar/v2_parts/stl/WheelFL.stl"
+  },
+  "WheelFR": {
+   "watertight_solid": true,
+   "volume_mm3": 14047.0,
+   "bbox_mm": [
+    36.0,
+    14.0,
+    36.0
+   ],
+   "min_edge_mm": 13.509,
+   "min_cyl_radius_mm": 2.15,
+   "printable_walls": true,
+   "stl": "/home/ubuntu/Dao-3D-Modeling-Agent/60-实战_Projects/玩具小车_ToyCar/v2_parts/stl/WheelFR.stl"
+  },
+  "BodyShell": {
+   "watertight_solid": true,
+   "volume_mm3": 92091.1,
+   "bbox_mm": [
+    150.0,
+    56.0,
+    46.0
+   ],
+   "min_edge_mm": 3.218,
+   "min_cyl_radius_mm": 5.0,
+   "printable_walls": true,
+   "stl": "/home/ubuntu/Dao-3D-Modeling-Agent/60-实战_Projects/玩具小车_ToyCar/v2_parts/stl/BodyShell.stl"
+  }
+ },
+ "gear_mesh_heal": {
+  "Pinion": {
+   "watertight": true,
+   "method": "voxel_remesh(pitch=0.08)",
+   "volume_mm3": 66.1,
+   "faces": 20000
+  },
+  "SpurGear": {
+   "watertight": true,
+   "method": "voxel_remesh(pitch=0.15)",
+   "volume_mm3": 881.3,
+   "faces": 20000
+  }
+ },
+ "stl_watertight": {
+  "AxleFront": true,
+  "AxleRear": true,
+  "BodyShell": true,
+  "Chassis": true,
+  "Motor": true,
+  "MotorMount": true,
+  "Pinion": true,
+  "SpurGear": true,
+  "WheelFL": true,
+  "WheelFR": true,
+  "WheelRL": true,
+  "WheelRR": true
+ },
+ "non_watertight": [],
+ "dynamics": {
+  "V": 3.0,
+  "R_ohm": 1.429,
+  "Ke": 0.00162,
+  "Kt": 0.001681,
+  "ratio": 4.0,
+  "eta": 0.85,
+  "mass_kg": 0.618,
+  "top_speed_m_s": 6.66,
+  "top_speed_km_h": 23.96,
+  "accel_0_1m_s": 1.51,
+  "max_grade_deg": 4.2,
+  "est_runtime_min": 267.0
+ }
+}

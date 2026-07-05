@@ -228,7 +228,7 @@ async function ensureBridge() {
 }
 
 function vncWebviewHtml() {
-  const url = `http://127.0.0.1:${XPRA_PORT}/index.html?reconnect=true&sound=false&clipboard=true`;
+  const url = `http://127.0.0.1:${XPRA_PORT}/index.html?reconnect=true&sound=false&clipboard=true&floating_menu=no&autohide=1&video=false`;
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src http://127.0.0.1:* http://localhost:*; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
 <style>html,body{height:100%;margin:0;overflow:hidden;background:#111}iframe{width:100%;height:100%;border:0}</style>
@@ -287,15 +287,24 @@ function fitFreeCADWindow(w, h) {
 
 // 底层双向适配守护：xpra 虚拟屏(随面板 iframe 实时变化)一变，FreeCAD 主窗即刻贴合
 let fitWatcher = null;
+let fitErrors = 0;
+function stopFitWatcher() {
+  if (fitWatcher) { clearInterval(fitWatcher); fitWatcher = null; }
+}
 function startFitWatcher() {
   if (process.platform !== "linux" || fitWatcher) return;
   let prev = "";
+  fitErrors = 0;
   fitWatcher = setInterval(() => {
     cp.exec("xdotool getdisplaygeometry",
       { env: { ...process.env, DISPLAY: XPRA_DISPLAY }, timeout: 8000 },
       (e, out) => {
         const cur = String(out || "").trim();
-        if (!/^\d+ \d+$/.test(cur)) return;
+        if (!/^\d+ \d+$/.test(cur)) {
+          if (++fitErrors >= 20) stopFitWatcher(); // 显示服务不在, 停表避免空转
+          return;
+        }
+        fitErrors = 0;
         if (cur !== prev) {
           prev = cur;
           const [W, H] = cur.split(" ");
@@ -328,7 +337,7 @@ async function openWholeWindow() {
       fitFreeCADWindow(msg.w, msg.h);
     }
   });
-  windowPanel.onDidDispose(() => { windowPanel = null; });
+  windowPanel.onDidDispose(() => { windowPanel = null; stopFitWatcher(); });
 }
 
 function postJSON(p, body) {
