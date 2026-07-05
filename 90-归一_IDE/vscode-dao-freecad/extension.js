@@ -24,9 +24,12 @@ const FREECAD_APPIMAGE_URL =
 function cfg() { return vscode.workspace.getConfiguration("dao-freecad"); }
 function base() { return `http://127.0.0.1:${cfg().get("port")}`; }
 
-const VNC_DISPLAY = ":99";
-const VNC_RFB_PORT = 5902;
-const VNC_WEB_PORT = 6080;
+// 显示层：xpra X11 指令级窗口路由（非整屏像素投屏）
+// FreeCAD 本体窗口以 X11 协议逐窗路由，损伤区域增量编码，浏览器端 HTML5 客户端重建窗口。
+const XPRA_DISPLAY = ":100";
+const XPRA_PORT = 14500;
+// 注意：Xvfb 屏幕必须是纯 24 位（不能 24+32），否则 FreeCAD 的 GL 视口选到 32 位视觉后画面不落帧缓冲
+const XPRA_XVFB = "Xvfb +extension GLX +extension Composite -screen 0 1920x1080x24 -dpi 96 -nolisten tcp -noreset";
 
 function portAlive(port, path_) {
   return new Promise((resolve) => {
@@ -44,25 +47,25 @@ function spawnBg(bin, args, env) {
   return p;
 }
 
-/** 整窗归一显示路由：Xvfb 虚拟屏 + 窗口管理器 + x11vnc + noVNC(websockify) */
+/** 整窗归一显示路由：xpra X11 窗口级指令路由 + 内置 HTML5 客户端 */
 async function ensureDisplayRoute() {
-  if (process.platform !== "linux") return true; // 其他平台由用户自备 VNC 通道
-  if (await portAlive(VNC_WEB_PORT, "/vnc.html")) return true;
+  if (process.platform !== "linux") return true; // 其他平台由用户自备 xpra 通道
+  if (await portAlive(XPRA_PORT, "/index.html")) return true;
   try {
-    if (!fs.existsSync(`/tmp/.X11-unix/X${VNC_DISPLAY.slice(1)}`)) {
-      spawnBg("Xvfb", [VNC_DISPLAY, "-screen", "0", "1920x1080x24"]);
-      await new Promise((r) => setTimeout(r, 1500));
-    }
-    spawnBg("openbox", [], { DISPLAY: VNC_DISPLAY });
-    spawnBg("x11vnc", ["-display", VNC_DISPLAY, "-forever", "-shared", "-nopw", "-rfbport", String(VNC_RFB_PORT), "-noxdamage"]);
-    spawnBg("websockify", ["--web", "/usr/share/novnc", String(VNC_WEB_PORT), `127.0.0.1:${VNC_RFB_PORT}`]);
+    spawnBg("xpra", [
+      "start", XPRA_DISPLAY,
+      "--xvfb=" + XPRA_XVFB,
+      "--html=on",
+      "--bind-tcp=127.0.0.1:" + XPRA_PORT,
+      "--daemon=yes",
+    ]);
   } catch (e) {
-    vscode.window.showWarningMessage("DAO FreeCAD: 显示路由组件启动失败(需 Xvfb/x11vnc/novnc): " + e.message);
+    vscode.window.showWarningMessage("DAO FreeCAD: 显示路由组件启动失败(需 xpra): " + e.message);
     return false;
   }
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 25; i++) {
     await new Promise((r) => setTimeout(r, 800));
-    if (await portAlive(VNC_WEB_PORT, "/vnc.html")) return true;
+    if (await portAlive(XPRA_PORT, "/index.html")) return true;
   }
   return false;
 }
@@ -211,7 +214,8 @@ async function ensureBridge() {
   const env = { ...process.env, FC_REMOTE_PORT: String(cfg().get("port")) };
   if (process.platform === "linux") {
     await ensureDisplayRoute();
-    env.DISPLAY = VNC_DISPLAY; // FreeCAD GUI 本体落在虚拟屏，经 VNC 整窗路由进 IDE
+    env.DISPLAY = XPRA_DISPLAY; // FreeCAD GUI 本体落在 xpra 虚拟屏，逐窗指令级路由进 IDE
+    env.LIBGL_ALWAYS_SOFTWARE = env.LIBGL_ALWAYS_SOFTWARE || "1"; // 无 GPU 环境下 3D 视口软渲染
   }
   fcProc = cp.spawn(bin, [script], { detached: true, stdio: "ignore", env });
   fcProc.unref();
@@ -224,7 +228,7 @@ async function ensureBridge() {
 }
 
 function vncWebviewHtml() {
-  const url = `http://127.0.0.1:${VNC_WEB_PORT}/vnc.html?autoconnect=1&reconnect=1&reconnect_delay=1000&resize=scale&show_dot=1&bell=0`;
+  const url = `http://127.0.0.1:${XPRA_PORT}/index.html?reconnect=true&sound=false&clipboard=true`;
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src http://127.0.0.1:* http://localhost:*; style-src 'unsafe-inline';">
 <style>html,body{height:100%;margin:0;overflow:hidden;background:#111}iframe{width:100%;height:100%;border:0}</style>
@@ -250,7 +254,7 @@ async function openWorkbench() {
   panel.onDidDispose(() => { panel = null; });
 }
 
-/** 整窗归一：FreeCAD 软件本体全 UI 经 VNC 协议路由为中间面板单网页 */
+/** 整窗归一：FreeCAD 软件本体全 UI 经 xpra X11 指令级路由为中间面板单网页 */
 async function openWholeWindow() {
   if (!(await ensureBridge())) return;
   await ensureDisplayRoute();
