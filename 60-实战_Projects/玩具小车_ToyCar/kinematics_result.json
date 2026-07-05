@@ -1,0 +1,13 @@
+{
+ "travel_mm": 100.0,
+ "wheel_angle_rad": 6.25,
+ "wheel_angle_deg": 358.1,
+ "dof": 4,
+ "links": [
+  "chassis",
+  "wheel_FL",
+  "wheel_FR",
+  "wheel_RL",
+  "wheel_RR"
+ ]
+}

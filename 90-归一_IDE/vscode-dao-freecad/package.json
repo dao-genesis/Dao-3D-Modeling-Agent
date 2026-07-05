@@ -12,7 +12,8 @@
     "commands": [
       { "command": "dao-freecad.open", "title": "DAO FreeCAD: 打开归一工作台" },
       { "command": "dao-freecad.openWindow", "title": "DAO FreeCAD: 整窗归一（软件本体全 UI 路由为单网页）" },
-      { "command": "dao-freecad.openFile", "title": "DAO FreeCAD: 在工作台中打开当前 FCStd/STEP/STL" }
+      { "command": "dao-freecad.openFile", "title": "DAO FreeCAD: 在工作台中打开当前 FCStd/STEP/STL" },
+      { "command": "dao-freecad.fitWindow", "title": "DAO FreeCAD: 面板适配（收拢 FreeCAD 主窗到面板尺寸）" }
     ],
     "configuration": {
       "title": "DAO FreeCAD",
