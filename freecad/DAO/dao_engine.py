@@ -130,8 +130,18 @@ def _build_handlers(state):
     handlers["doc.info"] = _info
 
     def _docformat():
-        from cad_agent import docformat
-        return docformat
+        try:
+            from cad_agent import docformat
+            return docformat
+        except ImportError:
+            import importlib.util
+            path = os.path.join(os.path.dirname(os.path.dirname(
+                os.path.dirname(os.path.abspath(__file__)))),
+                "cad_agent", "docformat.py")
+            spec = importlib.util.spec_from_file_location("_dao_docformat", path)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod
 
     def _inspect(a):
         return _docformat().inspect_document(a["path"])

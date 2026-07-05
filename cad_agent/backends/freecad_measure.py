@@ -78,11 +78,14 @@ def register(state):
         obj_name = a.get("object") or a.get("name")
         if not isinstance(obj_name, str) or not obj_name:
             raise ValueError("measure.volume 'object' must be an object name string")
-        _get_obj(obj_name)
-        m = Measurement()
-        m.addReference3D(obj_name, "")
-        val = m.volume()
-        m.clear()
+        obj = _get_obj(obj_name)
+        if hasattr(Measurement, "volume"):
+            m = Measurement()
+            m.addReference3D(obj_name, "")
+            val = m.volume()
+            m.clear()
+        else:
+            val = obj.Shape.Volume
         return {"object": obj_name, "volume": _round(val)}
 
     def com(a):
