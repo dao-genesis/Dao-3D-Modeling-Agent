@@ -254,10 +254,22 @@ async function openWorkbench() {
   panel.onDidDispose(() => { panel = null; });
 }
 
+/** 面板适配：FreeCAD 主窗过大时 xpra 客户端只见局部/留白，按面板可视尺寸收拢主窗 */
+function fitFreeCADWindow(w, h) {
+  if (process.platform !== "linux") return;
+  const size = `${w || 900} ${h || 660}`;
+  cp.exec(
+    `xdotool search --name FreeCAD | while read id; do xdotool windowsize $id ${size}; xdotool windowmove $id 0 0; done`,
+    { env: { ...process.env, DISPLAY: XPRA_DISPLAY }, timeout: 8000 },
+    () => {}
+  );
+}
+
 /** 整窗归一：FreeCAD 软件本体全 UI 经 xpra X11 指令级路由为中间面板单网页 */
 async function openWholeWindow() {
   if (!(await ensureBridge())) return;
   await ensureDisplayRoute();
+  setTimeout(() => fitFreeCADWindow(), 1200);
   if (windowPanel) { windowPanel.reveal(vscode.ViewColumn.One); return; }
   windowPanel = vscode.window.createWebviewPanel(
     "daoFreecadWindow", "☯ FreeCAD 整窗归一", vscode.ViewColumn.One,
@@ -294,7 +306,8 @@ function activate(context) {
   context.subscriptions.push(
     vscode.commands.registerCommand("dao-freecad.open", openWorkbench),
     vscode.commands.registerCommand("dao-freecad.openWindow", openWholeWindow),
-    vscode.commands.registerCommand("dao-freecad.openFile", openCurrentFile)
+    vscode.commands.registerCommand("dao-freecad.openFile", openCurrentFile),
+    vscode.commands.registerCommand("dao-freecad.fitWindow", () => fitFreeCADWindow())
   );
 }
 function deactivate() {}
