@@ -230,9 +230,20 @@ async function ensureBridge() {
 function vncWebviewHtml() {
   const url = `http://127.0.0.1:${XPRA_PORT}/index.html?reconnect=true&sound=false&clipboard=true`;
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src http://127.0.0.1:* http://localhost:*; style-src 'unsafe-inline';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src http://127.0.0.1:* http://localhost:*; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
 <style>html,body{height:100%;margin:0;overflow:hidden;background:#111}iframe{width:100%;height:100%;border:0}</style>
-</head><body><iframe src="${url}" allow="clipboard-read; clipboard-write"></iframe></body></html>`;
+</head><body><iframe src="${url}" allow="clipboard-read; clipboard-write"></iframe>
+<script>
+(function(){
+  const vscode = acquireVsCodeApi();
+  let t = null;
+  function report(){
+    vscode.postMessage({ type: "panelSize", w: window.innerWidth, h: window.innerHeight });
+  }
+  window.addEventListener("resize", function(){ clearTimeout(t); t = setTimeout(report, 250); });
+  report();
+})();
+</script></body></html>`;
 }
 
 function webviewHtml(page) {
@@ -276,6 +287,12 @@ async function openWholeWindow() {
     { enableScripts: true, retainContextWhenHidden: true }
   );
   windowPanel.webview.html = vncWebviewHtml();
+  // 底层双向适配：面板尺寸变化 → X11 主窗同步缩放，与 IDE 浑然一体而非投屏
+  windowPanel.webview.onDidReceiveMessage((msg) => {
+    if (msg && msg.type === "panelSize" && msg.w > 100 && msg.h > 100) {
+      fitFreeCADWindow(msg.w, msg.h);
+    }
+  });
   windowPanel.onDidDispose(() => { windowPanel = null; });
 }
 
