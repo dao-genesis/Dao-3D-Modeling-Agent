@@ -12,108 +12,40 @@ html,body{height:100%;background:#1e1e1e;color:#d4d4d4;font:12px/1.4 "Segoe UI",
 #bar b{color:#4ec9b0}
 #bar a{color:#3794ff;text-decoration:none}
 #stat{margin-left:auto;color:#8a8a8a}
-#stage{position:absolute;inset:26px 0 0 0;display:flex;align-items:center;justify-content:center;background:#111}
-#frame{max-width:100%;max-height:100%;cursor:default;user-select:none;-webkit-user-drag:none;outline:none}
-#off{position:absolute;inset:26px 0 0 0;display:none;align-items:center;justify-content:center;color:#f48771}
+#stage{position:absolute;inset:26px 0 0 0;background:#111}
+#vnc{width:100%;height:100%;border:0;display:block}
+#off{position:absolute;inset:26px 0 0 0;display:none;align-items:center;justify-content:center;color:#f48771;background:#111}
 </style>
 </head>
 <body>
 <div id="bar"><b>☯ FreeCAD 整窗归一</b>
- <span>软件本体已整体路由至此页 · 一切板块/菜单/对话框直接操作</span>
+ <span>FreeCAD 软件本体经 VNC 协议整体路由至此页 · 菜单/工具栏/对话框/3D 视口原样直接操作</span>
  <a href="index.html">⇄ 工作台模式</a>
  <span id="stat">连接中…</span></div>
-<div id="stage"><img id="frame" tabindex="0" draggable="false" alt=""></div>
-<div id="off">桥接离线 — 等待 FreeCAD…</div>
+<div id="stage"><iframe id="vnc" allow="clipboard-read; clipboard-write"></iframe></div>
+<div id="off">显示路由离线 — 等待 FreeCAD GUI / VNC 通道…</div>
 
 <script>
-const B = location.origin;
-const img = document.getElementById('frame');
+// 显示层：noVNC(RFB 协议·增量帧·完整键鼠语义)，非 JPEG 轮询投屏。
+// 控制层：AI/脚本不走本页面，直接经 :18920 /exec /agent 在 FreeCAD 进程内核操作。
+const VNC_PORT = 6080;
+const host = location.hostname || '127.0.0.1';
+const vncBase = `http://${host}:${VNC_PORT}`;
+const iframe = document.getElementById('vnc');
 const stat = document.getElementById('stat');
 const off = document.getElementById('off');
-let W = 0, H = 0, busy = false, alive = false, fps = 0, frames = 0;
 
-async function pull(){
-  if (busy) return; busy = true;
+iframe.src = vncBase + '/vnc.html?autoconnect=1&reconnect=1&reconnect_delay=1000&resize=remote&show_dot=1&bell=0';
+
+async function probe(){
   try{
-    const r = await fetch(B + '/window?fmt=jpg&q=72');
-    const d = await r.json();
-    if (d.ok){
-      W = d.window_width; H = d.window_height;
-      img.src = 'data:image/jpeg;base64,' + d.data;
-      alive = true; frames++;
-      off.style.display = 'none';
-    }
-  }catch(e){ alive = false; off.style.display = 'flex'; }
-  busy = false;
+    const r = await fetch(vncBase + '/vnc.html', {method:'GET', cache:'no-store'});
+    const alive = r.ok;
+    off.style.display = alive ? 'none' : 'flex';
+    stat.textContent = alive ? '在线 · VNC 直连 FreeCAD 本体' : '离线';
+  }catch(e){ off.style.display = 'flex'; stat.textContent = '离线'; }
 }
-setInterval(pull, 120); pull();
-setInterval(()=>{ fps = frames; frames = 0;
-  stat.textContent = alive ? `在线 · ${W}×${H} · ${fps}fps` : '离线'; }, 1000);
-
-function map(ev){
-  const r = img.getBoundingClientRect();
-  return { x: Math.round((ev.clientX - r.left) * W / r.width),
-           y: Math.round((ev.clientY - r.top) * H / r.height) };
-}
-function mods(ev){
-  const m = [];
-  if (ev.ctrlKey) m.push('ctrl');
-  if (ev.shiftKey) m.push('shift');
-  if (ev.altKey) m.push('alt');
-  if (ev.metaKey) m.push('meta');
-  return m;
-}
-function send(o){ fetch(B + '/input', {method:'POST', body: JSON.stringify(o)}).catch(()=>{}); }
-const BTN = {0:'left', 1:'middle', 2:'right'};
-
-let lastMove = 0;
-img.addEventListener('mousemove', ev => {
-  const now = Date.now();
-  if (now - lastMove < 40) return;
-  lastMove = now;
-  const p = map(ev);
-  send({type:'mouse_move', x:p.x, y:p.y, modifiers:mods(ev)});
-});
-img.addEventListener('mousedown', ev => {
-  ev.preventDefault(); img.focus();
-  const p = map(ev);
-  send({type:'mouse_down', x:p.x, y:p.y, button:BTN[ev.button]||'left', modifiers:mods(ev)});
-});
-img.addEventListener('mouseup', ev => {
-  ev.preventDefault();
-  const p = map(ev);
-  send({type:'mouse_up', x:p.x, y:p.y, button:BTN[ev.button]||'left', modifiers:mods(ev)});
-});
-img.addEventListener('dblclick', ev => {
-  ev.preventDefault();
-  const p = map(ev);
-  send({type:'dblclick', x:p.x, y:p.y, button:BTN[ev.button]||'left', modifiers:mods(ev)});
-});
-img.addEventListener('contextmenu', ev => ev.preventDefault());
-img.addEventListener('wheel', ev => {
-  ev.preventDefault();
-  const p = map(ev);
-  send({type:'wheel', x:p.x, y:p.y, delta: ev.deltaY < 0 ? 120 : -120, modifiers:mods(ev)});
-}, {passive:false});
-
-const SPECIAL = {Enter:'Return', Tab:'Tab', Escape:'Escape', Backspace:'Backspace',
-  Delete:'Delete', ArrowUp:'Up', ArrowDown:'Down', ArrowLeft:'Left', ArrowRight:'Right',
-  Home:'Home', End:'End', PageUp:'PageUp', PageDown:'PageDown', ' ':'Space', F1:'F1'};
-img.addEventListener('keydown', ev => {
-  ev.preventDefault();
-  if (ev.key.length === 1 && !ev.ctrlKey && !ev.altKey && !ev.metaKey){
-    send({type:'text', text: ev.key});
-    return;
-  }
-  const key = SPECIAL[ev.key] || ev.key;
-  send({type:'key_down', key, modifiers:mods(ev)});
-});
-img.addEventListener('keyup', ev => {
-  ev.preventDefault();
-  if (ev.key.length === 1 && !ev.ctrlKey && !ev.altKey && !ev.metaKey) return;
-  const key = SPECIAL[ev.key] || ev.key;
-  send({type:'key_up', key, modifiers:mods(ev)});
-});
+setInterval(probe, 3000); probe();
 </script>
 </body>
 </html>

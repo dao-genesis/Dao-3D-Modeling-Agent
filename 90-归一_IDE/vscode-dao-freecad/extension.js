@@ -24,6 +24,49 @@ const FREECAD_APPIMAGE_URL =
 function cfg() { return vscode.workspace.getConfiguration("dao-freecad"); }
 function base() { return `http://127.0.0.1:${cfg().get("port")}`; }
 
+const VNC_DISPLAY = ":99";
+const VNC_RFB_PORT = 5901;
+const VNC_WEB_PORT = 6080;
+
+function portAlive(port, path_) {
+  return new Promise((resolve) => {
+    const req = http.get(`http://127.0.0.1:${port}${path_ || "/"}`, { timeout: 1500 }, (res) => {
+      res.resume(); resolve(true);
+    });
+    req.on("error", () => resolve(false));
+    req.on("timeout", () => { req.destroy(); resolve(false); });
+  });
+}
+
+function spawnBg(bin, args, env) {
+  const p = cp.spawn(bin, args, { detached: true, stdio: "ignore", env: { ...process.env, ...(env || {}) } });
+  p.unref();
+  return p;
+}
+
+/** 整窗归一显示路由：Xvfb 虚拟屏 + 窗口管理器 + x11vnc + noVNC(websockify) */
+async function ensureDisplayRoute() {
+  if (process.platform !== "linux") return true; // 其他平台由用户自备 VNC 通道
+  if (await portAlive(VNC_WEB_PORT, "/vnc.html")) return true;
+  try {
+    if (!fs.existsSync(`/tmp/.X11-unix/X${VNC_DISPLAY.slice(1)}`)) {
+      spawnBg("Xvfb", [VNC_DISPLAY, "-screen", "0", "1920x1080x24"]);
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+    spawnBg("openbox", [], { DISPLAY: VNC_DISPLAY });
+    spawnBg("x11vnc", ["-display", VNC_DISPLAY, "-forever", "-shared", "-nopw", "-rfbport", String(VNC_RFB_PORT), "-noxdamage"]);
+    spawnBg("websockify", ["--web", "/usr/share/novnc", String(VNC_WEB_PORT), `127.0.0.1:${VNC_RFB_PORT}`]);
+  } catch (e) {
+    vscode.window.showWarningMessage("DAO FreeCAD: 显示路由组件启动失败(需 Xvfb/x11vnc/novnc): " + e.message);
+    return false;
+  }
+  for (let i = 0; i < 20; i++) {
+    await new Promise((r) => setTimeout(r, 800));
+    if (await portAlive(VNC_WEB_PORT, "/vnc.html")) return true;
+  }
+  return false;
+}
+
 function ping() {
   return new Promise((resolve) => {
     const req = http.get(base() + "/status", { timeout: 2000 }, (res) => {
@@ -165,7 +208,12 @@ async function ensureBridge() {
   const bin = await ensureFreeCADRuntime();
   if (!bin) return false;
   vscode.window.setStatusBarMessage("DAO FreeCAD: 正在启动 FreeCAD 桥接…", 15000);
-  fcProc = cp.spawn(bin, [script], { detached: true, stdio: "ignore", env: { ...process.env, FC_REMOTE_PORT: String(cfg().get("port")) } });
+  const env = { ...process.env, FC_REMOTE_PORT: String(cfg().get("port")) };
+  if (process.platform === "linux") {
+    await ensureDisplayRoute();
+    env.DISPLAY = VNC_DISPLAY; // FreeCAD GUI 本体落在虚拟屏，经 VNC 整窗路由进 IDE
+  }
+  fcProc = cp.spawn(bin, [script], { detached: true, stdio: "ignore", env });
   fcProc.unref();
   for (let i = 0; i < 40; i++) {
     await new Promise((r) => setTimeout(r, 1500));
@@ -178,7 +226,7 @@ async function ensureBridge() {
 function webviewHtml(page) {
   const url = base() + "/ui" + (page ? "/" + page : "");
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${base()} http://localhost:*; style-src 'unsafe-inline';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${base()} http://127.0.0.1:* http://localhost:*; style-src 'unsafe-inline';">
 <style>html,body{height:100%;margin:0;overflow:hidden}iframe{width:100%;height:100%;border:0}</style>
 </head><body><iframe src="${url}" allow="clipboard-read; clipboard-write"></iframe></body></html>`;
 }
@@ -194,9 +242,10 @@ async function openWorkbench() {
   panel.onDidDispose(() => { panel = null; });
 }
 
-/** 整窗归一：FreeCAD 软件本体全 UI 路由为中间面板单网页 */
+/** 整窗归一：FreeCAD 软件本体全 UI 经 VNC 协议路由为中间面板单网页 */
 async function openWholeWindow() {
   if (!(await ensureBridge())) return;
+  await ensureDisplayRoute();
   if (windowPanel) { windowPanel.reveal(vscode.ViewColumn.One); return; }
   windowPanel = vscode.window.createWebviewPanel(
     "daoFreecadWindow", "☯ FreeCAD 整窗归一", vscode.ViewColumn.One,
