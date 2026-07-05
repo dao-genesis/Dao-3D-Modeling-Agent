@@ -24,6 +24,52 @@ const FREECAD_APPIMAGE_URL =
 function cfg() { return vscode.workspace.getConfiguration("dao-freecad"); }
 function base() { return `http://127.0.0.1:${cfg().get("port")}`; }
 
+// 显示层：xpra X11 指令级窗口路由（非整屏像素投屏）
+// FreeCAD 本体窗口以 X11 协议逐窗路由，损伤区域增量编码，浏览器端 HTML5 客户端重建窗口。
+const XPRA_DISPLAY = ":100";
+const XPRA_PORT = 14500;
+// 注意：Xvfb 屏幕必须是纯 24 位（不能 24+32），否则 FreeCAD 的 GL 视口选到 32 位视觉后画面不落帧缓冲
+const XPRA_XVFB = "Xvfb +extension GLX +extension Composite -screen 0 1920x1080x24 -dpi 96 -nolisten tcp -noreset";
+
+function portAlive(port, path_) {
+  return new Promise((resolve) => {
+    const req = http.get(`http://127.0.0.1:${port}${path_ || "/"}`, { timeout: 1500 }, (res) => {
+      res.resume(); resolve(true);
+    });
+    req.on("error", () => resolve(false));
+    req.on("timeout", () => { req.destroy(); resolve(false); });
+  });
+}
+
+function spawnBg(bin, args, env) {
+  const p = cp.spawn(bin, args, { detached: true, stdio: "ignore", env: { ...process.env, ...(env || {}) } });
+  p.unref();
+  return p;
+}
+
+/** 整窗归一显示路由：xpra X11 窗口级指令路由 + 内置 HTML5 客户端 */
+async function ensureDisplayRoute() {
+  if (process.platform !== "linux") return true; // 其他平台由用户自备 xpra 通道
+  if (await portAlive(XPRA_PORT, "/index.html")) return true;
+  try {
+    spawnBg("xpra", [
+      "start", XPRA_DISPLAY,
+      "--xvfb=" + XPRA_XVFB,
+      "--html=on",
+      "--bind-tcp=127.0.0.1:" + XPRA_PORT,
+      "--daemon=yes",
+    ]);
+  } catch (e) {
+    vscode.window.showWarningMessage("DAO FreeCAD: 显示路由组件启动失败(需 xpra): " + e.message);
+    return false;
+  }
+  for (let i = 0; i < 25; i++) {
+    await new Promise((r) => setTimeout(r, 800));
+    if (await portAlive(XPRA_PORT, "/index.html")) return true;
+  }
+  return false;
+}
+
 function ping() {
   return new Promise((resolve) => {
     const req = http.get(base() + "/status", { timeout: 2000 }, (res) => {
@@ -165,7 +211,13 @@ async function ensureBridge() {
   const bin = await ensureFreeCADRuntime();
   if (!bin) return false;
   vscode.window.setStatusBarMessage("DAO FreeCAD: 正在启动 FreeCAD 桥接…", 15000);
-  fcProc = cp.spawn(bin, [script], { detached: true, stdio: "ignore", env: { ...process.env, FC_REMOTE_PORT: String(cfg().get("port")) } });
+  const env = { ...process.env, FC_REMOTE_PORT: String(cfg().get("port")) };
+  if (process.platform === "linux") {
+    await ensureDisplayRoute();
+    env.DISPLAY = XPRA_DISPLAY; // FreeCAD GUI 本体落在 xpra 虚拟屏，逐窗指令级路由进 IDE
+    env.LIBGL_ALWAYS_SOFTWARE = env.LIBGL_ALWAYS_SOFTWARE || "1"; // 无 GPU 环境下 3D 视口软渲染
+  }
+  fcProc = cp.spawn(bin, [script], { detached: true, stdio: "ignore", env });
   fcProc.unref();
   for (let i = 0; i < 40; i++) {
     await new Promise((r) => setTimeout(r, 1500));
@@ -175,10 +227,18 @@ async function ensureBridge() {
   return false;
 }
 
-function webviewHtml(page) {
-  const url = base() + "/ui" + (page ? "/" + page : "");
+function vncWebviewHtml() {
+  const url = `http://127.0.0.1:${XPRA_PORT}/index.html?reconnect=true&sound=false&clipboard=true`;
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${base()} http://localhost:*; style-src 'unsafe-inline';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src http://127.0.0.1:* http://localhost:*; style-src 'unsafe-inline';">
+<style>html,body{height:100%;margin:0;overflow:hidden;background:#111}iframe{width:100%;height:100%;border:0}</style>
+</head><body><iframe src="${url}" allow="clipboard-read; clipboard-write"></iframe></body></html>`;
+}
+
+function webviewHtml(page) {
+  const url = base() + "/ui" + (page ? "/" + page : "") + "?ts=" + Date.now();
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${base()} http://127.0.0.1:* http://localhost:*; style-src 'unsafe-inline';">
 <style>html,body{height:100%;margin:0;overflow:hidden}iframe{width:100%;height:100%;border:0}</style>
 </head><body><iframe src="${url}" allow="clipboard-read; clipboard-write"></iframe></body></html>`;
 }
@@ -194,15 +254,16 @@ async function openWorkbench() {
   panel.onDidDispose(() => { panel = null; });
 }
 
-/** 整窗归一：FreeCAD 软件本体全 UI 路由为中间面板单网页 */
+/** 整窗归一：FreeCAD 软件本体全 UI 经 xpra X11 指令级路由为中间面板单网页 */
 async function openWholeWindow() {
   if (!(await ensureBridge())) return;
+  await ensureDisplayRoute();
   if (windowPanel) { windowPanel.reveal(vscode.ViewColumn.One); return; }
   windowPanel = vscode.window.createWebviewPanel(
     "daoFreecadWindow", "☯ FreeCAD 整窗归一", vscode.ViewColumn.One,
     { enableScripts: true, retainContextWhenHidden: true }
   );
-  windowPanel.webview.html = webviewHtml("window.html");
+  windowPanel.webview.html = vncWebviewHtml();
   windowPanel.onDidDispose(() => { windowPanel = null; });
 }
 
