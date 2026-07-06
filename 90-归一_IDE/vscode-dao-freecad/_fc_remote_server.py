@@ -55,6 +55,12 @@ from urllib.parse import urlparse, parse_qs
 
 # ─── Configuration ────────────────────────────────────────────────────────────
 PORT = int(os.environ.get("FC_REMOTE_PORT", "18920"))
+
+# FC_REMOTE_TOOLS: 附加工具库目录(插件内置建模后端等), FreeCAD 内核对 PYTHONPATH
+# 的处理因发行版而异, 故由本服务器显式注入 sys.path 保证 /exec 可 import
+for _p in os.environ.get("FC_REMOTE_TOOLS", "").split(os.pathsep):
+    if _p and _p not in sys.path:
+        sys.path.insert(0, _p)
 HOST = os.environ.get("FC_REMOTE_HOST", "127.0.0.1")
 SCRIPT_DIR = Path(__file__).parent.resolve()
 
