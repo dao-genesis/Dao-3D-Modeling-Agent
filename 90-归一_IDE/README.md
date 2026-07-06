@@ -53,7 +53,21 @@ FreeCAD 时自动按平台下载官方发行包并解为插件内置运行时（
 
 探测优先级：设置 `dao-freecad.freecadPath` → 常见安装目录扫描（任意版本取最新）→
 PATH → 已解出的内置运行时 → 自动下载内置（可用 `dao-freecad.autoProvision=false` 关闭）。
-命令面板：`DAO FreeCAD: 安装/重装内置 FreeCAD 运行时` / `DAO FreeCAD: 状态总览`。
+命令面板：`DAO FreeCAD: 安装/重装内置 FreeCAD 运行时` / `DAO FreeCAD: 状态总览` /
+`DAO FreeCAD: 启动/重启内核桥接`。
+
+## 插件即本体（自启 · 自愈 · 自包含）
+
+v0.3.0 起插件即 FreeCAD 内核宿主，用户启动 IDE 即等于启动 FreeCAD：
+
+- **自启**：`onStartupFinished` 激活即静默拉起内核桥接（`dao-freecad.autoStart`，默认开；
+  探到本机 FreeCAD 直接路由，缺失才按平台调度下载内置）。
+- **自愈**：内核看门狗每 15s 探活，失联自动重拉（1 次失联容忍瞬时抖动，
+  之后按 4/8/16 周期指数退避；实测掉线 ≈48s 内自动恢复）。
+- **自包含**：桥接服务 `_fc_remote_server.py`、单网页工作台 `web/`、建模后端
+  `tools/freecad_backend.py` 全部随 .vsix 内置——无仓库工作区也完整运行
+  （经 `FC_REMOTE_UI` / `FC_REMOTE_TOOLS` 注入内核，`/exec` 可直接
+  `import freecad_backend`）。工作区里有同名文件时优先用工作区版本。
 
 ## 桥接 API（同源 /ui 直连，无 CORS 问题）
 

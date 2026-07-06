@@ -198,31 +198,65 @@ function findServerScript() {
   return fs.existsSync(bundled) ? bundled : null;
 }
 
-async function ensureBridge() {
+let bridgeStarting = false;
+async function ensureBridge(quiet) {
   if (await ping()) return true;
-  const script = findServerScript();
-  if (!script) {
-    vscode.window.showErrorMessage("DAO FreeCAD: 找不到 _fc_remote_server.py（可在设置 dao-freecad.serverScript 指定）");
+  if (bridgeStarting) return false; // 单飞：避免并发重复拉起内核
+  bridgeStarting = true;
+  try {
+    const script = findServerScript();
+    if (!script) {
+      if (!quiet) vscode.window.showErrorMessage("DAO FreeCAD: 找不到 _fc_remote_server.py（可在设置 dao-freecad.serverScript 指定）");
+      return false;
+    }
+    const bin = await ensureFreeCADRuntime();
+    if (!bin) return false;
+    vscode.window.setStatusBarMessage("DAO FreeCAD: 正在启动 FreeCAD 桥接…", 15000);
+    const env = { ...process.env, FC_REMOTE_PORT: String(cfg().get("port")) };
+    // 自包含：单网页工作台与建模后端随插件内置，无仓库工作区也能完整运行
+    const bundledWeb = path.join(__dirname, "web");
+    if (!env.FC_REMOTE_UI && fs.existsSync(path.join(bundledWeb, "index.html"))) env.FC_REMOTE_UI = bundledWeb;
+    const bundledTools = path.join(__dirname, "tools");
+    if (fs.existsSync(bundledTools)) {
+      env.FC_REMOTE_TOOLS = bundledTools + (env.FC_REMOTE_TOOLS ? path.delimiter + env.FC_REMOTE_TOOLS : "");
+    }
+    if (process.platform === "linux") {
+      await ensureDisplayRoute();
+      env.DISPLAY = XPRA_DISPLAY; // FreeCAD GUI 本体落在 xpra 虚拟屏，逐窗指令级路由进 IDE
+      env.LIBGL_ALWAYS_SOFTWARE = env.LIBGL_ALWAYS_SOFTWARE || "1"; // 无 GPU 环境下 3D 视口软渲染
+    }
+    fcProc = cp.spawn(bin, [script], { detached: true, stdio: "ignore", env });
+    fcProc.unref();
+    for (let i = 0; i < 40; i++) {
+      await new Promise((r) => setTimeout(r, 1500));
+      if (await ping()) return true;
+    }
+    if (!quiet) vscode.window.showErrorMessage("DAO FreeCAD: 桥接启动超时（请确认 FreeCAD 路径：" + bin + "）");
     return false;
+  } finally {
+    bridgeStarting = false;
   }
-  const bin = await ensureFreeCADRuntime();
-  if (!bin) return false;
-  vscode.window.setStatusBarMessage("DAO FreeCAD: 正在启动 FreeCAD 桥接…", 15000);
-  const env = { ...process.env, FC_REMOTE_PORT: String(cfg().get("port")) };
-  if (process.platform === "linux") {
-    await ensureDisplayRoute();
-    env.DISPLAY = XPRA_DISPLAY; // FreeCAD GUI 本体落在 xpra 虚拟屏，逐窗指令级路由进 IDE
-    env.LIBGL_ALWAYS_SOFTWARE = env.LIBGL_ALWAYS_SOFTWARE || "1"; // 无 GPU 环境下 3D 视口软渲染
-  }
-  fcProc = cp.spawn(bin, [script], { detached: true, stdio: "ignore", env });
-  fcProc.unref();
-  for (let i = 0; i < 40; i++) {
-    await new Promise((r) => setTimeout(r, 1500));
-    if (await ping()) return true;
-  }
-  vscode.window.showErrorMessage("DAO FreeCAD: 桥接启动超时（请确认 FreeCAD 路径：" + bin + "）");
-  return false;
 }
+
+// 内核看门狗：桥接掉线自动重拉（指数退避，成功即复位）——插件即内核宿主，自愈不求人
+let watchdog = null;
+let watchdogFails = 0;
+let watchdogNextRetry = 2;
+function startWatchdog() {
+  if (watchdog || !cfg().get("autoStart")) return;
+  watchdog = setInterval(async () => {
+    if (bridgeStarting) return;
+    if (await ping()) { watchdogFails = 0; watchdogNextRetry = 2; return; }
+    watchdogFails++;
+    // 1次失联容忍（瞬时抖动）；第2次起重拉，之后按 4/8/16 个周期指数退避
+    if (watchdogFails >= watchdogNextRetry) {
+      watchdogNextRetry = watchdogFails + Math.min(watchdogNextRetry * 2, 16);
+      vscode.window.setStatusBarMessage("DAO FreeCAD: 内核失联，看门狗重拉…", 8000);
+      await ensureBridge(true);
+    }
+  }, 15000);
+}
+function stopWatchdog() { if (watchdog) { clearInterval(watchdog); watchdog = null; } }
 
 function vncWebviewHtml() {
   const url = `http://127.0.0.1:${XPRA_PORT}/index.html?reconnect=true&sound=false&clipboard=true&floating_menu=no&autohide=1&video=false`;
@@ -361,14 +395,22 @@ async function openCurrentFile() {
 
 function activate(context) {
   extCtx = context;
+  // 插件即本体：IDE 启动 → 内核自起（探到本机 FreeCAD 直接路由，缺失才按平台调度下载）
+  if (cfg().get("autoStart")) {
+    ensureBridge(true).finally(startWatchdog);
+  }
   context.subscriptions.push(
     vscode.commands.registerCommand("dao-freecad.open", openWorkbench),
     vscode.commands.registerCommand("dao-freecad.openWindow", openWholeWindow),
     vscode.commands.registerCommand("dao-freecad.openFile", openCurrentFile),
     vscode.commands.registerCommand("dao-freecad.fitWindow", () => fitFreeCADWindow()),
     vscode.commands.registerCommand("dao-freecad.installRuntime", () => ensureFreeCADRuntime(true)),
-    vscode.commands.registerCommand("dao-freecad.status", showStatus)
+    vscode.commands.registerCommand("dao-freecad.status", showStatus),
+    vscode.commands.registerCommand("dao-freecad.restartBridge", async () => {
+      await ensureBridge();
+      startWatchdog();
+    })
   );
 }
-function deactivate() {}
+function deactivate() { stopWatchdog(); stopFitWatcher(); }
 module.exports = { activate, deactivate };

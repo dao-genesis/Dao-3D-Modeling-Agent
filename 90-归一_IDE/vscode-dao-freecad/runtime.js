@@ -79,6 +79,34 @@ function download(url, dest, onProgress, depth) {
   });
 }
 
+/**
+ * 健壮下载：唯一临时名防并发碰撞 + 网络错误重试（最多 3 次，递增退避）；
+ * 若重命名时发现目标已存在（并发竞争中另一方已完成）则直接视为成功。
+ */
+async function fetchTo(url, dest, onProgress) {
+  if (fs.existsSync(dest)) return;
+  const part = dest + ".part-" + process.pid + "-" + Math.random().toString(36).slice(2, 8);
+  let lastErr = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      await download(url, part, onProgress);
+      try {
+        fs.renameSync(part, dest);
+      } catch (e) {
+        fs.rmSync(part, { force: true });
+        if (!fs.existsSync(dest)) throw e;
+      }
+      return;
+    } catch (e) {
+      lastErr = e;
+      fs.rmSync(part, { force: true });
+      if (fs.existsSync(dest)) return;
+      if (attempt < 3) await new Promise((r) => setTimeout(r, attempt * 3000));
+    }
+  }
+  throw lastErr;
+}
+
 function run(bin, args, opts) {
   return new Promise((resolve, reject) => {
     const p = cp.spawn(bin, args, { stdio: "ignore", ...(opts || {}) });
@@ -91,10 +119,9 @@ async function provisionLinux(dir, url, report) {
   const appimage = path.join(dir, "FreeCAD.AppImage");
   if (!fs.existsSync(appimage)) {
     report("下载 FreeCAD AppImage…");
-    await download(url, appimage + ".part", (r) => report(`下载 AppImage ${(r * 100) | 0}%`));
-    fs.renameSync(appimage + ".part", appimage);
-    fs.chmodSync(appimage, 0o755);
+    await fetchTo(url, appimage, (r) => report(`下载 AppImage ${(r * 100) | 0}%`));
   }
+  fs.chmodSync(appimage, 0o755);
   report("解包运行时（免 FUSE）…");
   await run(appimage, ["--appimage-extract"], { cwd: dir });
   return embeddedExe(dir);
@@ -105,13 +132,11 @@ async function provisionWindows(dir, url, report) {
   const sevenzr = path.join(dir, "7zr.exe");
   if (!fs.existsSync(sevenzr)) {
     report("下载解包器 7zr…");
-    await download(SEVENZR_URL, sevenzr + ".part");
-    fs.renameSync(sevenzr + ".part", sevenzr);
+    await fetchTo(SEVENZR_URL, sevenzr);
   }
   if (!fs.existsSync(archive)) {
     report("下载 FreeCAD 便携包…");
-    await download(url, archive + ".part", (r) => report(`下载便携包 ${(r * 100) | 0}%`));
-    fs.renameSync(archive + ".part", archive);
+    await fetchTo(url, archive, (r) => report(`下载便携包 ${(r * 100) | 0}%`));
   }
   report("解包运行时…");
   await run(sevenzr, ["x", archive, "-o" + path.join(dir, "FreeCAD"), "-y"]);
@@ -122,8 +147,7 @@ async function provisionMac(dir, url, report) {
   const dmg = path.join(dir, "FreeCAD.dmg");
   if (!fs.existsSync(dmg)) {
     report("下载 FreeCAD 镜像…");
-    await download(url, dmg + ".part", (r) => report(`下载镜像 ${(r * 100) | 0}%`));
-    fs.renameSync(dmg + ".part", dmg);
+    await fetchTo(url, dmg, (r) => report(`下载镜像 ${(r * 100) | 0}%`));
   }
   const mnt = path.join(dir, "mnt");
   fs.mkdirSync(mnt, { recursive: true });
@@ -156,4 +180,4 @@ async function provision(dir, report) {
   return provisionLinux(dir, url, report);
 }
 
-module.exports = { FREECAD_VERSION, assetUrl, embeddedExe, provision, download };
+module.exports = { FREECAD_VERSION, assetUrl, embeddedExe, provision, download, fetchTo };
