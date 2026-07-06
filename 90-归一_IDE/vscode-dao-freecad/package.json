@@ -2,7 +2,7 @@
   "name": "dao-freecad",
   "displayName": "DAO · FreeCAD 归一工作台",
   "description": "把 FreeCAD 全部功能以单网页形式嵌入 IDE 中间面板：模型树 / 3D 视口 / 属性 / Python 控制台 / GUI 命令，桥接 FreeCAD 本体，适配任何 VS Code 系 IDE（含 AI IDE）。",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "dao",
   "engines": { "vscode": "^1.75.0" },
   "categories": ["Visualization", "Other"],
@@ -13,7 +13,9 @@
       { "command": "dao-freecad.open", "title": "DAO FreeCAD: 打开归一工作台" },
       { "command": "dao-freecad.openWindow", "title": "DAO FreeCAD: 整窗归一（软件本体全 UI 路由为单网页）" },
       { "command": "dao-freecad.openFile", "title": "DAO FreeCAD: 在工作台中打开当前 FCStd/STEP/STL" },
-      { "command": "dao-freecad.fitWindow", "title": "DAO FreeCAD: 面板适配（收拢 FreeCAD 主窗到面板尺寸）" }
+      { "command": "dao-freecad.fitWindow", "title": "DAO FreeCAD: 面板适配（收拢 FreeCAD 主窗到面板尺寸）" },
+      { "command": "dao-freecad.installRuntime", "title": "DAO FreeCAD: 安装/重装内置 FreeCAD 运行时（零安装）" },
+      { "command": "dao-freecad.status", "title": "DAO FreeCAD: 状态总览（FreeCAD/内置运行时/桥接/显示路由）" }
     ],
     "configuration": {
       "title": "DAO FreeCAD",
@@ -28,7 +30,12 @@
           "default": "",
           "description": "_fc_remote_server.py 桥接脚本路径（留空则在工作区内自动查找 10-反笙_FreeCAD/_fc_remote_server.py）"
         },
-        "dao-freecad.port": { "type": "number", "default": 18920, "description": "桥接 HTTP 端口" }
+        "dao-freecad.port": { "type": "number", "default": 18920, "description": "桥接 HTTP 端口" },
+        "dao-freecad.autoProvision": {
+          "type": "boolean",
+          "default": true,
+          "description": "未找到 FreeCAD 时自动下载官方发行包并内置为插件运行时（Linux AppImage / Windows 7z / macOS dmg，零安装）"
+        }
       }
     }
   }

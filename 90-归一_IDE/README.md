@@ -39,6 +39,22 @@ freecad 10-反笙_FreeCAD/_fc_remote_server.py
 code --extensionDevelopmentPath=$PWD/90-归一_IDE/vscode-dao-freecad $PWD
 ```
 
+## 内置 FreeCAD 运行时（零安装 · 跨平台）
+
+用户只装插件即可，无需预装 FreeCAD。`vscode-dao-freecad/runtime.js` 在探测不到本机
+FreeCAD 时自动按平台下载官方发行包并解为插件内置运行时（落在扩展 globalStorage，
+卸插件即除净，不污染系统）：
+
+| 平台 | 发行包 | 解包方式 |
+|---|---|---|
+| Linux x64/arm64 | AppImage | `--appimage-extract`（免 FUSE / 免 root） |
+| Windows x64 | conda `.7z` | 便携 `7zr.exe`（免安装器 / 免管理员） |
+| macOS x64/arm64 | `.dmg` | `hdiutil attach` + 拷贝 `.app` |
+
+探测优先级：设置 `dao-freecad.freecadPath` → 常见安装目录扫描（任意版本取最新）→
+PATH → 已解出的内置运行时 → 自动下载内置（可用 `dao-freecad.autoProvision=false` 关闭）。
+命令面板：`DAO FreeCAD: 安装/重装内置 FreeCAD 运行时` / `DAO FreeCAD: 状态总览`。
+
 ## 桥接 API（同源 /ui 直连，无 CORS 问题）
 
 `GET /status /document /workbenches /selection /screenshot /ui` ·
