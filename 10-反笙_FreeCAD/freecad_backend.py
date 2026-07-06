@@ -814,12 +814,15 @@ def run_ops(ops):
                 inv_ref   = _involute_pt(base_r, t_pitch)
                 pitch_ang = math.atan2(inv_ref.y, inv_ref.x)
 
-                # Collect all profile points in angular order (robust makePolygon)
+                # Collect all profile points in CCW angular order (robust makePolygon)
                 all_points = []
                 for i in range(z):
-                    base_rot   = i * angle_step
-                    offset_r   = base_rot + tooth_thick_half - pitch_ang + inv_pa
-                    offset_l   = base_rot - tooth_thick_half + pitch_ang - inv_pa
+                    base_rot = i * angle_step
+                    # Lower flank (+involute) sits on the trailing side of the
+                    # tooth; the mirrored flank on the leading side. Arcs sweep
+                    # CCW by taking deltas modulo 2π (never the long way round).
+                    offset_lo = base_rot - tooth_thick_half - pitch_ang
+                    offset_hi = base_rot + tooth_thick_half + pitch_ang
 
                     def _rot_i(px, py, a):
                         c, s = math.cos(a), math.sin(a)
@@ -828,31 +831,29 @@ def run_ops(ops):
                     r_eff = max(root_r, base_r * 1.001)
                     flank = _involute_flank(base_r, r_eff, tip_r, n=8)
 
-                    # Right flank (root → tip)
+                    # Lower flank (root → tip)
                     for p in flank:
-                        all_points.append(_rot_i(p.x, p.y, offset_r))
+                        all_points.append(_rot_i(p.x, p.y, offset_lo))
 
-                    # Tip arc (right tip → left tip)
-                    tip_ang_r = math.atan2(all_points[-1].y, all_points[-1].x)
-                    left_tip  = _rot_i(flank[-1].x, -flank[-1].y, offset_l)
-                    tip_ang_l = math.atan2(left_tip.y, left_tip.x)
-                    if tip_ang_l < tip_ang_r: tip_ang_l += 2 * math.pi
+                    # Tip arc (lower tip → upper tip, short CCW sweep)
+                    tip_ang_a = math.atan2(all_points[-1].y, all_points[-1].x)
+                    upper_tip = _rot_i(flank[-1].x, -flank[-1].y, offset_hi)
+                    tip_sweep = (math.atan2(upper_tip.y, upper_tip.x) - tip_ang_a) % (2 * math.pi)
                     for j in range(1, 5):
-                        a = tip_ang_r + (tip_ang_l - tip_ang_r) * j / 4
+                        a = tip_ang_a + tip_sweep * j / 4
                         all_points.append(Base.Vector(tip_r*math.cos(a), tip_r*math.sin(a), 0))
 
-                    # Left flank (tip → root)
+                    # Upper flank (tip → root, mirrored involute)
                     for p in reversed(flank):
-                        all_points.append(_rot_i(p.x, -p.y, offset_l))
+                        all_points.append(_rot_i(p.x, -p.y, offset_hi))
 
-                    # Root arc to next tooth
+                    # Root arc to next tooth (short CCW sweep)
                     ra_start = math.atan2(all_points[-1].y, all_points[-1].x)
-                    next_offset_l = (i+1) * angle_step - tooth_thick_half + pitch_ang - inv_pa
-                    next_root_pt  = _rot_i(flank[0].x, -flank[0].y, next_offset_l)
-                    ra_end = math.atan2(next_root_pt.y, next_root_pt.x)
-                    if ra_end < ra_start: ra_end += 2 * math.pi
+                    next_offset_lo = (i+1) * angle_step - tooth_thick_half - pitch_ang
+                    next_root_pt = _rot_i(flank[0].x, flank[0].y, next_offset_lo)
+                    root_sweep = (math.atan2(next_root_pt.y, next_root_pt.x) - ra_start) % (2 * math.pi)
                     for j in range(1, 4):
-                        a = ra_start + (ra_end - ra_start) * j / 3
+                        a = ra_start + root_sweep * j / 3
                         all_points.append(Base.Vector(root_r*math.cos(a), root_r*math.sin(a), 0))
 
                 all_points.append(all_points[0])  # close the polygon
@@ -862,6 +863,10 @@ def run_ops(ops):
                     gear = gear_face.extrude(Base.Vector(0, 0, b))
                     if gear.isNull() or gear.Volume < 1:
                         raise ValueError("Extrude produced null/empty solid")
+                    if not gear.isValid():
+                        gear.fix(1e-4, 1e-4, 1e-4)
+                        if not gear.isValid():
+                            raise ValueError("Extrude produced invalid solid")
                 except Exception as _ge:
                     # Fallback: simple 4-point-per-tooth polygon
                     pts2 = []
