@@ -18,24 +18,25 @@
   "motor_rpm_loaded": 8000.0,
   "wheel_rpm": 2000.0,
   "speed_m_s": 3.77,
-  "speed_km_h": 13.57
+  "speed_km_h": 13.57,
+  "total_mass_g": 228.8
  },
  "interference": [],
  "mass_g": {
-  "Chassis": 48.42,
-  "MotorMount": 1.17,
-  "Pinion": 7.96,
-  "SpurGear": 367.37,
-  "AxleRear": 9.96,
   "AxleFront": 9.96,
-  "WheelRL": 12.64,
-  "WheelRR": 12.64,
+  "AxleRear": 9.96,
+  "BatteryPack": 22.34,
+  "BodyShell": 45.47,
+  "Chassis": 48.42,
+  "Hood": 8.9,
+  "MotorMount": 1.17,
+  "PCB": 1.78,
+  "Pinion": 0.61,
+  "SpurGear": 11.65,
   "WheelFL": 12.64,
   "WheelFR": 12.64,
-  "BatteryPack": 22.34,
-  "PCB": 1.78,
-  "BodyShell": 45.47,
-  "Hood": 8.9
+  "WheelRL": 12.64,
+  "WheelRR": 12.64
  },
  "total_mass_g": 591.9
 }

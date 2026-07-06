@@ -1,0 +1,182 @@
+{
+ "AxleFront": {
+  "watertight_raw": true,
+  "watertight": true,
+  "heal": "none",
+  "volume_mm3": 1262.77,
+  "faces": 428,
+  "bbox": [
+   8.0,
+   92.0,
+   8.0
+  ]
+ },
+ "AxleRear": {
+  "watertight_raw": true,
+  "watertight": true,
+  "heal": "none",
+  "volume_mm3": 1262.77,
+  "faces": 428,
+  "bbox": [
+   8.0,
+   92.0,
+   8.0
+  ]
+ },
+ "BatteryPack": {
+  "watertight_raw": true,
+  "watertight": true,
+  "heal": "none",
+  "volume_mm3": 21268.15,
+  "faces": 1052,
+  "bbox": [
+   50.0,
+   36.0,
+   12.0
+  ]
+ },
+ "BodyShell": {
+  "watertight_raw": true,
+  "watertight": true,
+  "heal": "none",
+  "volume_mm3": 43247.73,
+  "faces": 2124,
+  "bbox": [
+   161.5,
+   56.0,
+   38.36
+  ]
+ },
+ "Chassis": {
+  "watertight_raw": true,
+  "watertight": true,
+  "heal": "none",
+  "volume_mm3": 46112.6,
+  "faces": 1308,
+  "bbox": [
+   160.0,
+   60.0,
+   16.0
+  ]
+ },
+ "Hood": {
+  "watertight_raw": true,
+  "watertight": true,
+  "heal": "none",
+  "volume_mm3": 8459.29,
+  "faces": 250,
+  "bbox": [
+   49.32,
+   54.65,
+   4.0
+  ]
+ },
+ "Motor": {
+  "watertight_raw": true,
+  "watertight": true,
+  "heal": "none",
+  "volume_mm3": 7842.3,
+  "faces": 284,
+  "bbox": [
+   20.0,
+   34.0,
+   20.0
+  ]
+ },
+ "MotorMount": {
+  "watertight_raw": true,
+  "watertight": true,
+  "heal": "none",
+  "volume_mm3": 1118.81,
+  "faces": 144,
+  "bbox": [
+   24.0,
+   8.0,
+   18.0
+  ]
+ },
+ "PCB": {
+  "watertight_raw": true,
+  "watertight": true,
+  "heal": "none",
+  "volume_mm3": 1696.0,
+  "faces": 28,
+  "bbox": [
+   28.0,
+   28.0,
+   4.0
+  ]
+ },
+ "Pinion": {
+  "watertight_raw": true,
+  "watertight": true,
+  "heal": "none",
+  "volume_mm3": 77.78,
+  "faces": 1384,
+  "bbox": [
+   5.79,
+   5.0,
+   6.0
+  ]
+ },
+ "SpurGear": {
+  "watertight_raw": true,
+  "watertight": true,
+  "heal": "none",
+  "volume_mm3": 1484.48,
+  "faces": 4024,
+  "bbox": [
+   21.0,
+   5.0,
+   21.0
+  ]
+ },
+ "WheelFL": {
+  "watertight_raw": true,
+  "watertight": true,
+  "heal": "none",
+  "volume_mm3": 11997.71,
+  "faces": 316,
+  "bbox": [
+   35.95,
+   12.0,
+   35.98
+  ]
+ },
+ "WheelFR": {
+  "watertight_raw": true,
+  "watertight": true,
+  "heal": "none",
+  "volume_mm3": 11997.71,
+  "faces": 316,
+  "bbox": [
+   35.95,
+   12.0,
+   35.98
+  ]
+ },
+ "WheelRL": {
+  "watertight_raw": true,
+  "watertight": true,
+  "heal": "none",
+  "volume_mm3": 11997.71,
+  "faces": 316,
+  "bbox": [
+   35.95,
+   12.0,
+   35.98
+  ]
+ },
+ "WheelRR": {
+  "watertight_raw": true,
+  "watertight": true,
+  "heal": "none",
+  "volume_mm3": 11997.71,
+  "faces": 316,
+  "bbox": [
+   35.95,
+   12.0,
+   35.98
+  ]
+ }
+}
