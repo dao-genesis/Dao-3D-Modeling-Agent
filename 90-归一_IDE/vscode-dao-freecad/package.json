@@ -2,7 +2,7 @@
   "name": "dao-freecad",
   "displayName": "DAO · FreeCAD 归一工作台",
   "description": "把 FreeCAD 全部功能以单网页形式嵌入 IDE 中间面板：模型树 / 3D 视口 / 属性 / Python 控制台 / GUI 命令，桥接 FreeCAD 本体，适配任何 VS Code 系 IDE（含 AI IDE）。",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "dao",
   "engines": { "vscode": "^1.75.0" },
   "categories": ["Visualization", "Other"],
