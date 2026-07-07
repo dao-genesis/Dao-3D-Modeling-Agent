@@ -1012,10 +1012,18 @@ def _handle_input(body):
 _dao_engine = None
 
 
+def _dao_root():
+    """定位 DAO 模块根: 仓库布局(<repo>/freecad/DAO) 或插件内置(<plugin>/dao/freecad/DAO)."""
+    for root in (SCRIPT_DIR.parent, SCRIPT_DIR / "dao"):
+        if (root / "freecad" / "DAO").is_dir():
+            return root
+    return SCRIPT_DIR.parent
+
+
 def _get_engine():
     global _dao_engine
     if _dao_engine is None:
-        dao_dir = str(SCRIPT_DIR.parent / "freecad" / "DAO")
+        dao_dir = str(_dao_root() / "freecad" / "DAO")
         if dao_dir not in sys.path:
             sys.path.insert(0, dao_dir)
         import dao_engine
@@ -1028,6 +1036,20 @@ def _handle_tools():
     def _fn():
         eng = _get_engine()
         return {"ok": True, "ops": eng.ops(), "count": len(eng.ops())}
+    return _exec_in_gui_thread(_fn, timeout=60)
+
+
+def _handle_toolspec():
+    """GET /toolspec — Devin-Desktop 式工具目录: 每个 op 的描述 + 参数契约 + 分组."""
+    def _fn():
+        eng = _get_engine()
+        repo = str(_dao_root())
+        if repo not in sys.path:
+            sys.path.insert(0, repo)
+        from cad_agent import tool_catalog
+        cat = tool_catalog.build_catalog(eng.ops())
+        cat["ok"] = True
+        return cat
     return _exec_in_gui_thread(_fn, timeout=60)
 
 
@@ -1062,6 +1084,86 @@ def _handle_agent(body):
         note, results = eng.run(text)
         return {"ok": True, "note": note, "results": results}
     return _exec_in_gui_thread(_fn, timeout=300)
+
+
+def _dao_modules():
+    """Import the DAO AI-IDE modules (llm/prompts/sessions) lazily."""
+    dao_dir = str(_dao_root() / "freecad" / "DAO")
+    if dao_dir not in sys.path:
+        sys.path.insert(0, dao_dir)
+    import dao_llm
+    import dao_prompts
+    import dao_sessions
+    return dao_llm, dao_prompts, dao_sessions
+
+
+def _handle_aiconfig_get():
+    """GET /aiconfig — AI 供应商配置(密钥打码)."""
+    dao_llm, _, _ = _dao_modules()
+    cfg = dao_llm.load_config()
+    key = cfg.get("api_key") or ""
+    cfg["api_key"] = (key[:6] + "…") if key else ""
+    cfg["configured"] = dao_llm.configured()
+    cfg.pop("api_token", None)
+    return {"ok": True, "config": cfg}
+
+
+def _handle_aiconfig_post(body):
+    """POST /aiconfig — 更新 base_url/api_key/model/temperature/max_steps."""
+    dao_llm, _, _ = _dao_modules()
+    cfg = dao_llm.load_config()
+    for k in ("base_url", "api_key", "model", "temperature",
+              "max_steps", "system_prompt_id"):
+        if body.get(k) not in (None, ""):
+            cfg[k] = body[k]
+    dao_llm.save_config(cfg)
+    return {"ok": True, "configured": dao_llm.configured(cfg)}
+
+
+def _handle_chat(body):
+    """POST /chat — 真·LLM 对话式建模(工具调用闭环, 仿 Devin Desktop).
+
+    {"text": "...", "session": "<id 可选>"} — 会话历史自动持久化续聊；
+    无模型配置时报错并指引 /aiconfig。"""
+    text = body.get("text", "")
+    if not text:
+        return {"ok": False, "error": "text required"}
+    dao_llm, dao_prompts, dao_sessions = _dao_modules()
+    if not dao_llm.configured():
+        return {"ok": False, "error": "AI 未配置：先 POST /aiconfig "
+                "{base_url, api_key, model}（任意 OpenAI 兼容端点）",
+                "need_config": True}
+
+    def _fn():
+        eng = _get_engine()
+        eng._ensure_doc()
+
+        def actor(tool, args):
+            fn = eng.handlers.get(tool)
+            if fn is None:
+                raise KeyError("unknown tool: %s" % tool)
+            return fn(args or {})
+
+        cfg = dao_llm.load_config()
+        agent = dao_llm.LLMAgent(
+            actor, cfg=cfg,
+            system_prompt=dao_prompts.system_prompt(
+                cfg.get("system_prompt_id", "default"), eng.ops()))
+        sid = body.get("session")
+        conv = (dao_sessions.load(sid) if sid else None) or \
+            dao_sessions.create(title=text[:40])
+        sid = conv["id"]
+        out = agent.ask(text, history=conv.get("messages") or [])
+        dao_sessions.save_messages(sid, out["messages"])
+        return {"ok": True, "session": sid, "say": out["say"],
+                "actions": out["actions"], "verify": out.get("verify")}
+    return _exec_in_gui_thread(_fn, timeout=600)
+
+
+def _handle_sessions():
+    """GET /sessions — 会话列表(仿 Devin Desktop 会话管理)."""
+    _, _, dao_sessions = _dao_modules()
+    return {"ok": True, "sessions": dao_sessions.list_all()}
 
 
 # ─── HTTP Request Handler ────────────────────────────────────────────────────
@@ -1137,6 +1239,12 @@ class FreeCADRemoteHandler(BaseHTTPRequestHandler):
                 self._json_response(_handle_window(parse_qs(parsed.query)))
             elif path == "/tools":
                 self._json_response(_handle_tools())
+            elif path == "/toolspec":
+                self._json_response(_handle_toolspec())
+            elif path == "/aiconfig":
+                self._json_response(_handle_aiconfig_get())
+            elif path == "/sessions":
+                self._json_response(_handle_sessions())
             elif path == "/ui" or path.startswith("/ui/"):
                 self._ui_response(path)
             else:
@@ -1193,6 +1301,10 @@ class FreeCADRemoteHandler(BaseHTTPRequestHandler):
                 self._json_response(_handle_tool(body))
             elif path == "/agent":
                 self._json_response(_handle_agent(body))
+            elif path == "/chat":
+                self._json_response(_handle_chat(body))
+            elif path == "/aiconfig":
+                self._json_response(_handle_aiconfig_post(body))
             else:
                 self._json_response({"ok": False, "error": "not found"}, 404)
         except Exception as e:
