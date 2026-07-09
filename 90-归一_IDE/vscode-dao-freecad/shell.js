@@ -21,6 +21,7 @@ const BOARD_META = {
 };
 
 let _server = null;
+let _port = 0;
 let _deps = null; // { bridgePort(), xpraPort, proxyHtml(), status() }
 
 function probe(port, path_) {
@@ -209,8 +210,9 @@ function send(res, code, type, body) {
  */
 function startShell(port, deps, log) {
   _deps = deps;
-  if (_server) return Promise.resolve(port);
+  if (_server) return Promise.resolve(_port);
   return new Promise((resolve) => {
+    const tryListen = (pt, left) => {
     const srv = http.createServer(async (req, res) => {
       try {
         const u = new URL(req.url, "http://x");
@@ -251,17 +253,29 @@ function startShell(port, deps, log) {
         try { send(res, 500, "text/plain", String(e && e.stack || e)); } catch (_) {}
       }
     });
-    srv.on("error", (e) => { log && log("✗ 归一外壳端口 " + port + " 启动失败: " + e.message); resolve(0); });
-    srv.listen(port, "127.0.0.1", () => {
-      _server = srv;
-      log && log("✓ 归一外壳 /shell 在线: http://127.0.0.1:" + port + "/shell");
-      resolve(port);
+    srv.on("error", (e) => {
+      // 道并行而不相悖：端口被占(如 dao-vsix 本地 API)时自动后退相邻端口
+      if (e && e.code === "EADDRINUSE" && left > 0) {
+        log && log("⚠ 端口 " + pt + " 被占，后退到 " + (pt + 1));
+        return tryListen(pt + 1, left - 1);
+      }
+      log && log("✗ 归一外壳端口 " + pt + " 启动失败: " + e.message);
+      resolve(0);
     });
+    srv.listen(pt, "127.0.0.1", () => {
+      _server = srv; _port = pt;
+      log && log("✓ 归一外壳 /shell 在线: http://127.0.0.1:" + pt + "/shell");
+      resolve(pt);
+    });
+    };
+    tryListen(port, 9);
   });
 }
 
 function stopShell() {
-  if (_server) { try { _server.close(); } catch (_) {} _server = null; }
+  if (_server) { try { _server.close(); } catch (_) {} _server = null; _port = 0; }
 }
 
-module.exports = { startShell, stopShell, BOARD_META };
+function shellPort() { return _port; }
+
+module.exports = { startShell, stopShell, shellPort, BOARD_META };

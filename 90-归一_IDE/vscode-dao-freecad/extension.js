@@ -510,6 +510,55 @@ function registerFreecadMcp(log) {
   } catch (e) { log("✗ MCP 注册失败: " + (e && e.stack ? e.stack : e)); }
 }
 
+// dao-vsix 第7板块「子板块」收编: 向 ~/.dao/subplugins/freecad.json 落描述符(spec JSON),
+// 朴散则为器 —— 二合一/三合一面板据此将 FreeCAD 域认作已装领域层(@freecad)。
+// 桥接就绪后用 /toolspec 实时枚举 verbs; 离线时也先落基础描述符(弱者道之用)。
+function registerSubplugin(log) {
+  try {
+    const dir = path.join(os.homedir(), ".dao", "subplugins");
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, "freecad.json");
+    const port = cfg().get("port");
+    const write = (verbs) => {
+      const spec = {
+        app_id: "freecad",
+        name: "FreeCAD · 3D 建模",
+        mention: "freecad",
+        description: "AI 纵深操作 FreeCAD 参数化建模(桥接 :" + port + " · 归一外壳 /shell)",
+        endpoint: "http://127.0.0.1:" + port,
+        invoke_url: "http://127.0.0.1:" + port + "/exec",
+        shell_url: "http://127.0.0.1:" + (shell.shellPort() || shellPort()) + "/shell",
+        verbs: verbs,
+        updated: new Date().toISOString(),
+      };
+      fs.writeFileSync(file, JSON.stringify(spec, null, 2));
+      log("✓ 子板块描述符已落 " + file + " (verbs " + verbs.length + ")");
+    };
+    write(["exec", "status", "toolspec", "screenshot", "tree", "ui"]);
+    (async () => {
+      for (let i = 0; i < 30; i++) {
+        try {
+          const spec = await new Promise((resolve) => {
+            const rq = http.get("http://127.0.0.1:" + cfg().get("port") + "/toolspec", { timeout: 3000 }, (rs) => {
+              let b = ""; rs.on("data", (c) => (b += c));
+              rs.on("end", () => { try { resolve(JSON.parse(b)); } catch (_) { resolve(null); } });
+            });
+            rq.on("error", () => resolve(null));
+            rq.on("timeout", () => { rq.destroy(); resolve(null); });
+          });
+          const ops = spec && (spec.ops || spec.tools ||
+            (Array.isArray(spec.groups) ? spec.groups.flatMap((g) => g.tools || []) : null));
+          if (Array.isArray(ops) && ops.length) {
+            write(ops.map((o) => (typeof o === "string" ? o : o.name || o.op)).filter(Boolean));
+            return;
+          }
+        } catch (_) {}
+        await new Promise((r) => setTimeout(r, 10000));
+      }
+    })();
+  } catch (e) { log("✗ 子板块描述符落盘失败: " + (e && e.message || e)); }
+}
+
 // ── 归一外壳 /shell（dao-one 骨架落地）：单网页外壳把主页/FreeCAD 整窗/工作台/Proxy Pro
 //    收为平级并排的板块标签；IDE 面板与任意外部浏览器同源可达。
 function shellPort() { return cfg().get("shellPort") || 9920; }
@@ -534,7 +583,7 @@ async function ensureShell() {
 }
 
 async function openShell() {
-  await ensureShell();
+  const livePort = await ensureShell();
   ensureBridge(true).catch(() => {});
   ensureDisplayRoute().catch(() => {});
   if (shellPanel) { shellPanel.reveal(vscode.ViewColumn.One); return; }
@@ -542,7 +591,7 @@ async function openShell() {
     "daoFreecadShell", "☯ 归一 · 总控外壳", vscode.ViewColumn.One,
     { enableScripts: true, retainContextWhenHidden: true }
   );
-  const url = `http://127.0.0.1:${shellPort()}/shell`;
+  const url = `http://127.0.0.1:${livePort || shell.shellPort() || shellPort()}/shell`;
   shellPanel.webview.html = `<!DOCTYPE html><html><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src http://127.0.0.1:* http://localhost:*; style-src 'unsafe-inline';">
 <style>html,body{height:100%;margin:0;overflow:hidden;background:#16181d}iframe{width:100%;height:100%;border:0}</style>
@@ -560,6 +609,8 @@ function activate(context) {
   } catch (e) { console.error("[dao-ai-base] 基底激活失败: " + (e && e.stack ? e.stack : e)); }
   // 两者融合: FreeCAD 工具面 → AI 底层(MCP), 物无非彼与物无非是归于一。
   registerFreecadMcp((m) => console.log("[dao-freecad-mcp] " + m));
+  // 四体系归宗之钩: 向 dao-vsix 第7板块登记 FreeCAD 子板块描述符。
+  registerSubplugin((m) => console.log("[dao-freecad-sub] " + m));
   // 三插件合一之三: dao-proxy-pro(外接 API / 提示词隔离替换 / 本源观照面板) vendored 折入。
   // 在 Devin Desktop / Windsurf 宿主内全量生效(LS 锚定/ACP 代理/模型解锁);
   // 纯 VS Code 宿主中优雅降级(面板与外接 API 可用, MITM 锚定自然无为)。
