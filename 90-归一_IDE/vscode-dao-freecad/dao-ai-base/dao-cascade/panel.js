@@ -130,7 +130,10 @@ class CascadePanelProvider {
         if (msg.type === "cancel") {
           if (this._cascadeLsId) {
             const ls = require("./ls-bridge");
-            ls.call("CancelCascadeInvocation", { cascadeId: this._cascadeLsId }).catch(() => {});
+            // 官方式停止: CancelCascadeInvocationAndWait 同步等 LS 落定运行态, 回执后清 busy(避免停了仍转圈)
+            ls.call("CancelCascadeInvocationAndWait", { cascadeId: this._cascadeLsId })
+              .then(() => { this._cxRunning = false; this._post({ type: "assistant-done", id: msg.id, text: "⏹ 已停止" }); })
+              .catch(() => { ls.call("CancelCascadeInvocation", { cascadeId: this._cascadeLsId }).catch(() => {}); });
           }
           if (this._cloud) this._cloud.cancel();
           return this._acp && this._acp.cancel();
@@ -157,6 +160,8 @@ class CascadePanelProvider {
         if (msg.type === "timeline-list") return this._handleTimelineList();
         if (msg.type === "worktree-create") return this._handleWorktreeCreate();
         if (msg.type === "outline-list") return this._handleOutlineList();
+        if (msg.type === "plans-list") return this._handlePlansList();
+        if (msg.type === "plan-create") return this._handlePlanCreate();
         if (msg.type === "custom-list") return this._handleCustomizationsList();
         if (msg.type === "custom-create") return this._handleCustomizationCreate(msg.kind);
         if (msg.type === "custom-wf-copy") return this._handleWorkflowCopy(msg.name);
@@ -174,6 +179,9 @@ class CascadePanelProvider {
         if (msg.type === "mcp-store-install") return this._handleMcpStoreInstall(msg.id, msg.link);
         if (msg.type === "store-open") return void vscode.env.openExternal(vscode.Uri.parse(msg.url)).then(undefined, () => {});
         if (msg.type === "custom-refresh") return this._handleCustomRefresh();
+        if (msg.type === "custom-import-cursor") return this._handleCursorImport();
+        if (msg.type === "mcp-tool-toggle") return this._handleMcpToolToggle(msg.server, msg.tool);
+        if (msg.type === "mcp-prompt-run") return this._handleMcpPromptRun(msg.server, msg.prompt, msg.args);
         if (msg.type === "account-status") return this._handleAccountStatus();
         if (msg.type === "token-query") return this._handleTokenQuery(msg.reqId, msg.text);
         if (msg.type === "memory-delete") return this._handleMemoryDelete(msg.id);
@@ -278,7 +286,7 @@ class CascadePanelProvider {
     }
     // 领域模式工具面重塑钩子(如 FreeCAD 模式保留/禁用特定工具)
     if (this._domainActive() && typeof this._domain.plannerConfig === "function") {
-      try { base = this._domain.plannerConfig(base) || base; } catch (_) {}
+      try { return this._domain.plannerConfig(base) || base; } catch (_) {}
     }
     return base;
   }
@@ -871,11 +879,15 @@ class CascadePanelProvider {
   async _handleStatusInfo() {
     const ls = require("./ls-bridge");
     try {
-      const [pr, wi, ri, dd] = await Promise.all([
+      const [pr, wi, ri, dd, rl, we, wo, lg] = await Promise.all([
         ls.call("GetProcesses", {}).catch(() => ({})),
         ls.call("GetWorkspaceInfos", {}).catch(() => ({})),
         ls.call("GetRepoInfos", {}).catch(() => ({})),
         ls.call("GetDebugDiagnostics", {}).catch(() => ({})),
+        ls.call("CheckUserMessageRateLimit", {}).catch(() => null),
+        ls.call("GetWorkspaceEditState", {}).catch(() => ({})),
+        ls.call("GetDefaultWebOrigins", {}).catch(() => ({})),
+        ls.call("GetLifeguardConfig", {}).catch(() => ({})),
       ]);
       const logs = (((dd.languageServerDiagnostics || {}).logs) || []).slice(-15).map((l) => String(l).trim());
       this._post({ type: "status-info", info: {
@@ -883,6 +895,12 @@ class CascadePanelProvider {
         lspPort: pr.lspPort || 0,
         workspaces: ((wi.workspaceInfos || [])).map((w) => (w.workspaceUri || "").replace("file://", "")),
         repos: (ri.repos || []).map((r) => ({ name: r.name || "", branches: (r.branches || []).map((b) => b.name || "") })),
+        rateLimit: rl && { hasCapacity: !!rl.hasCapacity, remaining: Number(rl.messagesRemaining), max: Number(rl.maxMessages),
+          resetsIn: Number(rl.resetsInSeconds) || 0 },
+        workspaceEdits: (we.workspaceEdits || []).map((x) => ({ repoRoot: x.repoRoot || "",
+          files: (x.fileStates || x.files || []).length })),
+        webOrigins: wo.defaultOrigins || [],
+        lifeguard: (((lg.config || {}).modes || {}).agent) || null,
         logs,
       } });
     } catch (e) { this._post({ type: "error", text: "读取诊断信息失败: " + e.message }); }
@@ -913,6 +931,36 @@ class CascadePanelProvider {
       items.sort((a, b) => a.line - b.line);
       this._post({ type: "outline", file: doc.uri.fsPath, items });
     } catch (e) { this._post({ type: "error", text: "读取大纲失败: " + e.message }); }
+  }
+
+  // 官方式 Plans 面板: GetAllPlans{} → {plans:[{path(fileURI),title,description}]}
+  // 契约(实测): 计划源为 <workspace>/.windsurf/plans/*.md; title 取首个 H1, description 取正文首段;
+  // 与 Plan 模式(exit_plan_mode → planFile)同源, 点击在编辑器打开计划文档
+  async _handlePlansList() {
+    try {
+      const ls = require("./ls-bridge");
+      const r = await ls.call("GetAllPlans", {});
+      const items = ((r && r.plans) || []).map((p) => ({
+        path: (p.path || "").replace("file://", ""),
+        title: p.title || (p.path || "").split("/").pop() || "(无题)",
+        description: p.description || "" }));
+      this._post({ type: "plans", items });
+    } catch (e) { this._post({ type: "error", text: "读取 Plans 失败: " + e.message }); }
+  }
+
+  async _handlePlanCreate() {
+    try {
+      const name = await vscode.window.showInputBox({ prompt: "计划名(生成 .windsurf/plans/<name>.md)" });
+      if (!name) return;
+      const ws = (vscode.workspace.workspaceFolders || [])[0];
+      if (!ws) throw new Error("无工作区");
+      const slug = name.trim().toLowerCase().split("").map((c) => (/[a-z0-9\u4e00-\u9fff]/.test(c) ? c : "-")).join("");
+      const uri = vscode.Uri.joinPath(ws.uri, ".windsurf", "plans", slug + ".md");
+      await vscode.workspace.fs.writeFile(uri, Buffer.from("# " + name.trim() + "\n\n## Goal\n\n## Steps\n- [ ] \n", "utf8"));
+      const doc = await vscode.workspace.openTextDocument(uri);
+      await vscode.window.showTextDocument(doc, { preview: false });
+      this._handlePlansList();
+    } catch (e) { this._post({ type: "error", text: "新建计划失败: " + e.message }); }
   }
 
   // 官方式 standalone 建 worktree: CreateWorktree{} → {worktrees:[{original:{workspaceUri,gitRootUri},worktreePath}]}
@@ -985,9 +1033,39 @@ class CascadePanelProvider {
         status: (s.status || "").replace("MCP_SERVER_STATUS_", ""),
         disabled: !!(s.spec || {}).disabled,
         error: s.error || "",
-        tools: (s.tools || []).map((t) => ({ name: t.name, description: t.description || "" })) }));
+        tools: ((s2) => { const off = new Set((s2.spec || {}).disabledTools || []);
+          return (s2.tools || []).map((t) => ({ name: t.name, description: t.description || "", off: off.has(t.name) })); })(s),
+        prompts: (s.prompts || []).map((p) => ({ name: p.name, description: p.description || "",
+          args: (p.arguments || []).map((a) => a.name || "") })) }));
       this._post({ type: "mcp", servers });
     } catch (e) { this._post({ type: "error", text: "读取 MCP 状态失败: " + e.message }); }
+  }
+
+  // 官方式工具级开关: ToggleMcpTool{serverId,toolName} → 翻转 spec.disabledTools(持久化至 mcp_config.json)
+  async _handleMcpToolToggle(server, tool) {
+    try {
+      const ls = require("./ls-bridge");
+      await ls.call("ToggleMcpTool", { serverId: server, toolName: tool });
+      this._handleMcpList();
+    } catch (e) { this._post({ type: "error", text: "切换工具失败: " + e.message }); }
+  }
+
+  // 官方式 MCP prompts: GetMcpPrompt{serverName,promptName,arguments} → {messages:[{role,content:[{text}]}]}
+  // 取回拼接各 message 文本塗入 composer
+  async _handleMcpPromptRun(server, prompt, argNames) {
+    try {
+      const ls = require("./ls-bridge");
+      const args = {};
+      for (const a of (argNames || [])) {
+        const v = await vscode.window.showInputBox({ prompt: "MCP prompt 参数 " + a + " (" + server + "/" + prompt + ")" });
+        if (v === undefined) return;
+        if (v) args[a] = v;
+      }
+      const r = await ls.call("GetMcpPrompt", { serverName: server, promptName: prompt, arguments: args });
+      const text = ((r && r.messages) || []).map((mm) => (mm.content || []).map((c) => c.text || "").join("\n")).filter(Boolean).join("\n");
+      if (!text) throw new Error("prompt 无文本内容");
+      this._post({ type: "insert-input", text });
+    } catch (e) { this._post({ type: "error", text: "获取 MCP prompt 失败: " + e.message }); }
   }
 
   async _handleMcpRefresh() {
@@ -1228,18 +1306,11 @@ class CascadePanelProvider {
     this._handleCustomizationsList();
   }
 
-  // 官方式启用/禁用: mcp_config.json 条目级 disabled 字段
+  // 官方式 server 级开关: UpdateMcpServerInConfigFile{serverId} → 翻转 disabled 并持久化(LS 自行重载)
   async _handleMcpToggle(name) {
     try {
-      const p = path.join(os.homedir(), ".codeium", "windsurf", "mcp_config.json");
-      const fs = require("fs");
-      const cfg = JSON.parse(fs.readFileSync(p, "utf8"));
-      const s = (cfg.mcpServers || {})[name];
-      if (!s) throw new Error("配置中无 " + name);
-      if (s.disabled) delete s.disabled; else s.disabled = true;
-      fs.writeFileSync(p, JSON.stringify(cfg, null, 2));
       const ls = require("./ls-bridge");
-      await ls.call("RefreshMcpServers", {});
+      await ls.call("UpdateMcpServerInConfigFile", { serverId: name });
     } catch (e) { this._post({ type: "error", text: "切换 MCP 失败: " + e.message }); }
     setTimeout(() => this._handleMcpList(), 1500);
   }
@@ -1474,6 +1545,20 @@ class CascadePanelProvider {
         return { name: m.title || m.memoryId || "", trigger: (ps.trigger || "").replace("CORTEX_MEMORY_TRIGGER_", "").toLowerCase(),
           path: fromUri(ps.absoluteFilePath) };
       });
+      // 全局规则(~/.devin/rules/*.md, 含 Cursor 导入): GetAllRules 只返回工作区规则, 此处直读补显
+      try {
+        const fs = require("fs");
+        const gdir = path.join(os.homedir(), ".devin", "rules");
+        const seen = new Set(rules.map((x) => x.path));
+        for (const f of fs.readdirSync(gdir)) {
+          if (!f.endsWith(".md")) continue;
+          const p = path.join(gdir, f);
+          if (seen.has(p)) continue;
+          let name = f.replace(/\.md$/, "");
+          try { const h1 = fs.readFileSync(p, "utf8").match(/^#\s+(.+)$/m); if (h1) name = h1[1].trim(); } catch (_) {}
+          rules.push({ name, trigger: "global", path: p });
+        }
+      } catch (_) {}
       const skills = (sk.skills || r.skills || []).map((s) => ({
         name: s.name || s.skillName || "", description: s.description || "", path: fromUri(s.path) }));
       const workflows = (wf.workflows || []).map((w) => ({
@@ -1498,6 +1583,30 @@ class CascadePanelProvider {
       if (p) await this._handleOpenFile(p);
       this._handleCustomizationsList();
     } catch (e) { this._post({ type: "error", text: "新建失败: " + e.message }); }
+  }
+
+  // 官方式从 Cursor 导入规则: ImportFromCursor{sourcePath} → {copiedFiles:[...]}
+  // 契约(实测): sourcePath 必须以 .cursor/rules 结尾; *.mdc 拷为 ~/.devin/rules/*.md(全局规则)
+  async _handleCursorImport() {
+    try {
+      const fs = require("fs");
+      const cands = [];
+      const probe = (p) => { try { if (fs.statSync(p).isDirectory()) cands.push(p); } catch (_) {} };
+      probe(path.join(os.homedir(), ".cursor", "rules"));
+      for (const ws of vscode.workspace.workspaceFolders || []) probe(path.join(ws.uri.fsPath, ".cursor", "rules"));
+      let src = cands[0];
+      if (cands.length > 1) src = await vscode.window.showQuickPick(cands, { placeHolder: "选择 Cursor 规则目录" });
+      if (!cands.length) {
+        const pick = await vscode.window.showOpenDialog({ canSelectFolders: true, canSelectFiles: false, openLabel: "选择 .cursor/rules 目录" });
+        src = pick && pick[0] && pick[0].fsPath;
+      }
+      if (!src) return;
+      const ls = require("./ls-bridge");
+      const r = await ls.call("ImportFromCursor", { sourcePath: src });
+      const n = ((r && r.copiedFiles) || []).length;
+      vscode.window.showInformationMessage("已从 Cursor 导入 " + n + " 条规则 → ~/.devin/rules/");
+      this._handleCustomRefresh();
+    } catch (e) { this._post({ type: "error", text: "Cursor 导入失败: " + e.message }); }
   }
 
   // 官方式变更存档: AcknowledgeCascadeCodeEdit{cascadeId,absoluteUri:[repeated],accept}(二进制描述符实测 absolute_uri/contents 均 repeated string)
@@ -2009,12 +2118,13 @@ class CascadePanelProvider {
       <div class="ttl">Cascade · 三模式</div>
       <div class="sub">Kick off a new project. Make changes across your entire codebase.</div>
       <div id="recent">
-        <div class="rhead"><span>Recent sessions</span><span class="va" id="agBtn">Agents</span><span class="va" id="cmBtn">Maps</span><span class="va" id="cusBtn">Rules</span><span class="va" id="mcpBtn">MCP</span><span class="va" id="memsBtn">Memories</span><span class="va" id="olBtn">Outline</span><span class="va" id="stBtn">Status</span><span class="va" id="tlBtn">Timeline</span><span class="va" id="viewAll">View all</span></div>
+        <div class="rhead"><span>Recent sessions</span><span class="va" id="agBtn">Agents</span><span class="va" id="cmBtn">Maps</span><span class="va" id="cusBtn">Rules</span><span class="va" id="mcpBtn">MCP</span><span class="va" id="memsBtn">Memories</span><span class="va" id="olBtn">Outline</span><span class="va" id="plBtn">Plans</span><span class="va" id="stBtn">Status</span><span class="va" id="tlBtn">Timeline</span><span class="va" id="viewAll">View all</span></div>
         <div id="recentList"></div>
         <div id="memList" style="display:none"></div>
         <div id="stList" style="display:none"></div>
         <div id="tlList" style="display:none"></div>
         <div id="olList" style="display:none"></div>
+        <div id="plList" style="display:none"></div>
         <div id="mcpList" style="display:none"></div>
         <div id="cusList" style="display:none"></div>
         <div id="agList" style="display:none"></div>
@@ -2043,7 +2153,7 @@ class CascadePanelProvider {
         <button id="imgBtn" title="附加图片（支持粘贴）">🖼</button>
         <button id="arenaBtn" title="Arena 模式：同题双轨候选，择优续行（新会话/会话中途均可）">⚔</button>
         <button id="wtBtn" title="Worktree 模式：新会话在隔离 git worktree 中运行，改动不直接落入主工作区，可随后合并">⎇</button>
-        <button id="domainBtn" style="display:none"></button>
+        <button id="domainBtn" style="display:none;width:auto;padding:0 8px;font-size:12px"></button>
         <span class="pill" id="modeWrap" title="Session Mode">&lt;&gt;<select id="modeSel"></select></span>
         <span class="pill" id="modelWrap" title="Model"><select id="modelSel"></select></span>
         <span class="spacer"></span>
@@ -2079,8 +2189,8 @@ class CascadePanelProvider {
         agList=$("agList"), agBtn=$("agBtn"),
         cmList=$("cmList"), cmBtn=$("cmBtn");
   viewAll.onclick=()=>vscode.postMessage({type:"history-open"});
-  const stList=$("stList"), tlList=$("tlList"), olList=$("olList");
-  const homeLists={memList,mcpList,cusList,agList,cmList,stList,tlList,olList};
+  const stList=$("stList"), tlList=$("tlList"), olList=$("olList"), plList=$("plList");
+  const homeLists={memList,mcpList,cusList,agList,cmList,stList,tlList,olList,plList};
   function openHomeList(name,msgType){ const el=homeLists[name]; const open=el.style.display==="none";
     for(const k in homeLists) homeLists[k].style.display="none";
     el.style.display=open?"":"none"; recentList.style.display=open?"none":"";
@@ -2089,14 +2199,13 @@ class CascadePanelProvider {
   $("stBtn").onclick=()=>openHomeList("stList","status-info");
   $("tlBtn").onclick=()=>openHomeList("tlList","timeline-list");
   $("olBtn").onclick=()=>openHomeList("olList","outline-list");
+  $("plBtn").onclick=()=>openHomeList("plList","plans-list");
   mcpBtn.onclick=()=>openHomeList("mcpList","mcp-list");
   cusBtn.onclick=()=>openHomeList("cusList","custom-list");
   agBtn.onclick=()=>openHomeList("agList","agents-registry");
   cmBtn.onclick=()=>openHomeList("cmList","codemaps-list");
 
   modelSel.addEventListener("change",()=>vscode.postMessage({type:"set-config", configId:"model", value:modelSel.value, agent}));
-  const domainBtn=$("domainBtn");
-  domainBtn.onclick=()=>vscode.postMessage({type:"domain-toggle"});
   // 发送钮在回合进行中变为停止钮(官方式)
   let busy=false;
   function setBusy(b){ busy=b; sendEl.textContent=b?"■":"↑"; sendEl.title=b?"中断当前回合":"发送 (Enter)"; }
@@ -2214,6 +2323,8 @@ class CascadePanelProvider {
   wtUndo.onclick=()=>vscode.postMessage({type:"worktree-undo"});
   $("wtOpen").onclick=()=>vscode.postMessage({type:"worktree-open"});
   wtBtn.onclick=()=>{ wtOn=!wtOn; wtBtn.classList.toggle("on",wtOn); };
+  const domainBtn=$("domainBtn");
+  domainBtn.onclick=()=>vscode.postMessage({type:"domain-toggle"});
   wtMerge.onclick=()=>vscode.postMessage({type:"worktree-merge"});
   const arenaBtn=$("arenaBtn"); let arenaOn=false;
   const arenaTitle=arenaBtn.title;
@@ -2401,15 +2512,6 @@ class CascadePanelProvider {
       else if(m.state==="ok"){ authmsg.textContent="登录成功"; authcode.style.display="none"; authsubmit.style.display="none"; }
       else { authmsg.textContent="登录失败: "+(m.text||""); }
     }
-    else if(m.type==="domain"){
-      // 领域模式开关胶囊: 开=领域专用(提示词/工具面全量重塑), 关=日常 Devin Desktop
-      domainBtn.style.display="";
-      domainBtn.textContent=(m.on?"☯ ":"○ ")+m.name;
-      domainBtn.title=m.on?(m.name+" 模式已开：底层提示词与工具面塑为 "+m.name+" 专用；点击切回日常 Devin 模式")
-                         :("日常 Devin 模式；点击切入 "+m.name+" 模式(领域专用提示词/工具面)");
-      domainBtn.style.opacity=m.on?"1":".55";
-      domainBtn.style.color=m.on?"var(--vscode-textLink-foreground,#4da3ff)":"";
-    }
     else if(m.type==="config-options"){
       // 按 agent 分组存配置(cascade=LS 本地轨 133 模型; acp=Devin Local/Cloud 云端轨)。
       // 不同轨模型/模式各异, 存后仅渲染当前 agent 的选择器, 避免 ACP 单模型覆盖 Cascade 全量目录。
@@ -2468,6 +2570,8 @@ class CascadePanelProvider {
         const hl=document.createElement("span"); hl.textContent=ttl; h.appendChild(hl);
         const ad=document.createElement("span"); ad.className="mi"; ad.title="新建 "+ttl.slice(0,-1); ad.textContent="＋"; ad.style.cursor="pointer";
         ad.onclick=()=>vscode.postMessage({type:"custom-create", kind}); h.appendChild(ad);
+        if(kind==="rule"){ const im=document.createElement("span"); im.className="mi"; im.title="从 Cursor 导入规则(.cursor/rules → 全局规则)"; im.textContent="⇤"; im.style.cursor="pointer";
+          im.onclick=()=>vscode.postMessage({type:"custom-import-cursor"}); h.appendChild(im); }
         cusList.appendChild(h);
         if(!arr.length){ const d=document.createElement("div"); d.textContent="(无)"; d.style.opacity=".6"; cusList.appendChild(d); continue; }
         for(const it of arr){ const el=document.createElement("div"); el.className="mem"; el.style.cursor="pointer";
@@ -2518,6 +2622,18 @@ class CascadePanelProvider {
       if(!(m.items||[]).length){ const d=document.createElement("div"); d.textContent="(无符号)"; d.style.opacity=".6"; olList.appendChild(d); }
       for(const it of m.items||[]){ const d=document.createElement("div"); d.className="mc"; d.style.cursor="pointer"; d.textContent=String(it.line).padStart(4," ")+"  "+it.icon+" "+(it.text||""); d.onclick=()=>vscode.postMessage({type:"open-file-line", path:m.file, line:it.line}); olList.appendChild(d); }
     }
+    else if(m.type==="plans"){
+      // 官方式 Plans 面板: .windsurf/plans/*.md 计划文档清单(标题+摘要), 点击打开, ＋ 新建
+      plList.innerHTML="";
+      const h=document.createElement("div"); h.className="mh";
+      const t=document.createElement("span"); t.className="mt"; t.textContent="Plans ("+(m.items||[]).length+")"; h.appendChild(t);
+      const add=document.createElement("span"); add.className="mi"; add.title="新建计划文档"; add.textContent="＋"; add.onclick=()=>vscode.postMessage({type:"plan-create"}); h.appendChild(add);
+      plList.appendChild(h);
+      if(!(m.items||[]).length){ const d=document.createElement("div"); d.textContent="(无计划 · Plan 模式或 ＋ 会生成 .windsurf/plans/*.md)"; d.style.opacity=".6"; plList.appendChild(d); }
+      for(const it of m.items||[]){ const d=document.createElement("div"); d.className="mc"; d.style.cursor="pointer";
+        d.textContent="▤ "+(it.title||"")+(it.description?" — "+it.description:"");
+        d.title=it.path||""; d.onclick=()=>vscode.postMessage({type:"open-file", path:it.path}); plList.appendChild(d); }
+    }
     else if(m.type==="status-info"){
       // 官方式诊断页: LS 端口/工作区/仓库分支/日志尾部
       stList.innerHTML="";
@@ -2531,6 +2647,15 @@ class CascadePanelProvider {
       for(const w of info.workspaces||[]) row(w);
       sec("Repos");
       for(const r of info.repos||[]) row(r.name+" · "+(r.branches||[]).length+" branches: "+(r.branches||[]).slice(0,8).join(", ")+((r.branches||[]).length>8?" …":""));
+      if(info.rateLimit){ sec("消息额度");
+        const rl=info.rateLimit;
+        row(rl.hasCapacity?("可用"+(rl.max>0?" · 剩余 "+rl.remaining+"/"+rl.max:" · 无限额")):("已限流"+(rl.resetsIn?" · "+Math.ceil(rl.resetsIn/60)+" 分钟后重置":""))); }
+      if((info.workspaceEdits||[]).length){ sec("Cascade 待处置编辑");
+        for(const x of info.workspaceEdits) row(x.repoRoot+(x.files?" · "+x.files+" 文件":"")); }
+      if(info.lifeguard){ sec("Lifeguard 审阅");
+        row((info.lifeguard.enabled?"已启用":"已禁用")+" · "+(info.lifeguard.modelDisplayName||info.lifeguard.model||"")+(info.lifeguard.agentVersion?" · "+info.lifeguard.agentVersion:"")); }
+      if((info.webOrigins||[]).length){ sec("Cascade Web 默认白名单 ("+info.webOrigins.length+")");
+        row(info.webOrigins.map(function(u){return u.replace(/^https?:\\/\\//,"");}).join(" · ")); }
       sec("LS 日志尾部");
       for(const l of info.logs||[]) row(l);
     }
@@ -2562,7 +2687,18 @@ class CascadePanelProvider {
         if(sv.disabled){ t.style.opacity=".5"; }
         h.appendChild(t); h.appendChild(st); h.appendChild(tg);
         const c=document.createElement("div"); c.className="mc";
-        c.textContent=sv.error?("错误: "+sv.error):((sv.tools||[]).map(x=>x.name).join(" · ")||"(无工具)");
+        if(sv.error){ c.textContent="错误: "+sv.error; }
+        else if(!(sv.tools||[]).length){ c.textContent="(无工具)"; }
+        else for(const x of sv.tools){ const tp=document.createElement("span"); tp.textContent=(x.off?"◌ ":"● ")+x.name;
+          tp.title=(x.off?"已禁用 · 点击启用":"点击禁用")+(x.description?" — "+x.description:"");
+          tp.style.cssText="margin-right:8px;cursor:pointer;"+(x.off?"opacity:.45;text-decoration:line-through;":"");
+          tp.onclick=()=>vscode.postMessage({type:"mcp-tool-toggle", server:sv.name, tool:x.name}); c.appendChild(tp); }
+        if((sv.prompts||[]).length){ const pc=document.createElement("div"); pc.className="mc";
+          for(const p of sv.prompts){ const pp=document.createElement("span"); pp.textContent="▤ "+p.name;
+            pp.title="插入 prompt 到输入框"+(p.description?" — "+p.description:"")+(p.args.length?"（参数: "+p.args.join(", ")+"）":"");
+            pp.style.cssText="margin-right:8px;cursor:pointer;color:#58a6ff;";
+            pp.onclick=()=>vscode.postMessage({type:"mcp-prompt-run", server:sv.name, prompt:p.name, args:p.args}); pc.appendChild(pp); }
+          it.appendChild(h); it.appendChild(c); it.appendChild(pc); mcpList.appendChild(it); continue; }
         it.appendChild(h); it.appendChild(c);
         mcpList.appendChild(it); }
     }
@@ -2859,6 +2995,14 @@ class CascadePanelProvider {
     } else if(m.type==="arena-done"){
       const n=findNode(m.id); if(n) n.querySelectorAll(".apick").forEach(p=>{p.disabled=false;});
       setBusy(false);
+    } else if(m.type==="domain"){
+      // 领域模式开关胶囊: 开=领域专用(提示词/工具面全量重塑), 关=日常 Devin Desktop
+      domainBtn.style.display="";
+      domainBtn.textContent=(m.on?"⚿ ":"○ ")+m.name;
+      domainBtn.title=m.on?(m.name+" 模式已开：底层提示词与工具面塑为 "+m.name+" 专用；点击切回日常 Devin 模式")
+                           :("日常 Devin 模式；点击切入 "+m.name+" 模式(领域专用提示词/工具面)");
+      domainBtn.classList.toggle("on",!!m.on);
+      domainBtn.style.opacity=m.on?"1":".55";
     } else if(m.type==="worktree-info"){
       wtBar.style.display=m.on?"flex":"none"; wtTxt.textContent=m.text||"";
       wtUndo.style.display=m.undo?"":"none";
@@ -2874,7 +3018,8 @@ class CascadePanelProvider {
         wrap.querySelectorAll(".apick").forEach(p=>p.remove()); wrap.removeAttribute("id"); }
     } else if(m.type==="msg-stats"){ const node=findNode(m.id);
       if(node&&m.text){ let sf=node.querySelector(".msgstats"); if(!sf){ sf=document.createElement("div"); sf.className="msgstats"; node.appendChild(sf); } sf.textContent=m.text; }
-    } else if(m.type==="error"){ addMsg("assistant","⚠ "+m.text); setBusy(false); }
+    } else if(m.type==="insert-input"){ inputEl.value=(inputEl.value?inputEl.value+"\\n":"")+m.text; autoGrow(); inputEl.focus(); }
+    else if(m.type==="error"){ addMsg("assistant","⚠ "+m.text); setBusy(false); }
   });
 
   renderAgents(); vscode.postMessage({type:"ready"}); vscode.postMessage({type:"sessions-list"});
@@ -2885,7 +3030,6 @@ class CascadePanelProvider {
 function register(context, log, opts) {
   // opts.ns: 命名空间(默认 "dao") —— 供 dao-ai-base 被多个领域插件 vendor 时隔离视图/命令 id。
   const ns = (opts && opts.ns) || "dao";
-  // opts.domain: 领域模式(提示词隔离替换 + 工具面重塑, 可开关) —— 见 CascadePanelProvider 构造注释。
   const viewId = ns + ".cascade";
   const provider = new CascadePanelProvider(context, log, viewId, opts);
   context.subscriptions.push(
