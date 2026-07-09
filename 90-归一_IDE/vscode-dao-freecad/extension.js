@@ -518,6 +518,14 @@ function activate(context) {
   } catch (e) { console.error("[dao-ai-base] 基底激活失败: " + (e && e.stack ? e.stack : e)); }
   // 两者融合: FreeCAD 工具面 → AI 底层(MCP), 物无非彼与物无非是归于一。
   registerFreecadMcp((m) => console.log("[dao-freecad-mcp] " + m));
+  // 三插件合一之三: dao-proxy-pro(外接 API / 提示词隔离替换 / 本源观照面板) vendored 折入。
+  // 在 Devin Desktop / Windsurf 宿主内全量生效(LS 锚定/ACP 代理/模型解锁);
+  // 纯 VS Code 宿主中优雅降级(面板与外接 API 可用, MITM 锚定自然无为)。
+  try {
+    const daoProxyPro = require("./dao-proxy-pro/extension.js");
+    daoProxyPro.activate(context);
+    console.log("[dao-proxy-pro] ✓ 外接 API / 提示词隔离模块就位");
+  } catch (e) { console.error("[dao-proxy-pro] 激活失败(不影响 FreeCAD/Cascade 主链路): " + (e && e.stack ? e.stack : e)); }
   // 插件即本体：IDE 启动 → 内核自起（探到本机 FreeCAD 直接路由，缺失才按平台调度下载）
   if (cfg().get("autoStart")) {
     ensureBridge(true).finally(startWatchdog);
@@ -535,5 +543,8 @@ function activate(context) {
     })
   );
 }
-function deactivate() { stopWatchdog(); stopFitWatcher(); }
+function deactivate() {
+  stopWatchdog(); stopFitWatcher();
+  try { return require("./dao-proxy-pro/extension.js").deactivate(); } catch (_) {}
+}
 module.exports = { activate, deactivate, freecadDomain };

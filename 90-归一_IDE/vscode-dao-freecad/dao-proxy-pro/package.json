@@ -1,71 +1,68 @@
 {
-  "name": "dao-freecad",
-  "displayName": "DAO · FreeCAD 归一工作台",
-  "description": "把 FreeCAD 全部功能以单网页形式嵌入 IDE 中间面板：模型树 / 3D 视口 / 属性 / Python 控制台 / GUI 命令，桥接 FreeCAD 本体，适配任何 VS Code 系 IDE（含 AI IDE）。",
-  "version": "0.7.0",
-  "publisher": "dao",
+  "name": "dao-proxy-pro",
+  "displayName": "道Agent Pro · 外接API · 反者道之动",
+  "description": "在 dao-proxy-min 反代/提示词隔离之上，新增外接第三方 API：多 Key/多端点加权负载均衡 + 故障转移、按渠道/模型用量与成本可见、配置原子写+备份轮转、四面板（本源观照/渠道配置/模型路由/模型反代）、只填 API Key 自动识别模型。模型反代(反者道之动)把已接通模型反向暴露为标准 OpenAI(/v1/chat/completions)与 Anthropic(/v1/messages)本地端点，脱离 Devin Desktop 供智能家居/本地设备直调。完整版本历史见 CHANGELOG。",
+  "version": "9.9.345",
+  "publisher": "dao-agi",
+  "license": "Apache-2.0",
   "engines": {
-    "vscode": "^1.75.0"
+    "vscode": "^1.85.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zhouyoukang1234-spec/windsurf-assistant.git",
+    "directory": "plugins/dao-proxy-pro"
+  },
+  "homepage": "https://github.com/zhouyoukang1234-spec/windsurf-assistant",
+  "icon": "media/icon.png",
   "categories": [
-    "Visualization",
+    "AI",
     "Other"
   ],
+  "keywords": [
+    "windsurf",
+    "cascade",
+    "system-prompt",
+    "dao",
+    "proxy",
+    "外接api",
+    "third-party",
+    "BYOK",
+    "道德经",
+    "反代",
+    "pro"
+  ],
   "activationEvents": [
-    "onStartupFinished",
-    "onCommand:dao-freecad.open",
-    "onCommand:dao-freecad.openWindow",
-    "onCustomEditor:dao-freecad.fcstd"
+    "*"
   ],
   "main": "./extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true,
+      "description": "dao-proxy-pro runs in all workspaces"
+    },
+    "virtualWorkspaces": true
+  },
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "dao-container",
+          "title": "道Agent Pro",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "dao-container": [
+        {
+          "id": "daopp.essence",
+          "name": "本源观照",
+          "type": "webview"
+        }
+      ]
+    },
     "commands": [
-      {
-        "command": "dao-freecad.open",
-        "title": "DAO FreeCAD: 打开归一工作台"
-      },
-      {
-        "command": "dao-freecad.openWindow",
-        "title": "DAO FreeCAD: 整窗归一（软件本体全 UI 路由为单网页）"
-      },
-      {
-        "command": "dao-freecad.openFile",
-        "title": "DAO FreeCAD: 在工作台中打开当前 FCStd/STEP/STL"
-      },
-      {
-        "command": "dao-freecad.fitWindow",
-        "title": "DAO FreeCAD: 面板适配（收拢 FreeCAD 主窗到面板尺寸）"
-      },
-      {
-        "command": "dao-freecad.installRuntime",
-        "title": "DAO FreeCAD: 安装/重装内置 FreeCAD 运行时（零安装）"
-      },
-      {
-        "command": "dao-freecad.status",
-        "title": "DAO FreeCAD: 状态总览（FreeCAD/内置运行时/桥接/显示路由）"
-      },
-      {
-        "command": "dao-freecad.restartBridge",
-        "title": "DAO FreeCAD: 启动/重启内核桥接"
-      },
-      {
-        "command": "daoFreecad.cascade.open",
-        "title": "FreeCAD · AI: 聚焦 Cascade 三模式面板"
-      },
-      {
-        "command": "daoFreecad.cascade.newSession",
-        "title": "FreeCAD · AI: 新建 Cascade 会话",
-        "icon": "$(add)"
-      },
-      {
-        "command": "daoFreecad.cascade.history",
-        "title": "FreeCAD · AI: Cascade 历史会话",
-        "icon": "$(history)"
-      },
-      {
-        "command": "daoFreecad.cascade.deepwiki",
-        "title": "FreeCAD · AI: DeepWiki 解释选中符号"
-      },
       {
         "command": "daopp.originInvert",
         "title": "道Agent Pro: 启 (invert · 道德经前置 · 彻删官方着相)",
@@ -148,33 +145,8 @@
       }
     ],
     "configuration": {
-      "title": "DAO FreeCAD",
+      "title": "道Agent Pro",
       "properties": {
-        "dao-freecad.freecadPath": {
-          "type": "string",
-          "default": "",
-          "description": "FreeCAD 可执行文件路径（留空则按 PATH / 常见位置自动探测；Linux AppImage 解包用 squashfs-root/usr/bin/freecad）"
-        },
-        "dao-freecad.serverScript": {
-          "type": "string",
-          "default": "",
-          "description": "_fc_remote_server.py 桥接脚本路径（留空则在工作区内自动查找 10-反笙_FreeCAD/_fc_remote_server.py）"
-        },
-        "dao-freecad.port": {
-          "type": "number",
-          "default": 18920,
-          "description": "桥接 HTTP 端口"
-        },
-        "dao-freecad.autoStart": {
-          "type": "boolean",
-          "default": true,
-          "description": "IDE 启动时自动拉起 FreeCAD 内核桥接，并开启看门狗自愈（探到本机 FreeCAD 直接路由，缺失才下载内置）"
-        },
-        "dao-freecad.autoProvision": {
-          "type": "boolean",
-          "default": true,
-          "description": "未找到 FreeCAD 时自动下载官方发行包并内置为插件运行时（Linux AppImage / Windows 7z / macOS dmg，零安装）"
-        },
         "dao.origin.port": {
           "type": "number",
           "default": 0,
@@ -218,50 +190,20 @@
           "description": "模型反代 · 反者道之动 · 把『渠道配置/模型路由』已接通模型反向暴露为标准 OpenAI(/v1/chat/completions,/v1/models)与 Anthropic(/v1/messages)本地端点 · 脱离 Devin Desktop · 供智能家居/本地脚本/其他设备以标准 SDK 直调. 配置落 ~/.codeium/dao-byok/revproxy.json. 默认关 · 在④模型反代面板开启."
         }
       }
-    },
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "daoFreecad-cascade",
-          "title": "FreeCAD · AI",
-          "icon": "$(comment-discussion)"
-        },
-        {
-          "id": "dao-container",
-          "title": "道Agent Pro",
-          "icon": "dao-proxy-pro/media/icon.svg"
-        }
-      ]
-    },
-    "views": {
-      "daoFreecad-cascade": [
-        {
-          "id": "daoFreecad.cascade",
-          "name": "Cascade · 三模式",
-          "type": "webview"
-        }
-      ],
-      "dao-container": [
-        {
-          "id": "daopp.essence",
-          "name": "本源观照",
-          "type": "webview"
-        }
-      ]
-    },
-    "menus": {
-      "view/title": [
-        {
-          "command": "daoFreecad.cascade.newSession",
-          "when": "view == daoFreecad.cascade",
-          "group": "navigation@1"
-        },
-        {
-          "command": "daoFreecad.cascade.history",
-          "when": "view == daoFreecad.cascade",
-          "group": "navigation@2"
-        }
-      ]
     }
+  },
+  "scripts": {
+    "test": "node vendor/外接api/core/dao-test.js",
+    "test:quick": "node vendor/外接api/core/dao-test.js --quick",
+    "test:e2e": "node vendor/外接api/core/dao-test.js --e2e",
+    "test:protocol": "node vendor/外接api/core/dao-test.js --protocol",
+    "test:revproxy": "node vendor/外接api/core/_revproxy_selftest.js",
+    "test:lswedge": "node vendor/外接api/core/_lswedge_selftest.js",
+    "package": "vsce package --no-dependencies --allow-missing-repository"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.84.0",
+    "@vscode/vsce": "^3.9.1"
   }
 }
