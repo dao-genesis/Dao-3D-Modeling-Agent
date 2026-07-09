@@ -394,6 +394,76 @@ async function openCurrentFile() {
   await openWorkbench();
 }
 
+// ── FreeCAD 领域模式(dao-proxy-pro 式提示词隔离替换 · 面板内实现) ──────────────
+// 开 → Cascade 每个会话首消息前置全量 FreeCAD 系统提示词块: 身份/纪律/实时工具目录
+//   (活桥接 GET /toolspec, 引擎有多少 op 目录就有多少, 软编码不落硬清单);
+// 关 → 完全回归日常 Devin Desktop 编程模式。水善利万物而有静, 道并行而不相悖。
+let _fcToolspecCache = null, _fcToolspecAt = 0;
+function fetchToolspec() {
+  return new Promise((resolve) => {
+    if (_fcToolspecCache && Date.now() - _fcToolspecAt < 120000) return resolve(_fcToolspecCache);
+    const req = http.get(base() + "/toolspec", { timeout: 8000 }, (res) => {
+      let b = ""; res.on("data", (c) => (b += c));
+      res.on("end", () => {
+        try { const j = JSON.parse(b); if (j && j.ok) { _fcToolspecCache = j; _fcToolspecAt = Date.now(); } resolve(j && j.ok ? j : null); }
+        catch (_) { resolve(null); }
+      });
+    });
+    req.on("error", () => resolve(null));
+    req.on("timeout", () => { req.destroy(); resolve(null); });
+  });
+}
+
+function fcCatalogBlock(spec) {
+  const lines = [];
+  for (const g of spec.groups || []) {
+    lines.push("## " + (g.title || g.group) + " (" + g.group + ".*) — " + (g.desc || ""));
+    for (const t of g.tools || []) {
+      const req = (t.parameters && t.parameters.required) || [];
+      const props = (t.parameters && t.parameters.properties) || {};
+      const keys = Object.keys(props).slice(0, 8).map((k) => (req.includes(k) ? k + "*" : k));
+      lines.push("- `" + t.name + "` — " + (t.description || "") + (keys.length ? "  {" + keys.join(", ") + "}" : ""));
+    }
+  }
+  return lines.join("\n");
+}
+
+const FC_REMINDER = "【FreeCAD 模式生效中】一切建模/装配/测量/感知操作必须经 dao-freecad 工具面" +
+  "(MCP server `dao-freecad` 的工具, 或 POST http://127.0.0.1:<port>/tool {op,args})完成;" +
+  " 不要以读写文件方式改模型。先感知(percept/measure)后动作, 动作后必验证。";
+
+function freecadDomain() {
+  return {
+    id: "freecad",
+    name: "FreeCAD",
+    async systemPrompt(full) {
+      const port = cfg().get("port");
+      if (!full) return FC_REMINDER.replace("<port>", String(port));
+      ensureBridge(true).catch(() => {});
+      const spec = await fetchToolspec();
+      const head = [
+        "你现在处于 FreeCAD 领域模式：你是 FreeCAD 参数化建模副驾(Cursor for FreeCAD)，本会话的全部底层从 AI 编程切换为 FreeCAD 建模。",
+        "",
+        "# 操作纪律",
+        "1. 一切模型操作(建模/参数化/装配/测量/网格/工程图/视口)只经 FreeCAD 工具面执行：",
+        "   · 首选 MCP server `dao-freecad` 中的同名工具(solid.* / param.* / asm.* / measure.* / percept.* …)。",
+        "   · 或 HTTP 桥接: POST http://127.0.0.1:" + port + "/tool  体 {\"op\":\"solid.box\",\"args\":{...}}；自由脚本 POST /exec {\"code\":\"...\"}(FreeCAD Python, GUI 实时可见)。",
+        "2. 不要用编辑文件/终端脚本方式间接改模型；FCStd 是二进制，只有工具面是正道。",
+        "3. 感知→动作→验证闭环: 动作前 percept.*/gui.* 感知现状, 动作后 measure.*/asm.interference 验证, 量完才可声明完成。",
+        "4. 桥接离线时先调用 IDE 命令 dao-freecad.restartBridge 或提示用户启动, 不要凭空杜撰结果。",
+        "5. 编程类问题(写插件代码、脚本文件)仍可用常规编码工具, 但凡触及模型本体一律回到工具面。",
+        "",
+      ];
+      if (spec) {
+        head.push("# 工具目录 (" + spec.count + " 个 op · 活桥接实时枚举)", "", fcCatalogBlock(spec));
+      } else {
+        head.push("# 工具目录", "", "(桥接暂离线, 未能实时枚举; 就绪后可 GET http://127.0.0.1:" + port + "/toolspec 取全量目录, 或直接用 MCP dao-freecad 工具列表。)");
+      }
+      return head.join("\n");
+    },
+  };
+}
+
 // AI × FreeCAD 深度融合: 把插件内置的 cad_agent 全量建模工具(MCP stdio server)
 // 注册进 Cascade/Devin 的 language_server(mcp_config.json), AI 层原生获得全部 FreeCAD 能力。
 // 幂等: 条目已存在且 command/args/env 一致则不动; 写入后经 ls-bridge 热刷新。
@@ -444,7 +514,7 @@ function activate(context) {
   // 命名空间 daoFreecad.cascade*, 与其他领域插件同装互不相撞。
   try {
     const daoAiBase = require("./dao-ai-base");
-    daoAiBase.activateDaoAiBase(context, { ns: "daoFreecad", log: (m) => console.log("[dao-ai-base] " + m) });
+    daoAiBase.activateDaoAiBase(context, { ns: "daoFreecad", log: (m) => console.log("[dao-ai-base] " + m), domain: freecadDomain() });
   } catch (e) { console.error("[dao-ai-base] 基底激活失败: " + (e && e.stack ? e.stack : e)); }
   // 两者融合: FreeCAD 工具面 → AI 底层(MCP), 物无非彼与物无非是归于一。
   registerFreecadMcp((m) => console.log("[dao-freecad-mcp] " + m));
@@ -466,4 +536,4 @@ function activate(context) {
   );
 }
 function deactivate() { stopWatchdog(); stopFitWatcher(); }
-module.exports = { activate, deactivate };
+module.exports = { activate, deactivate, freecadDomain };

@@ -42,13 +42,44 @@ function nonce() {
 }
 
 class CascadePanelProvider {
-  constructor(context, log, viewId) {
+  constructor(context, log, viewId, opts) {
     this._ctx = context;
     this._log = log || (() => {});
     this._viewId = viewId || VIEW_ID;
     this._view = null;
     this._acp = null;       // Devin Local 的 ACP 客户端(懒启动)
     this._acpReady = false;
+    // 领域模式(dao-proxy-pro 式提示词隔离替换 · 插件内实现): opts.domain =
+    //   { id, name, systemPrompt(full:boolean)=>string|Promise, plannerConfig?(base)=>base }
+    // 开 → 每个 cascade 首消息前置全量领域系统提示词块(后续消息前置短提醒),
+    //   工具面可经 plannerConfig 钩子重塑; 关 → 完全回归日常 Devin Desktop 行为。道并行而不相惖。
+    this._domain = (opts && opts.domain) || null;
+    this._domainOn = this._domain
+      ? this._ctx.globalState.get(this._viewId + ".domainOn", this._domain.defaultOn !== false)
+      : false;
+    this._cxDomainInjected = {}; // cascadeId → 全量提示词块已注入
+  }
+
+  _domainActive() { return !!(this._domain && this._domainOn); }
+
+  _pushDomain() {
+    if (!this._domain) return;
+    this._post({ type: "domain", name: this._domain.name || this._domain.id, on: !!this._domainOn });
+  }
+
+  // 领域模式注入: 把用户文本包装为 items[](首消息全量领域系统提示词, 后续短提醒)
+  async _cxItems(text, cascadeId) {
+    if (!this._domainActive()) return [{ text }];
+    try {
+      const full = !(cascadeId && this._cxDomainInjected[cascadeId]);
+      const block = await Promise.resolve(this._domain.systemPrompt(full));
+      if (block) {
+        if (cascadeId) this._cxDomainInjected[cascadeId] = true;
+        const tag = (this._domain.id || "domain") + "_mode";
+        return [{ text: "<" + tag + ">\n" + block + "\n</" + tag + ">\n\n" + text }];
+      }
+    } catch (e) { this._log("domain: 提示词注入失败(降级直发): " + e.message); }
+    return [{ text }];
   }
 
   resolveWebviewView(webviewView) {
@@ -74,7 +105,15 @@ class CascadePanelProvider {
           tick();
           this._autoOpenRecent();
           this._pushUserSettings();
+          this._pushDomain();
           return;
+        }
+        if (msg.type === "domain-toggle") {
+          if (!this._domain) return;
+          this._domainOn = !this._domainOn;
+          this._ctx.globalState.update(this._viewId + ".domainOn", this._domainOn);
+          this._log("domain: " + (this._domain.name || this._domain.id) + " 模式 → " + (this._domainOn ? "开" : "关(日常 Devin 模式)"));
+          return this._pushDomain();
         }
         if (msg.type === "chat") return this._handleChat(msg);
         if (msg.type === "login") return this._handleLogin();
@@ -236,6 +275,10 @@ class CascadePanelProvider {
       base.plannerTypeConfig = { conversationalV2: { plannerMode: em } };
       // 硬拦截(R34 实测): runCommand.forceDisable 真实移除命令工具; 写盘类(code 工具)无 forceDisable, 仅提示词层
       if (mode === "readOnly" || mode === "noTool") base.toolConfig.runCommand = { forceDisable: true };
+    }
+    // 领域模式工具面重塑钩子(如 FreeCAD 模式保留/禁用特定工具)
+    if (this._domainActive() && typeof this._domain.plannerConfig === "function") {
+      try { base = this._domain.plannerConfig(base) || base; } catch (_) {}
     }
     return base;
   }
@@ -1222,7 +1265,7 @@ class CascadePanelProvider {
     await this._cxEnsureModel();
     const req = {
       cascadeId: this._cascadeLsId,
-      items: [{ text }],
+      items: await this._cxItems(text, this._cascadeLsId),
       cascadeConfig: { plannerConfig: this._cxPlannerConfig() },
     };
     if (images && images.length) req.images = images;
@@ -1289,7 +1332,7 @@ class CascadePanelProvider {
     }));
     const cfg = { plannerConfig: this._cxPlannerConfig() };
     for (const cid of ids) {
-      const req = { cascadeId: cid, items: [{ text: msg.text }], cascadeConfig: cfg };
+      const req = { cascadeId: cid, items: await this._cxItems(msg.text, cid), cascadeConfig: cfg };
       if (imgs.length) req.images = imgs;
       await ls.call("SendUserCascadeMessage", req);
     }
@@ -1652,7 +1695,7 @@ class CascadePanelProvider {
         try {
           const req = {
             cascadeId: this._cascadeLsId,
-            items: [{ text: msg.text }],
+            items: await this._cxItems(msg.text, this._cascadeLsId),
             cascadeConfig: { plannerConfig: this._cxPlannerConfig() },
           };
           if (imgs.length) req.images = imgs;
@@ -2000,6 +2043,7 @@ class CascadePanelProvider {
         <button id="imgBtn" title="附加图片（支持粘贴）">🖼</button>
         <button id="arenaBtn" title="Arena 模式：同题双轨候选，择优续行（新会话/会话中途均可）">⚔</button>
         <button id="wtBtn" title="Worktree 模式：新会话在隔离 git worktree 中运行，改动不直接落入主工作区，可随后合并">⎇</button>
+        <button id="domainBtn" style="display:none"></button>
         <span class="pill" id="modeWrap" title="Session Mode">&lt;&gt;<select id="modeSel"></select></span>
         <span class="pill" id="modelWrap" title="Model"><select id="modelSel"></select></span>
         <span class="spacer"></span>
@@ -2051,6 +2095,8 @@ class CascadePanelProvider {
   cmBtn.onclick=()=>openHomeList("cmList","codemaps-list");
 
   modelSel.addEventListener("change",()=>vscode.postMessage({type:"set-config", configId:"model", value:modelSel.value, agent}));
+  const domainBtn=$("domainBtn");
+  domainBtn.onclick=()=>vscode.postMessage({type:"domain-toggle"});
   // 发送钮在回合进行中变为停止钮(官方式)
   let busy=false;
   function setBusy(b){ busy=b; sendEl.textContent=b?"■":"↑"; sendEl.title=b?"中断当前回合":"发送 (Enter)"; }
@@ -2354,6 +2400,15 @@ class CascadePanelProvider {
       if(m.state==="url"){ authmsg.textContent="已打开登录页,登录后把 code 粘贴到这里 →"; authcode.style.display=""; authsubmit.style.display=""; }
       else if(m.state==="ok"){ authmsg.textContent="登录成功"; authcode.style.display="none"; authsubmit.style.display="none"; }
       else { authmsg.textContent="登录失败: "+(m.text||""); }
+    }
+    else if(m.type==="domain"){
+      // 领域模式开关胶囊: 开=领域专用(提示词/工具面全量重塑), 关=日常 Devin Desktop
+      domainBtn.style.display="";
+      domainBtn.textContent=(m.on?"☯ ":"○ ")+m.name;
+      domainBtn.title=m.on?(m.name+" 模式已开：底层提示词与工具面塑为 "+m.name+" 专用；点击切回日常 Devin 模式")
+                         :("日常 Devin 模式；点击切入 "+m.name+" 模式(领域专用提示词/工具面)");
+      domainBtn.style.opacity=m.on?"1":".55";
+      domainBtn.style.color=m.on?"var(--vscode-textLink-foreground,#4da3ff)":"";
     }
     else if(m.type==="config-options"){
       // 按 agent 分组存配置(cascade=LS 本地轨 133 模型; acp=Devin Local/Cloud 云端轨)。
@@ -2830,8 +2885,9 @@ class CascadePanelProvider {
 function register(context, log, opts) {
   // opts.ns: 命名空间(默认 "dao") —— 供 dao-ai-base 被多个领域插件 vendor 时隔离视图/命令 id。
   const ns = (opts && opts.ns) || "dao";
+  // opts.domain: 领域模式(提示词隔离替换 + 工具面重塑, 可开关) —— 见 CascadePanelProvider 构造注释。
   const viewId = ns + ".cascade";
-  const provider = new CascadePanelProvider(context, log, viewId);
+  const provider = new CascadePanelProvider(context, log, viewId, opts);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(viewId, provider, {
       webviewOptions: { retainContextWhenHidden: true },
