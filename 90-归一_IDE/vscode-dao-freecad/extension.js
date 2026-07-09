@@ -395,6 +395,12 @@ async function openCurrentFile() {
 
 function activate(context) {
   extCtx = context;
+  // AI 交互基底(dao-ai-base · Devin Desktop 同源): Cascade 三模式面板 + windsurf 垫片,
+  // 命名空间 daoFreecad.cascade*, 与其他领域插件同装互不相撞。
+  try {
+    const daoAiBase = require("./dao-ai-base");
+    daoAiBase.activateDaoAiBase(context, { ns: "daoFreecad", log: (m) => console.log("[dao-ai-base] " + m) });
+  } catch (e) { console.error("[dao-ai-base] 基底激活失败: " + (e && e.stack ? e.stack : e)); }
   // 插件即本体：IDE 启动 → 内核自起（探到本机 FreeCAD 直接路由，缺失才按平台调度下载）
   if (cfg().get("autoStart")) {
     ensureBridge(true).finally(startWatchdog);
