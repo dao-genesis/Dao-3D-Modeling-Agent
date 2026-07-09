@@ -10,6 +10,7 @@ const vscode = require("vscode");
 const http = require("http");
 const cp = require("child_process");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const runtime = require("./runtime");
 
@@ -393,6 +394,50 @@ async function openCurrentFile() {
   await openWorkbench();
 }
 
+// AI × FreeCAD 深度融合: 把插件内置的 cad_agent 全量建模工具(MCP stdio server)
+// 注册进 Cascade/Devin 的 language_server(mcp_config.json), AI 层原生获得全部 FreeCAD 能力。
+// 幂等: 条目已存在且 command/args/env 一致则不动; 写入后经 ls-bridge 热刷新。
+function registerFreecadMcp(log) {
+  try {
+    const daoDir = path.join(__dirname, "dao");
+    if (!fs.existsSync(path.join(daoDir, "cad_agent", "mcp_server.py"))) return;
+    const entry = {
+      command: process.platform === "win32" ? "python" : "python3",
+      args: ["-m", "cad_agent.mcp_server"],
+      env: { PYTHONPATH: daoDir },
+    };
+    const cfgDir = path.join(os.homedir(), ".codeium", "windsurf");
+    const cfgFile = path.join(cfgDir, "mcp_config.json");
+    let conf = {};
+    try { conf = JSON.parse(fs.readFileSync(cfgFile, "utf8")); } catch (_) {}
+    if (!conf || typeof conf !== "object") conf = {};
+    if (!conf.mcpServers || typeof conf.mcpServers !== "object") conf.mcpServers = {};
+    const prev = conf.mcpServers["dao-freecad"];
+    const changed = !prev || JSON.stringify({ command: prev.command, args: prev.args, env: prev.env }) !== JSON.stringify(entry);
+    if (changed) {
+      conf.mcpServers["dao-freecad"] = Object.assign({}, prev, entry);
+      fs.mkdirSync(cfgDir, { recursive: true });
+      fs.writeFileSync(cfgFile, JSON.stringify(conf, null, 2));
+      log("✓ cad_agent 全量工具已注册为 MCP server dao-freecad (" + cfgFile + ")");
+    } else {
+      log("· MCP server dao-freecad 已在位, 不动");
+    }
+    // 热刷新: 等 LS 就绪后 RefreshMcpServers(尽力而为, 失败不扰)
+    if (changed) {
+      (async () => {
+        try {
+          const ls = require("./dao-ai-base/dao-cascade/ls-bridge");
+          for (let i = 0; i < 40 && (!ls.ready() || !ls.apiKey()); i++) await new Promise((r) => setTimeout(r, 3000));
+          if (ls.ready() && ls.apiKey()) {
+            await ls.call("RefreshMcpServers", {});
+            log("✓ LS 已热刷新 MCP servers(dao-freecad 生效)");
+          }
+        } catch (e) { log("· MCP 热刷新未完成(LS 就绪后自行拉取): " + e.message); }
+      })();
+    }
+  } catch (e) { log("✗ MCP 注册失败: " + (e && e.stack ? e.stack : e)); }
+}
+
 function activate(context) {
   extCtx = context;
   // AI 交互基底(dao-ai-base · Devin Desktop 同源): Cascade 三模式面板 + windsurf 垫片,
@@ -401,6 +446,8 @@ function activate(context) {
     const daoAiBase = require("./dao-ai-base");
     daoAiBase.activateDaoAiBase(context, { ns: "daoFreecad", log: (m) => console.log("[dao-ai-base] " + m) });
   } catch (e) { console.error("[dao-ai-base] 基底激活失败: " + (e && e.stack ? e.stack : e)); }
+  // 两者融合: FreeCAD 工具面 → AI 底层(MCP), 物无非彼与物无非是归于一。
+  registerFreecadMcp((m) => console.log("[dao-freecad-mcp] " + m));
   // 插件即本体：IDE 启动 → 内核自起（探到本机 FreeCAD 直接路由，缺失才按平台调度下载）
   if (cfg().get("autoStart")) {
     ensureBridge(true).finally(startWatchdog);

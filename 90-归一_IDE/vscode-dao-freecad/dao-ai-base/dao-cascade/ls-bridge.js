@@ -83,7 +83,8 @@ function call(method, body, timeoutMs) {
 
 // 生成驱动流: 官方 UI 靠此 server-streaming 连接推动 Cascade 执行(不挂即停摆)。
 // 返回 { close() } —— 消息发完/收完后调用 close 释放连接。
-function driveStream(cascadeId) {
+// onFrame(可选): 每收到一个反应式帧(轨迹变更信号)即回调 —— 以之唤醒轮询, 帧到立即拉增量
+function driveStream(cascadeId, onFrame) {
   const h = ready();
   if (!h) return { close() {} };
   const body = Buffer.from(JSON.stringify({ metadata: metadata(), protocolVersion: 1, id: cascadeId }), "utf8");
@@ -99,7 +100,20 @@ function driveStream(cascadeId) {
       "Content-Length": env.length,
     },
   });
-  req.on("response", (r) => { r.on("data", () => {}); r.on("error", () => {}); });
+  req.on("response", (r) => {
+    let buf = Buffer.alloc(0);
+    r.on("data", (c) => {
+      if (!onFrame) return;
+      buf = Buffer.concat([buf, c]);
+      while (buf.length >= 5) {
+        const len = buf.readUInt32BE(1);
+        if (buf.length < 5 + len) break;
+        buf = buf.slice(5 + len);
+        try { onFrame(); } catch (_) {}
+      }
+    });
+    r.on("error", () => {});
+  });
   req.on("error", () => {});
   req.end(env);
   return { close() { try { req.destroy(); } catch (_) {} } };
@@ -107,7 +121,8 @@ function driveStream(cascadeId) {
 
 // Connect server-streaming 通用调用(application/connect+json): 逐帧 JSON 回调 onMessage,
 // 末帧(flags&2)为 trailer —— 携 error 时以异常抛出。GetDeepWiki 等流式方法走此轨。
-function callStream(method, body, onMessage, timeoutMs) {
+// cancelRef(可选): 传入对象时回填 cancelRef.cancel(), 调用即主动断流(resolve, 不报错)
+function callStream(method, body, onMessage, timeoutMs, cancelRef) {
   return new Promise((resolve, reject) => {
     const h = ready();
     if (!h) return reject(new Error("官方 language_server 未就绪(端口/CSRF 未捕获)"));
@@ -143,10 +158,12 @@ function callStream(method, body, onMessage, timeoutMs) {
         }
       });
       r.on("end", () => (failed ? reject(failed) : resolve()));
-      r.on("error", reject);
+      r.on("error", (e) => (cancelled ? resolve() : reject(e)));
     });
+    let cancelled = false;
+    if (cancelRef) cancelRef.cancel = () => { cancelled = true; req.destroy(); resolve(); };
     req.setTimeout(timeoutMs || 120000, () => { req.destroy(new Error(method + ": 超时")); });
-    req.on("error", reject);
+    req.on("error", (e) => (cancelled ? resolve() : reject(e)));
     req.end(env);
   });
 }
