@@ -112,10 +112,17 @@ def register(state):
         if not isinstance(name, str):
             raise ValueError(
                 "asm.create 'name' must be a string (got %r)" % (name,))
-        asm = doc.addObject("Assembly::AssemblyObject", name)
+        # FreeCAD < 1.0 has no Assembly module; an App::Part group holds the
+        # same App::Link components and opens as a plain group in the GUI.
+        try:
+            asm = doc.addObject("Assembly::AssemblyObject", name)
+            container = "Assembly::AssemblyObject"
+        except Exception:
+            asm = doc.addObject("App::Part", name)
+            container = "App::Part"
         state.assembly = asm.Name
         doc.recompute()
-        return {"assembly": asm.Name}
+        return {"assembly": asm.Name, "container": container}
 
     def op_add(a):
         if state.assembly is None:
@@ -203,6 +210,11 @@ def register(state):
         if not cyls:
             raise ValueError("no matching cylindrical face found")
         cyls.sort(key=lambda c: c[0])
+        if isinstance(pick, (int, float)) and not isinstance(pick, bool):
+            # numeric pick = target radius; choose the closest cylinder, so a
+            # bore can be selected even when smaller holes (e.g. lightening
+            # holes) or larger rims exist on the same part.
+            return min(cyls, key=lambda c: abs(c[0] - float(pick)))
         return cyls[0] if pick == "min" else cyls[-1]
 
     def _canon(v):
