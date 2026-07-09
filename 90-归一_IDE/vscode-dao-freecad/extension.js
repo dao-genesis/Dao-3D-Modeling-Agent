@@ -13,8 +13,10 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const runtime = require("./runtime");
+const shell = require("./shell");
 
 let panel = null;
+let shellPanel = null;
 let windowPanel = null;
 let fcProc = null;
 let extCtx = null;
@@ -508,6 +510,46 @@ function registerFreecadMcp(log) {
   } catch (e) { log("✗ MCP 注册失败: " + (e && e.stack ? e.stack : e)); }
 }
 
+// ── 归一外壳 /shell（dao-one 骨架落地）：单网页外壳把主页/FreeCAD 整窗/工作台/Proxy Pro
+//    收为平级并排的板块标签；IDE 面板与任意外部浏览器同源可达。
+function shellPort() { return cfg().get("shellPort") || 9920; }
+
+async function ensureShell() {
+  let proxyMod = null;
+  try { proxyMod = require("./dao-proxy-pro/extension.js"); } catch (_) {}
+  return shell.startShell(shellPort(), {
+    bridgePort: () => cfg().get("port"),
+    xpraPort: XPRA_PORT,
+    proxyPort: () => (proxyMod && proxyMod.getCachedPort ? proxyMod.getCachedPort() : 0),
+    proxyHtml: () => {
+      if (!proxyMod || !proxyMod.getEaConfigHtml) return null;
+      const port = proxyMod.getCachedPort ? proxyMod.getCachedPort() : 0;
+      return proxyMod.getEaConfigHtml(port, undefined, { foldBridge: true });
+    },
+    actions: {
+      restartBridge: async () => { await ensureBridge(true); startWatchdog(); return "bridge " + (await ping() ? "在线" : "启动中"); },
+      fit: async () => { fitFreeCADWindow(); return "已按面板尺寸收拢主窗"; },
+    },
+  }, (m) => console.log("[dao-shell] " + m));
+}
+
+async function openShell() {
+  await ensureShell();
+  ensureBridge(true).catch(() => {});
+  ensureDisplayRoute().catch(() => {});
+  if (shellPanel) { shellPanel.reveal(vscode.ViewColumn.One); return; }
+  shellPanel = vscode.window.createWebviewPanel(
+    "daoFreecadShell", "☯ 归一 · 总控外壳", vscode.ViewColumn.One,
+    { enableScripts: true, retainContextWhenHidden: true }
+  );
+  const url = `http://127.0.0.1:${shellPort()}/shell`;
+  shellPanel.webview.html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src http://127.0.0.1:* http://localhost:*; style-src 'unsafe-inline';">
+<style>html,body{height:100%;margin:0;overflow:hidden;background:#16181d}iframe{width:100%;height:100%;border:0}</style>
+</head><body><iframe src="${url}" allow="clipboard-read; clipboard-write"></iframe></body></html>`;
+  shellPanel.onDidDispose(() => { shellPanel = null; });
+}
+
 function activate(context) {
   extCtx = context;
   // AI 交互基底(dao-ai-base · Devin Desktop 同源): Cascade 三模式面板 + windsurf 垫片,
@@ -530,8 +572,11 @@ function activate(context) {
   if (cfg().get("autoStart")) {
     ensureBridge(true).finally(startWatchdog);
   }
+  // 归一外壳随插件常驻(浏览器端同源可达)
+  ensureShell().catch((e) => console.error("[dao-shell] " + (e && e.message || e)));
   context.subscriptions.push(
     vscode.commands.registerCommand("dao-freecad.open", openWorkbench),
+    vscode.commands.registerCommand("dao-freecad.openShell", openShell),
     vscode.commands.registerCommand("dao-freecad.openWindow", openWholeWindow),
     vscode.commands.registerCommand("dao-freecad.openFile", openCurrentFile),
     vscode.commands.registerCommand("dao-freecad.fitWindow", () => fitFreeCADWindow()),
@@ -544,7 +589,7 @@ function activate(context) {
   );
 }
 function deactivate() {
-  stopWatchdog(); stopFitWatcher();
+  stopWatchdog(); stopFitWatcher(); shell.stopShell();
   try { return require("./dao-proxy-pro/extension.js").deactivate(); } catch (_) {}
 }
 module.exports = { activate, deactivate, freecadDomain };
