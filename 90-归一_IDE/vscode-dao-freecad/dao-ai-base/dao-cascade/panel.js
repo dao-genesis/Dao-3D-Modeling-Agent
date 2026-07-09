@@ -53,6 +53,7 @@ class CascadePanelProvider {
 
   resolveWebviewView(webviewView) {
     this._view = webviewView;
+    this._disposed = false;
     // 官方宿主态(LS 端口/CSRF/登录)变更 → 刷新 env 行，与官方登录模式同源
     if (hostState) { const h = hostState(); const fn = () => { this._pushEnv(); this._handleSessionsList(); this._pushCascadeConfigOptions(); }; h.listeners.add(fn);
       webviewView.onDidDispose(() => h.listeners.delete(fn)); }
@@ -71,6 +72,8 @@ class CascadePanelProvider {
             if (++tries < 12) setTimeout(tick, 2000);
           };
           tick();
+          this._autoOpenRecent();
+          this._pushUserSettings();
           return;
         }
         if (msg.type === "chat") return this._handleChat(msg);
@@ -96,6 +99,11 @@ class CascadePanelProvider {
         if (msg.type === "cx-revert") return this._handleCxRevert(msg.stepIndex);
         if (msg.type === "cx-branch") return this._handleCxBranch(msg.stepIndex, msg.text);
         if (msg.type === "cx-queue-remove" || msg.type === "cx-queue-front" || msg.type === "cx-queue-now") return this._handleCxQueueOp(msg);
+        if (msg.type === "worktree-merge") return this._handleWorktreeMerge();
+        if (msg.type === "worktree-undo") return this._handleWorktreeUndo();
+        if (msg.type === "worktree-open") return this._handleWorktreeOpen();
+        if (msg.type === "arena-pick") return this._handleArenaPick(msg.slot);
+        if (msg.type === "set-user-setting") return this._handleSetUserSetting(msg.patch);
         if (msg.type === "files-query") return this._handleFilesQuery(msg);
         if (msg.type === "copy") return vscode.env.clipboard.writeText(String(msg.text || "")).then(undefined, () => {});
         if (msg.type === "sessions-list") return this._handleSessionsList();
@@ -106,6 +114,10 @@ class CascadePanelProvider {
         if (msg.type === "session-export") return this._handleSessionExport(msg.sessionId);
         if (msg.type === "open-file") return this._handleOpenFile(msg.path);
         if (msg.type === "memories-list") return this._handleMemoriesList();
+        if (msg.type === "status-info") return this._handleStatusInfo();
+        if (msg.type === "timeline-list") return this._handleTimelineList();
+        if (msg.type === "worktree-create") return this._handleWorktreeCreate();
+        if (msg.type === "outline-list") return this._handleOutlineList();
         if (msg.type === "custom-list") return this._handleCustomizationsList();
         if (msg.type === "custom-create") return this._handleCustomizationCreate(msg.kind);
         if (msg.type === "custom-wf-copy") return this._handleWorkflowCopy(msg.name);
@@ -141,6 +153,8 @@ class CascadePanelProvider {
     webviewView.onDidDispose(() => {
       if (this._acp) { this._acp.stop(); this._acp = null; this._acpReady = false; }
       if (this._cloud) { this._cloud.stop(); this._cloud = null; }
+      this._disposed = true;
+      if (this._cxWatch) { try { this._cxWatch.close(); } catch (_) {} this._cxWatch = null; }
     });
   }
 
@@ -472,6 +486,86 @@ class CascadePanelProvider {
       startLine: start, endLine: end, content: vf.content || "" });
   }
 
+  // 官方式自动续聊: 用户设置 openMostRecentChatConversation 为真时, 面板首开即载入最近会话
+  // (GetUserSettings 与官方同源; LS 就绪约需数秒, 轮询重试; 用户已有活动会话则不打扰)
+  async _autoOpenRecent() {
+    const ls = require("./ls-bridge");
+    for (let i = 0; i < 12 && (!ls.ready() || !ls.apiKey()); i++) await new Promise((r) => setTimeout(r, 2000));
+    if (this._disposed || this._cascadeLsId || this._activeId) return;
+    try {
+      const s = await ls.call("GetUserSettings", {});
+      if (!s || !s.userSettings || s.userSettings.openMostRecentChatConversation !== true) return;
+      const list = (await this._cascadeSessions()).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+      if (!list.length || this._disposed || this._cascadeLsId || this._activeId) return;
+      await this._handleSessionLoad(list[0].sessionId);
+    } catch (_) {}
+  }
+
+  // 官方式 worktree 合并回主工作区: ResolveWorktreeChanges{cascadeId, uris[], mode:MERGE}
+  // (后端实测: uris 必填——不带 uris 为空操作; 文件清单取自轨迹摘要 referencedFiles 中的 worktree 内文件;
+  //  响应含 hadConflicts/conflictingFiles; 另有 STASH 模式与 UndoWorktreeMerge 可撤销)
+  async _handleWorktreeMerge() {
+    const ls = require("./ls-bridge");
+    try {
+      if (!this._cascadeLsId) throw new Error("当前无活动 cascade 会话");
+      const all = (await ls.call("GetAllCascadeTrajectories", {})).trajectorySummaries || {};
+      const summ = all[this._cascadeLsId] || {};
+      const wts = (summ.gitWorktreePaths || []).map((u) => (u.endsWith("/") ? u : u + "/"));
+      const uris = (summ.referencedFiles || []).filter((u) => wts.some((w) => u.startsWith(w)));
+      if (!uris.length) throw new Error("轨迹中无 worktree 内改动文件可合并");
+      const r = await ls.call("ResolveWorktreeChanges", { cascadeId: this._cascadeLsId, uris, mode: "RESOLVE_WORKTREE_CHANGES_MODE_MERGE" });
+      const txt = r.hadConflicts
+        ? "⚠ 合并存在冲突文件: " + (r.conflictingFiles || []).join(", ")
+        : "✓ 已将 " + uris.length + " 个 worktree 改动文件合并回主工作区";
+      this._post({ type: "worktree-info", on: true, text: txt, undo: !r.hadConflicts });
+    } catch (e) { this._post({ type: "worktree-info", on: true, text: "⚠ 合并失败: " + e.message }); }
+  }
+
+  // 官方式撤销合并: UndoWorktreeMerge{cascadeId} 弹出最近一次合并(栈式, 恢复主工作区合并前文件态)
+  // (后端实测: 无合并记录时报 not_found "no worktree merge found"; 另有 forceOverwrite/failOnConflicts 参数)
+  async _handleWorktreeUndo() {
+    const ls = require("./ls-bridge");
+    try {
+      if (!this._cascadeLsId) throw new Error("当前无活动 cascade 会话");
+      await ls.call("UndoWorktreeMerge", { cascadeId: this._cascadeLsId });
+      this._post({ type: "worktree-info", on: true, text: "↩ 已撤销最近一次合并，主工作区恢复合并前状态" });
+    } catch (e) { this._post({ type: "worktree-info", on: true, text: "⚠ 撤销失败: " + e.message.replace(/^.*no worktree merge found.*$/, "无可撤销的合并记录"), undo: false }); }
+  }
+
+  // 官方式在新窗口打开隔离 worktree(轨迹摘要 gitWorktreePaths → vscode.openFolder 新窗)
+  async _handleWorktreeOpen() {
+    const ls = require("./ls-bridge");
+    try {
+      if (!this._cascadeLsId) throw new Error("当前无活动 cascade 会话");
+      const summ = ((await ls.call("GetAllCascadeTrajectories", {})).trajectorySummaries || {})[this._cascadeLsId] || {};
+      const wt = (summ.gitWorktreePaths || [])[0];
+      if (!wt) throw new Error("轨迹中无 worktree 路径");
+      await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.parse(wt), { forceNewWindow: true });
+    } catch (e) { this._post({ type: "worktree-info", on: true, text: "⚠ 打开失败: " + e.message }); }
+  }
+
+  // 官方式设置同源: GetUserSettings → 灌入 ⚔ 初始态(lastArenaModeEnabled)与首页
+  // 「自动打开最近会话」开关(openMostRecentChatConversation), 与官方 Settings 页一致。
+  async _pushUserSettings() {
+    const ls = require("./ls-bridge");
+    for (let i = 0; i < 12 && (!ls.ready() || !ls.apiKey()); i++) await new Promise((r) => setTimeout(r, 2000));
+    if (this._disposed) return;
+    try {
+      const s = (await ls.call("GetUserSettings", {})).userSettings || {};
+      this._post({ type: "user-settings", arena: s.lastArenaModeEnabled === true, openRecent: s.openMostRecentChatConversation === true });
+    } catch (_) {}
+  }
+
+  // 官方式设置写回: 读-改-写全量合并(后端实测 SetUserSettings 为整体替换,
+  // 直写补丁会清掉 cachedCascadeModelConfigs 等其余字段, 故必须先取后并)。
+  async _handleSetUserSetting(patch) {
+    const ls = require("./ls-bridge");
+    try {
+      const s = (await ls.call("GetUserSettings", {})).userSettings || {};
+      await ls.call("SetUserSettings", { userSettings: Object.assign(s, patch || {}) });
+    } catch (e) { this._log("[settings] " + e.message); }
+  }
+
   // 官方式: Cascade 历史轨迹(GetAllCascadeTrajectories)并入 Recent sessions
   async _cascadeSessions() {
     try {
@@ -490,7 +584,28 @@ class CascadePanelProvider {
     } catch (e) { this._log("[cascade-sessions] " + e.message); return []; }
   }
 
+  // 官方式实时会话列表: StreamCascadeSummariesReactiveUpdates{protocolVersion:1,id:"summaries"}
+  // (Connect server-streaming, 后端实测) —— 任一会话增删/改名/归档即推帧, 以之为变更信号
+  // 去抖重拉 Recent sessions, 与官方首页列表实时同步。断流后 5s 自动重连。
+  _watchCascadeSummaries() {
+    if (this._sumWatching) return;
+    const ls = require("./ls-bridge");
+    if (!ls.ready() || !ls.apiKey()) return;
+    this._sumWatching = true;
+    const loop = () => {
+      ls.callStream("StreamCascadeSummariesReactiveUpdates", { protocolVersion: 1, id: "summaries" }, () => {
+        clearTimeout(this._sumDebounce);
+        this._sumDebounce = setTimeout(() => { this._handleSessionsList().catch(() => {}); }, 400);
+      }, 24 * 3600 * 1000).catch(() => {}).then(() => {
+        if (this._disposed) { this._sumWatching = false; return; }
+        setTimeout(loop, 5000);
+      });
+    };
+    loop();
+  }
+
   async _handleSessionsList() {
+    this._watchCascadeSummaries();
     let acp = [];
     try {
       await this._ensureAcp();
@@ -502,21 +617,49 @@ class CascadePanelProvider {
     this._post({ type: "sessions", sessions: all, current: this._acp && this._acp.sessionId });
   }
 
+  // 官方式「Response Statistics」: GetCascadeTrajectoryGeneratorMetadata → 每个 planner 步的
+  // 模型/输入输出 token/花费/首字延迟, 组成紧凑页脚字符串, 键为该步 stepIndex(与轨迹步下标同)。
+  async _cxGenStats(cascadeId) {
+    const ls = require("./ls-bridge");
+    const fmtS = (s) => { const n = parseFloat(String(s || "").replace("s", "")); return isFinite(n) && n > 0 ? (Math.round(n * 100) / 100) + "s" : ""; };
+    const out = { byStep: {}, last: "" };
+    let gm; try { gm = await ls.call("GetCascadeTrajectoryGeneratorMetadata", { cascadeId }); } catch (_) { return out; }
+    for (const g of ((gm || {}).generatorMetadata || [])) {
+      const cm = g.chatModel; if (!cm) continue;
+      const u = cm.usage || {};
+      let model = "";
+      for (const grp of (cm.responseDimensionGroups || [])) for (const d of (grp.dimensions || [])) if (d.uid === "model" && d.metric) model = d.metric.value;
+      model = model || u.modelUid || "";
+      const parts = [];
+      if (model) parts.push(model);
+      if (u.inputTokens || u.outputTokens) parts.push("↑" + (u.inputTokens || 0) + " ↓" + (u.outputTokens || 0));
+      if (typeof cm.modelCost === "number" && cm.modelCost > 0) parts.push("$" + (cm.modelCost < 0.01 ? cm.modelCost.toFixed(4) : cm.modelCost.toFixed(2)));
+      const ttft = fmtS(cm.timeToFirstToken); if (ttft) parts.push(ttft + " 首字");
+      const s = parts.join(" · ");
+      if (!s) continue;
+      for (const si of (g.stepIndices || [])) out.byStep[si] = s;
+      out.last = s;
+    }
+    return out;
+  }
+
   // 官方式: 载入 Cascade 历史轨迹并回放(用户泡/答复/工具步卡), 后续消息续接同轨
   async _loadCascadeTrajectory(cascadeId) {
     const ls = require("./ls-bridge");
     this._post({ type: "history-clear" });
     const r = await ls.call("GetCascadeTrajectorySteps", { cascadeId });
+    const gstats = await this._cxGenStats(cascadeId);
     const steps = ((r.trajectory || r).steps) || [];
     const rid = "cxload" + Date.now();
     for (let k = 0; k < steps.length; k++) {
       const st = steps[k];
-      if (st.userInput && st.userInput.userResponse) this._post({ type: "user-replay", text: st.userInput.userResponse, stepIndex: k });
+      if (st.userInput && (st.userInput.userResponse || (st.userInput.images || []).length)) this._post({ type: "user-replay", text: st.userInput.userResponse || "", images: (st.userInput.images || []).map((im) => "data:" + (im.mimeType || "image/png") + ";base64," + im.base64Data), stepIndex: k });
       else if (st.plannerResponse && (st.plannerResponse.response || st.plannerResponse.thinking)) {
         if (st.plannerResponse.thinking) this._post({ type: "thought-delta", id: rid + k, text: st.plannerResponse.thinking });
         if (st.plannerResponse.response) {
           this._post({ type: "assistant-delta", id: rid + k, text: st.plannerResponse.response });
           this._post({ type: "assistant-done", id: rid + k });
+          if (gstats.byStep[k]) this._post({ type: "msg-stats", id: rid + k, text: gstats.byStep[k] });
         }
       } else if (st.errorMessage && st.errorMessage.error) {
         this._post({ type: "assistant-done", id: rid + k, text: "⚠ " + (st.errorMessage.error.userErrorMessage || "") });
@@ -526,7 +669,55 @@ class CascadePanelProvider {
     }
     this._cascadeLsId = cascadeId;
     this._cascadeSeen = steps.length;
+    // 加载历史轨迹时恢复 worktree 态: 轨迹摘要含 gitWorktreePaths 即为隔离 worktree 会话
+    ls.call("GetAllCascadeTrajectories", {}).then((r) => {
+      if (this._cascadeLsId !== cascadeId) return;
+      const summ = (r.trajectorySummaries || {})[cascadeId] || {};
+      this._cxWorktree = (summ.gitWorktreePaths || []).length > 0;
+      if (this._cxWorktree) this._post({ type: "worktree-info", on: true, text: "⏎ 本会话运行于隔离 worktree，改动不直接落入主工作区" });
+    }).catch(() => {});
+    // 官方限制: 已 converge 过的 cascade 无法再开 Arena(failed_precondition) —— 预先置灰 ⚔
+    const inArena = steps.some((s) => s.type === "CORTEX_STEP_TYPE_ARENA_TRAJECTORY_CONVERGE");
+    this._post({ type: "arena-avail", ok: !inArena, reason: inArena ? "该会话已经过 Arena 收敛，无法再开" : "" });
     this._post({ type: "history-done" });
+    this._watchCascadeTrajectory(cascadeId);
+  }
+
+  // 官方式外部续写实时回放: 同一 cascade 被官方面板/他端驱动时, 反应式帧到即拉增量步回放
+  // (StreamCascadeReactiveUpdates 帧=轨迹变更信号; 本端发送轮询进行中(_cxRunning)则让位不重复渲染)
+  _watchCascadeTrajectory(cascadeId) {
+    const ls = require("./ls-bridge");
+    if (this._cxWatch) { try { this._cxWatch.close(); } catch (_) {} this._cxWatch = null; }
+    this._cxWatchId = cascadeId;
+    let t = null;
+    const pull = async () => {
+      if (this._disposed || this._cxRunning || this._cascadeLsId !== cascadeId) return;
+      let r; try { r = await ls.call("GetCascadeTrajectorySteps", { cascadeId }); } catch (_) { return; }
+      if (this._cxRunning || this._cascadeLsId !== cascadeId) return;
+      const steps = ((r.trajectory || r).steps) || [];
+      if (steps.length <= (this._cascadeSeen || 0)) return;
+      const gstats = await this._cxGenStats(cascadeId);
+      const rid = "cxlive" + Date.now();
+      for (let k = this._cascadeSeen || 0; k < steps.length; k++) {
+        const st = steps[k];
+        if (st.status && !/DONE|ERROR|CANCELLED/.test(st.status)) { steps.length = k; break; } // 未完步待下帧
+        if (st.userInput && (st.userInput.userResponse || (st.userInput.images || []).length)) this._post({ type: "user-replay", text: st.userInput.userResponse || "", images: (st.userInput.images || []).map((im) => "data:" + (im.mimeType || "image/png") + ";base64," + im.base64Data), stepIndex: k });
+        else if (st.plannerResponse && (st.plannerResponse.response || st.plannerResponse.thinking)) {
+          if (st.plannerResponse.thinking) this._post({ type: "thought-delta", id: rid + k, text: st.plannerResponse.thinking });
+          if (st.plannerResponse.response) {
+            this._post({ type: "assistant-delta", id: rid + k, text: st.plannerResponse.response });
+            this._post({ type: "assistant-done", id: rid + k });
+            if (gstats.byStep[k]) this._post({ type: "msg-stats", id: rid + k, text: gstats.byStep[k] });
+          }
+        } else if (st.errorMessage && st.errorMessage.error) {
+          this._post({ type: "assistant-done", id: rid + k, text: "⚠ " + (st.errorMessage.error.userErrorMessage || "") });
+        } else if (st.type && !/CHECKPOINT|RETRIEVE_MEMORY|DUMMY|PLANNER_RESPONSE/.test(st.type)) {
+          this._post(this._cxStepCard(st, k, rid));
+        }
+        this._cascadeSeen = k + 1;
+      }
+    };
+    this._cxWatch = ls.driveStream(cascadeId, () => { clearTimeout(t); t = setTimeout(pull, 300); });
   }
 
   async _handleSessionLoad(sessionId) {
@@ -633,6 +824,114 @@ class CascadePanelProvider {
     this._handleMemoriesList();
   }
 
+  // 官方式诊断页: GetProcesses(lspPort)/GetWorkspaceInfos/GetRepoInfos(branches)/GetDebugDiagnostics(LS 日志)
+  async _handleStatusInfo() {
+    const ls = require("./ls-bridge");
+    try {
+      const [pr, wi, ri, dd] = await Promise.all([
+        ls.call("GetProcesses", {}).catch(() => ({})),
+        ls.call("GetWorkspaceInfos", {}).catch(() => ({})),
+        ls.call("GetRepoInfos", {}).catch(() => ({})),
+        ls.call("GetDebugDiagnostics", {}).catch(() => ({})),
+      ]);
+      const logs = (((dd.languageServerDiagnostics || {}).logs) || []).slice(-15).map((l) => String(l).trim());
+      this._post({ type: "status-info", info: {
+        lsUrl: (ls.ready() && "127.0.0.1:" + ls.ready().lsPort) || "",
+        lspPort: pr.lspPort || 0,
+        workspaces: ((wi.workspaceInfos || [])).map((w) => (w.workspaceUri || "").replace("file://", "")),
+        repos: (ri.repos || []).map((r) => ({ name: r.name || "", branches: (r.branches || []).map((b) => b.name || "") })),
+        logs,
+      } });
+    } catch (e) { this._post({ type: "error", text: "读取诊断信息失败: " + e.message }); }
+  }
+
+  // 官方式代码结构大纲: GetFunctions/GetClassInfos{document:{absoluteUri,workspaceUri,editorLanguage,text}}
+  // 契约注意: 必须随请求送全量 text, 否则返回空 {}; 仅传 absolutePath 报 no absolute path provided(须 absoluteUri)
+  async _handleOutlineList() {
+    const ls = require("./ls-bridge");
+    try {
+      const ed = vscode.window.activeTextEditor || vscode.window.visibleTextEditors[0];
+      if (!ed || ed.document.uri.scheme !== "file") throw new Error("无活动文件编辑器");
+      const doc = ed.document;
+      const ws = vscode.workspace.getWorkspaceFolder(doc.uri);
+      const d = {
+        absoluteUri: doc.uri.toString(),
+        workspaceUri: (ws && ws.uri.toString()) || "",
+        editorLanguage: doc.languageId,
+        text: doc.getText(),
+      };
+      const [fr, cr] = await Promise.all([
+        ls.call("GetFunctions", { document: d }).catch(() => ({})),
+        ls.call("GetClassInfos", { document: d }).catch(() => ({})),
+      ]);
+      const items = [];
+      for (const c of (cr.classInfos || [])) items.push({ line: c.definitionLine || c.startLine || 0, icon: "◆", text: (c.nodeName || "?") });
+      for (const f of (fr.functionCaptures || [])) items.push({ line: f.definitionLine || f.startLine || 0, icon: "ƒ", text: (f.nodeName || "(anonymous)") + (f.params || "") });
+      items.sort((a, b) => a.line - b.line);
+      this._post({ type: "outline", file: doc.uri.fsPath, items });
+    } catch (e) { this._post({ type: "error", text: "读取大纲失败: " + e.message }); }
+  }
+
+  // 官方式 standalone 建 worktree: CreateWorktree{} → {worktrees:[{original:{workspaceUri,gitRootUri},worktreePath}]}
+  async _handleWorktreeCreate() {
+    const ls = require("./ls-bridge");
+    try {
+      const r = await ls.call("CreateWorktree", {});
+      const wt = ((r.worktrees || [])[0] || {}).worktreePath;
+      if (!wt) throw new Error("后端未返回 worktreePath");
+      this._handleStatusInfo();
+      const pick = await vscode.window.showInformationMessage("已创建隔离 worktree: " + wt, "新窗打开");
+      if (pick === "新窗打开") await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(wt), { forceNewWindow: true });
+    } catch (e) { this._post({ type: "error", text: "创建 worktree 失败: " + e.message }); }
+  }
+
+  // 官方式用户主线轨迹: GetUserTrajectoryDescriptions(current:true) → GetUserTrajectory{trajectoryId}
+  // steps 含 GIT_COMMIT/USER_INPUT/PLANNER_RESPONSE/VIEW_FILE/GREP_SEARCH_V2/CODE_ACTION/CHECKPOINT 等
+  // 实时追踪: StreamUserTrajectoryReactiveUpdates{protocolVersion:1,id:<trajectoryId>} 帧到即去拖重拉(断流 5s 重连)
+  _watchUserTrajectory(tid) {
+    if (this._tlWatching) return;
+    const ls = require("./ls-bridge");
+    if (!ls.ready() || !ls.apiKey()) return;
+    this._tlWatching = true;
+    const loop = () => {
+      ls.callStream("StreamUserTrajectoryReactiveUpdates", { protocolVersion: 1, id: tid }, () => {
+        clearTimeout(this._tlDebounce);
+        this._tlDebounce = setTimeout(() => { this._handleTimelineList().catch(() => {}); }, 600);
+      }, 24 * 3600 * 1000).catch(() => {}).then(() => {
+        if (this._disposed) { this._tlWatching = false; return; }
+        setTimeout(loop, 5000);
+      });
+    };
+    loop();
+  }
+
+  async _handleTimelineList() {
+    const ls = require("./ls-bridge");
+    try {
+      const ds = await ls.call("GetUserTrajectoryDescriptions", {});
+      const cur = ((ds.trajectories || []).find((t) => t.current) || {});
+      if (!cur.trajectoryId) throw new Error("无当前用户轨迹");
+      this._watchUserTrajectory(cur.trajectoryId);
+      const r = await ls.call("GetUserTrajectory", { trajectoryId: cur.trajectoryId });
+      const one = (s) => String(s || "").split("\n")[0].slice(0, 90);
+      const rel = (u) => String(u || "").replace(/^file:\/\//, "").split("/").slice(-2).join("/");
+      const items = ((r.trajectory || {}).steps || []).map((s) => {
+        const t = (s.type || "").replace("CORTEX_STEP_TYPE_", "");
+        const ts = ((s.metadata || {}).createdAt || "").replace("T", " ").slice(5, 16);
+        if (t === "GIT_COMMIT") return { ts, icon: "⎇", text: one((s.gitCommit || {}).commitMessage) + " · " + String((s.gitCommit || {}).commitHash || "").slice(0, 7) };
+        if (t === "USER_INPUT") return { ts, icon: "💬", text: one((s.userInput || {}).userResponse) };
+        if (t === "PLANNER_RESPONSE") return { ts, icon: "✦", text: one((s.plannerResponse || {}).response) };
+        if (t === "VIEW_FILE") return { ts, icon: "📄", text: "阅读 " + rel((s.viewFile || {}).absolutePathUri) };
+        if (t === "GREP_SEARCH_V2") return { ts, icon: "🔍", text: "搜索 " + one((s.grepSearchV2 || {}).pattern) };
+        if (t === "CODE_ACTION") return { ts, icon: "✎", text: "代码动作 " + rel(((((s.codeAction || {}).actionSpec || {}).createFile || {}).path || {}).absoluteUri) };
+        if (t === "CHECKPOINT") return { ts, icon: "⚑", text: one((s.checkpoint || {}).userIntent) };
+        if (t === "ERROR_MESSAGE") return { ts, icon: "⚠", text: one(((s.errorMessage || {}).error || {}).shortError) };
+        return null;
+      }).filter((it) => it && it.text).slice(-40).reverse();
+      this._post({ type: "timeline", tid: cur.trajectoryId, branch: ((cur.trajectoryScope || {}).branchName) || "", items });
+    } catch (e) { this._post({ type: "error", text: "读取活动轨迹失败: " + e.message }); }
+  }
+
   // 官方式 MCP 管理: GetMcpServerStates / RefreshMcpServers / SaveMcpServerToConfigFile(serverId+templateJson)
   async _handleMcpList() {
     try {
@@ -715,7 +1014,14 @@ class CascadePanelProvider {
             title: t.title || "", desc: t.description || "", diagram: t.traceTextDiagram || "",
             locations: (t.locations || []).map((l) => ({ path: l.path || "", line: l.lineNumber || 1, title: l.title || "", lineContent: l.lineContent || "" })) })) };
       });
-      this._post({ type: "codemaps", maps });
+      // 官方式 Suggested maps: GetCodeMapSuggestions(后端实测: 可选 cascadeId, LLM 即时生成
+      // {id,prompt,subtitle,startingPoints}; id 每次重生不可持久, 仅作本屏候选, 点选即以 prompt 生成)
+      let suggestions = [];
+      try {
+        const sr = await ls.call("GetCodeMapSuggestions", this._cascadeLsId ? { cascadeId: this._cascadeLsId } : {});
+        suggestions = ((sr && sr.suggestions) || []).map((s) => ({ prompt: s.prompt || "", subtitle: s.subtitle || "", startingPoints: s.startingPoints || [] }));
+      } catch (_) {}
+      this._post({ type: "codemaps", maps, suggestions });
     } catch (e) { this._post({ type: "error", text: "读取 Code Maps 失败: " + e.message }); }
   }
 
@@ -947,6 +1253,98 @@ class CascadePanelProvider {
     } catch (e) { this._post({ type: "error", text: "队列操作失败: " + e.message }); }
   }
 
+  // 官方式 Arena 模式(后端实测): StartCascade{startArena:2} → {cascadeId, arenaCascadeIds[]}
+  // → 对每个 arena cascade 各发一次 SendUserCascadeMessage(同一消息) → 并行轮询各自回复
+  // → 用户拣选 → ConvergeArenaCascades{targetCascadeId:胜者} → {convergedCascadeIds:[败者]},
+  //   胜者轨迹尾追 CORTEX_STEP_TYPE_ARENA_TRAJECTORY_CONVERGE 步, 会话在胜者上续行
+  //   会话中途: SpawnArenaModeMidConversation{cascadeId,count} → {cascadeIds:[原 id, 克隆 id…]}(克隆携完整历史)
+  async _cxArenaRace(msg, ls, imgs) {
+    let ids;
+    if (this._cascadeLsId) {
+      let r;
+      try { r = await ls.call("SpawnArenaModeMidConversation", { cascadeId: this._cascadeLsId, count: 2 }); }
+      catch (e) {
+        // 官方限制: 已 converge 过的 cascade 不能再开 Arena → 友好提示并置灰 ⚔
+        if (/already in an arena|failed.precondition/i.test(e.message || "")) {
+          this._post({ type: "arena-avail", ok: false, reason: "该会话已经过 Arena 收敛，无法再开" });
+          return this._post({ type: "assistant-done", id: msg.id, text: "⚠ 该会话已经过 Arena 收敛，无法再开 Arena；请新建会话使用 ⚔" });
+        }
+        throw e;
+      }
+      ids = (r.cascadeIds && r.cascadeIds.length) ? r.cascadeIds : [this._cascadeLsId];
+      this._log("cascade: SpawnArenaModeMidConversation → " + ids.join(", "));
+    } else {
+      const r = await ls.call("StartCascade", { startArena: 2 });
+      ids = (r.arenaCascadeIds && r.arenaCascadeIds.length) ? r.arenaCascadeIds : [r.cascadeId];
+      this._log("cascade: StartCascade(arena) → " + ids.join(", "));
+    }
+    // 基线: 中途克隆携历史 plannerResponse, 先取现有全文作增量起点
+    const base = await Promise.all(ids.map(async (cid) => {
+      try {
+        const sr = await ls.call("GetCascadeTrajectorySteps", { cascadeId: cid });
+        let f = "";
+        for (const st of (((sr.trajectory || sr).steps) || [])) if (st.plannerResponse && st.plannerResponse.response) f += st.plannerResponse.response;
+        return f;
+      } catch (_) { return ""; }
+    }));
+    const cfg = { plannerConfig: this._cxPlannerConfig() };
+    for (const cid of ids) {
+      const req = { cascadeId: cid, items: [{ text: msg.text }], cascadeConfig: cfg };
+      if (imgs.length) req.images = imgs;
+      await ls.call("SendUserCascadeMessage", req);
+    }
+    this._post({ type: "arena-start", id: msg.id, count: ids.length });
+    this._arenaIds = ids; this._arenaMsgId = msg.id;
+    await Promise.all(ids.map(async (cid, slot) => {
+      let out = base[slot] || "", grew = false, stable = 0;
+      const hadHistory = !!out;
+      for (let i = 0; i < 200; i++) {
+        await new Promise((rr) => setTimeout(rr, 1000));
+        let sr;
+        try { sr = await ls.call("GetCascadeTrajectorySteps", { cascadeId: cid }); }
+        catch (_) { continue; }
+        const steps = ((sr.trajectory || sr).steps) || [];
+        let full = "", allDone = true, sawWork = false;
+        for (const st of steps) {
+          if (st.plannerResponse && st.plannerResponse.response) full += st.plannerResponse.response;
+          if (st.type === "CORTEX_STEP_TYPE_PLANNER_RESPONSE") sawWork = true;
+          if (st.type === "CORTEX_STEP_TYPE_ARENA_TRAJECTORY_CONVERGE") continue;
+          if (st.errorMessage && st.errorMessage.shouldShowUser !== false) {
+            const em = (st.errorMessage.error && (st.errorMessage.error.userErrorMessage || st.errorMessage.error.shortError)) || "Cascade 后端错误";
+            full += (full ? "\n\n" : "") + "⚠ " + em; sawWork = true;
+          }
+          if (st.status && !/DONE|ERROR/.test(st.status)) allDone = false;
+        }
+        if (full.length > out.length) {
+          this._post({ type: "arena-delta", id: msg.id, slot, text: full.slice(out.length) });
+          out = full; grew = true; stable = 0;
+        } else if ((grew || (sawWork && !hadHistory)) && allDone && ++stable >= 3) break;
+      }
+    }));
+    this._post({ type: "arena-done", id: msg.id });
+  }
+
+  // 拣选胜者: ConvergeArenaCascades{targetCascadeId} → 会话续行于胜者 cascade
+  async _handleArenaPick(slot) {
+    const ids = this._arenaIds;
+    if (!ids || typeof slot !== "number" || !ids[slot]) return;
+    const ls = require("./ls-bridge");
+    try {
+      const win = ids[slot];
+      await ls.call("ConvergeArenaCascades", { targetCascadeId: win });
+      this._cascadeLsId = win;
+      try {
+        const sr = await ls.call("GetCascadeTrajectorySteps", { cascadeId: win });
+        this._cascadeSeen = (((sr.trajectory || sr).steps) || []).length;
+      } catch (_) { this._cascadeSeen = 0; }
+      this._arenaIds = null;
+      this._post({ type: "arena-picked", slot });
+      this._post({ type: "arena-avail", ok: false, reason: "该会话已经过 Arena 收敛，无法再开" });
+      this._log("cascade: ConvergeArenaCascades → 胜者 " + win);
+      try { const gs = await this._cxGenStats(win); if (gs.last && this._arenaMsgId) this._post({ type: "msg-stats", id: this._arenaMsgId, text: gs.last }); } catch (_) {}
+    } catch (e) { this._post({ type: "error", text: "Arena 拣选失败: " + e.message }); }
+  }
+
   // 官方式回退检查点: 先 GetRevertPreview{cascadeId,stepIndex} 展示将被撤销的文件改动, 确认后 RevertToCascadeStep 截断轨迹重放
   async _handleCxRevert(stepIndex) {
     if (!this._cascadeLsId || typeof stepIndex !== "number") return;
@@ -1129,10 +1527,15 @@ class CascadePanelProvider {
   }
 
   async _handleSessionNew() {
+    if (this._cxWatch) { try { this._cxWatch.close(); } catch (_) {} this._cxWatch = null; }
+    this._cxWatchId = null;
     this._cascadeLsId = null;
     this._cascadeSeen = 0;
+    this._cxWorktree = false;
+    this._post({ type: "worktree-info", on: false });
     // 官方式: 新建会话回到 New session 首页(居中 logo + Recent sessions)
     this._post({ type: "history-clear", home: true });
+    this._post({ type: "arena-avail", ok: true, reason: "" });
     try {
       await this._ensureAcp();
       const res = await this._acp.newSession();
@@ -1215,16 +1618,35 @@ class CascadePanelProvider {
         }
         // 图像附件(官方 ImageData{base64Data,mimeType,caption} · 顶层 images[]): 仅当模型支持
         const imgs = this._cxImages(msg.images);
+        // 官方式发送前配额闸: CheckUserMessageRateLimit → !hasCapacity 即拦(免费额度耗尽时与官方同款提示)
+        try {
+          const cap = await ls.call("CheckUserMessageRateLimit", {});
+          if (cap && cap.hasCapacity === false) {
+            const left = (cap.messagesRemaining >= 0 && cap.maxMessages >= 0) ? "（" + cap.messagesRemaining + "/" + cap.maxMessages + "）" : "";
+            return this._post({ type: "assistant-done", id: msg.id, text: "⚠ 已达消息用量上限" + left + "，请稍后再试或升级套餐" });
+          }
+        } catch (_) {}
         // 官方式消息队列: 运行中再发 → QueueCascadeMessage(带 cascadeConfig, 轮次结束 LS 自动续驱)
         if (this._cxRunning && this._cascadeLsId) {
           await this._cxEnqueue(msg.text, imgs);
           return this._post({ type: "assistant-done", id: msg.id, text: "⏳ 已加入队列，当前轮次结束后自动发送" });
         }
+        // 官方式 Arena 模式: StartCascade{startArena:N} → 每个 arena cascade 各发同一消息
+        // → 并行轮询各自 plannerResponse → 用户择优 → ConvergeArenaCascades{targetCascadeId}
+        // 会话中途亦可开 Arena: SpawnArenaModeMidConversation{cascadeId,count} 克隆出携完整历史的并行 cascade
+        if (msg.arena) {
+          this._cxRunning = true;
+          return await this._cxArenaRace(msg, ls, imgs);
+        }
         if (!this._cascadeLsId) {
-          const r = await ls.call("StartCascade", {});
+          // 官方式 worktree 会话(后端实测): StartCascade{gitWorktree:true} → 首次发消息时 LS 自动
+          // git worktree add 到 ~/.windsurf/worktrees/<repo>/<repo>-<slug>, 改动隔离于该 worktree, 主工作区不受影响
+          const r = await ls.call("StartCascade", msg.worktree ? { gitWorktree: true } : {});
           this._cascadeLsId = r.cascadeId;
           this._cascadeSeen = 0;
-          this._log("cascade: StartCascade → " + this._cascadeLsId);
+          this._cxWorktree = !!msg.worktree;
+          this._log("cascade: StartCascade" + (msg.worktree ? "(worktree)" : "") + " → " + this._cascadeLsId);
+          if (this._cxWorktree) this._post({ type: "worktree-info", on: true, text: "⏎ 本会话运行于隔离 worktree，改动不直接落入主工作区" });
         }
         this._cxRunning = true;
         try {
@@ -1243,10 +1665,14 @@ class CascadePanelProvider {
           }
           throw e;
         }
-        drive = ls.driveStream(this._cascadeLsId);
+        // R70: 驱动流帧即轨迹变更信号 —— 帧到立即唤醒拉增量(静默时 1s 兜底), 降出字延迟
+        let wake = null, pendingFrame = false;
+        drive = ls.driveStream(this._cascadeLsId, () => { if (wake) { const w = wake; wake = null; w(); } else pendingFrame = true; });
         let out = "", grew = false, stable = 0;
         for (let i = 0; i < 200; i++) {
-          await new Promise((r) => setTimeout(r, 1000));
+          await new Promise((r) => setTimeout(r, 150)); // 帧风暴限速: 两次拉取至少间隔 150ms
+          if (pendingFrame) pendingFrame = false;
+          else await new Promise((r) => { const t = setTimeout(() => { wake = null; r(); }, 850); wake = () => { clearTimeout(t); r(); }; });
           let r;
           try { r = await ls.call("GetCascadeTrajectorySteps", { cascadeId: this._cascadeLsId }); }
           catch (_) { continue; }
@@ -1331,10 +1757,16 @@ class CascadePanelProvider {
             out = full; grew = true; stable = 0;
           } else if (grew && allDone && ++stable >= 3) { this._cascadeSeen = steps.length; break; }
         }
-        return this._post({ type: "assistant-done", id: msg.id, text: grew ? undefined : "(Cascade 无输出)" });
+        this._post({ type: "assistant-done", id: msg.id, text: grew ? undefined : "(Cascade 无输出)" });
+        if (grew) { try { const gs = await this._cxGenStats(this._cascadeLsId); if (gs.last) this._post({ type: "msg-stats", id: msg.id, text: gs.last }); } catch (_) {} }
+        return;
       } catch (e) {
         return this._post({ type: "assistant-done", id: msg.id, text: "Cascade 轨失败: " + e.message });
-      } finally { this._cxRunning = false; if (drive) drive.close(); }
+      } finally {
+        this._cxRunning = false; if (drive) drive.close();
+        // 新会话首轮结束后同样挂外部续写监听(R74 原仅历史载入路径)
+        if (this._cascadeLsId && this._cxWatchId !== this._cascadeLsId) this._watchCascadeTrajectory(this._cascadeLsId);
+      }
     }
     if (agent === "devin-cloud") {
       // Devin Cloud 轨 = 远端 ACP over wss(与官方 CLI cloud_handoff 同源):
@@ -1437,19 +1869,32 @@ class CascadePanelProvider {
   .msg.user { background:var(--card); align-self:flex-end; }
   .msg.assistant { background:transparent; align-self:flex-start; padding-left:0; }
   .msg .thought { display:block; margin-bottom:4px; }
+  .msg .msgstats { margin-top:5px; font-size:10px; color:var(--dim); opacity:.72; letter-spacing:.2px; }
   .msg .thead2 { cursor:pointer; user-select:none; font-size:11px; color:var(--dim); display:flex; gap:4px; align-items:center; }
   .msg .tbody2 { opacity:.55; font-style:italic; font-size:12px; margin-top:2px; white-space:pre-wrap; }
   /* 官方式圆角 composer 卡片 */
   .composer { padding:8px 10px 6px; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:8px 10px 6px; display:flex; flex-direction:column; gap:6px; }
+  .card.dragover { border-color:var(--accent,#4a9eff); box-shadow:0 0 0 1px var(--accent,#4a9eff) inset; }
   textarea { resize:none; background:transparent; color:var(--vscode-input-foreground); border:none; outline:none; padding:2px 2px 0; font:13px var(--vscode-font-family); min-height:20px; max-height:120px; }
   .row { display:flex; gap:4px; align-items:center; }
   .pill { display:inline-flex; gap:4px; align-items:center; border:none; background:transparent; color:var(--dim); font:12px var(--vscode-font-family); border-radius:999px; padding:3px 8px; cursor:pointer; }
   .pill:hover { background:var(--pill-hover); color:var(--vscode-foreground); }
   .pill select { appearance:none; -webkit-appearance:none; background:transparent; color:inherit; border:none; font:inherit; cursor:pointer; outline:none; max-width:110px; text-overflow:ellipsis; }
   .pill select option { background:var(--vscode-dropdown-background); color:var(--vscode-dropdown-foreground); }
-  #plusBtn, #imgBtn { width:24px; height:24px; border-radius:999px; border:1px solid var(--line); background:transparent; color:var(--dim); cursor:pointer; font-size:14px; line-height:1; }
-  #plusBtn:hover, #imgBtn:hover { background:var(--pill-hover); }
+  #plusBtn, #imgBtn, #arenaBtn, #wtBtn { width:24px; height:24px; border-radius:999px; border:1px solid var(--line); background:transparent; color:var(--dim); cursor:pointer; font-size:14px; line-height:1; }
+  #plusBtn:hover, #imgBtn:hover, #arenaBtn:hover, #wtBtn:hover { background:var(--pill-hover); }
+  #arenaBtn.on, #wtBtn.on { border-color:var(--accent,#4a9eff); color:var(--accent,#4a9eff); }
+  #wtBar { display:none; align-items:center; gap:8px; font-size:11px; color:var(--dim); padding:3px 8px; border:1px dashed var(--line); border-radius:6px; margin:4px 0; }
+  #wtBar button { background:transparent; border:1px solid var(--line); border-radius:6px; color:inherit; cursor:pointer; font-size:11px; padding:1px 8px; }
+  .arena { display:flex; gap:8px; margin-top:4px; }
+  .arenacol { flex:1; min-width:0; border:1px solid var(--line); border-radius:8px; padding:6px 8px; }
+  .arenacol .ah { font-size:11px; color:var(--dim); margin-bottom:4px; }
+  .arenacol .ab { white-space:pre-wrap; font-size:12px; word-break:break-word; }
+  .apick { margin-top:6px; border:1px solid var(--line); background:transparent; color:inherit; border-radius:6px; padding:2px 8px; cursor:pointer; font-size:11px; }
+  .apick:disabled { opacity:.4; cursor:default; }
+  .arenacol.win { border-color:var(--accent,#4a9eff); }
+  .arenacol.lose { opacity:.45; }
   /* 官方式图像附件缩略图条(composer 内 & 消息气泡内复用) */
   .imgstrip { display:flex; flex-wrap:wrap; gap:6px; }
   .imgstrip:empty { display:none; }
@@ -1521,13 +1966,17 @@ class CascadePanelProvider {
       <div class="ttl">Cascade · 三模式</div>
       <div class="sub">Kick off a new project. Make changes across your entire codebase.</div>
       <div id="recent">
-        <div class="rhead"><span>Recent sessions</span><span class="va" id="agBtn">Agents</span><span class="va" id="cmBtn">Maps</span><span class="va" id="cusBtn">Rules</span><span class="va" id="mcpBtn">MCP</span><span class="va" id="memsBtn">Memories</span><span class="va" id="viewAll">View all</span></div>
+        <div class="rhead"><span>Recent sessions</span><span class="va" id="agBtn">Agents</span><span class="va" id="cmBtn">Maps</span><span class="va" id="cusBtn">Rules</span><span class="va" id="mcpBtn">MCP</span><span class="va" id="memsBtn">Memories</span><span class="va" id="olBtn">Outline</span><span class="va" id="stBtn">Status</span><span class="va" id="tlBtn">Timeline</span><span class="va" id="viewAll">View all</span></div>
         <div id="recentList"></div>
         <div id="memList" style="display:none"></div>
+        <div id="stList" style="display:none"></div>
+        <div id="tlList" style="display:none"></div>
+        <div id="olList" style="display:none"></div>
         <div id="mcpList" style="display:none"></div>
         <div id="cusList" style="display:none"></div>
         <div id="agList" style="display:none"></div>
         <div id="cmList" style="display:none"></div>
+        <label id="autoOpenRow" style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:11.5px;color:var(--dim);cursor:pointer;"><input type="checkbox" id="autoOpenCk" style="margin:0;">启动时自动打开最近会话</label>
       </div>
     </div>
   </div>
@@ -1537,6 +1986,7 @@ class CascadePanelProvider {
     <input id="authcode" placeholder="粘贴一次性登录 code" style="display:none"/>
     <button id="authsubmit" style="display:none">提交</button>
   </div>
+  <div id="wtBar"><span id="wtTxt"></span><button id="wtMerge" title="ResolveWorktreeChanges: 将 worktree 改动合并回主工作区">合并回工作区</button><button id="wtUndo" style="display:none" title="UndoWorktreeMerge: 撤销最近一次合并，恢复主工作区合并前状态">撤销合并</button><button id="wtOpen" title="在新窗口打开隔离 worktree 目录">打开 worktree</button></div>
   <div id="queuebar"></div>
   <div class="composer">
     <div id="slashMenu"></div>
@@ -1548,6 +1998,8 @@ class CascadePanelProvider {
       <div class="row">
         <button id="plusBtn" title="附加上下文">＋</button>
         <button id="imgBtn" title="附加图片（支持粘贴）">🖼</button>
+        <button id="arenaBtn" title="Arena 模式：同题双轨候选，择优续行（新会话/会话中途均可）">⚔</button>
+        <button id="wtBtn" title="Worktree 模式：新会话在隔离 git worktree 中运行，改动不直接落入主工作区，可随后合并">⎇</button>
         <span class="pill" id="modeWrap" title="Session Mode">&lt;&gt;<select id="modeSel"></select></span>
         <span class="pill" id="modelWrap" title="Model"><select id="modelSel"></select></span>
         <span class="spacer"></span>
@@ -1583,12 +2035,16 @@ class CascadePanelProvider {
         agList=$("agList"), agBtn=$("agBtn"),
         cmList=$("cmList"), cmBtn=$("cmBtn");
   viewAll.onclick=()=>vscode.postMessage({type:"history-open"});
-  const homeLists={memList,mcpList,cusList,agList,cmList};
+  const stList=$("stList"), tlList=$("tlList"), olList=$("olList");
+  const homeLists={memList,mcpList,cusList,agList,cmList,stList,tlList,olList};
   function openHomeList(name,msgType){ const el=homeLists[name]; const open=el.style.display==="none";
     for(const k in homeLists) homeLists[k].style.display="none";
     el.style.display=open?"":"none"; recentList.style.display=open?"none":"";
     if(open&&msgType) vscode.postMessage({type:msgType}); }
   memsBtn.onclick=()=>openHomeList("memList","memories-list");
+  $("stBtn").onclick=()=>openHomeList("stList","status-info");
+  $("tlBtn").onclick=()=>openHomeList("tlList","timeline-list");
+  $("olBtn").onclick=()=>openHomeList("olList","outline-list");
   mcpBtn.onclick=()=>openHomeList("mcpList","mcp-list");
   cusBtn.onclick=()=>openHomeList("cusList","custom-list");
   agBtn.onclick=()=>openHomeList("agList","agents-registry");
@@ -1704,12 +2160,32 @@ class CascadePanelProvider {
       const rm=document.createElement("button"); rm.className="rm"; rm.textContent="✕";
       rm.onclick=()=>{ pendingImages.splice(i,1); renderThumbs(); };
       t.appendChild(rm); imgStrip.appendChild(t); }); }
-  function addImageFile(file){ if(!file||!/^image\//.test(file.type)) return;
+  function addImageFile(file){ if(!file||!/^image\\//.test(file.type)) return;
     const r=new FileReader(); r.onload=()=>{ pendingImages.push(String(r.result)); renderThumbs(); }; r.readAsDataURL(file); }
   imgBtn.onclick=()=>imgFile.click();
+  // 官方式 Arena 模式开关: Cascade 轨新会话首条/会话中途均可, 发送后自动复位
+  const wtBtn=$("wtBtn"), wtBar=$("wtBar"), wtTxt=$("wtTxt"), wtMerge=$("wtMerge"), wtUndo=$("wtUndo"); let wtOn=false;
+  wtUndo.onclick=()=>vscode.postMessage({type:"worktree-undo"});
+  $("wtOpen").onclick=()=>vscode.postMessage({type:"worktree-open"});
+  wtBtn.onclick=()=>{ wtOn=!wtOn; wtBtn.classList.toggle("on",wtOn); };
+  wtMerge.onclick=()=>vscode.postMessage({type:"worktree-merge"});
+  const arenaBtn=$("arenaBtn"); let arenaOn=false;
+  const arenaTitle=arenaBtn.title;
+  arenaBtn.onclick=()=>{ if(arenaBtn.disabled) return; arenaOn=!arenaOn; arenaBtn.classList.toggle("on",arenaOn); vscode.postMessage({type:"set-user-setting", patch:{lastArenaModeEnabled:arenaOn}}); };
+  const autoOpenCk=$("autoOpenCk");
+  autoOpenCk.onchange=()=>vscode.postMessage({type:"set-user-setting", patch:{openMostRecentChatConversation:autoOpenCk.checked}});
   imgFile.onchange=()=>{ for(const f of imgFile.files||[]) addImageFile(f); imgFile.value=""; };
   inputEl.addEventListener("paste",(e)=>{ const items=(e.clipboardData&&e.clipboardData.items)||[]; let got=false;
-    for(const it of items){ if(it.kind==="file"&&/^image\//.test(it.type)){ addImageFile(it.getAsFile()); got=true; } }
+    for(const it of items){ if(it.kind==="file"&&/^image\\//.test(it.type)){ addImageFile(it.getAsFile()); got=true; } }
+    if(got) e.preventDefault(); });
+  // 官方式拖拽入图: 把图片文件拖到 composer(卡片区)即附加, dragover 高亮。
+  const dropZone=imgStrip.closest(".card")||inputEl;
+  ["dragenter","dragover"].forEach(ev=>dropZone.addEventListener(ev,(e)=>{
+    if(e.dataTransfer&&Array.from(e.dataTransfer.items||[]).some(it=>it.kind==="file")){ e.preventDefault(); dropZone.classList.add("dragover"); } }));
+  ["dragleave","dragend"].forEach(ev=>dropZone.addEventListener(ev,(e)=>{ if(e.target===dropZone) dropZone.classList.remove("dragover"); }));
+  dropZone.addEventListener("drop",(e)=>{ dropZone.classList.remove("dragover");
+    const files=(e.dataTransfer&&e.dataTransfer.files)||[]; let got=false;
+    for(const f of files){ if(/^image\\//.test(f.type)){ addImageFile(f); got=true; } }
     if(got) e.preventDefault(); });
   // 回合完成后为助手气泡挂复制钮(流式期会清空 textContent,故完成时再挂,免被抹除)。
   function attachMsgCopy(node){ if(!node||node.querySelector(".msgcopy")) return;
@@ -1738,7 +2214,10 @@ class CascadePanelProvider {
     state.history.push({role:"user",content:text}); vscode.setState(state);
     const id="m"+Date.now(); const node=addMsg("assistant","…");
     node.dataset.id=id; node.dataset.acc=""; setBusy(true);
-    vscode.postMessage({type:"chat", id, agent, text, images});
+    const arena=arenaOn&&agent==="cascade";
+    if(arena){ arenaOn=false; arenaBtn.classList.remove("on"); vscode.postMessage({type:"set-user-setting", patch:{lastArenaModeEnabled:false}}); }
+    const worktree=wtOn&&agent==="cascade";
+    vscode.postMessage({type:"chat", id, agent, text, images, arena, worktree});
   }
   sendEl.onclick=()=>{ if(busy){ vscode.postMessage({type:"cancel"}); setBusy(false); } else send(); };
 
@@ -1915,7 +2394,7 @@ class CascadePanelProvider {
     else if(m.type==="history-clear"){ logEl.innerHTML=""; state.history=[]; vscode.setState(state);
       if(m.home&&emptyEl){ logEl.appendChild(emptyEl); vscode.postMessage({type:"sessions-list"}); } }
     else if(m.type==="history-done"){ logEl.scrollTop=logEl.scrollHeight; }
-    else if(m.type==="user-replay"){ const n=addMsg("user", m.text);
+    else if(m.type==="user-replay"){ const n=addMsg("user", m.text, m.images);
       if(typeof m.stepIndex==="number"){ const rv=document.createElement("button"); rv.className="msgrevert"; rv.title="回退到此消息(丢弃之后步骤)"; rv.textContent="↩";
         rv.onclick=(e)=>{ e.stopPropagation(); vscode.postMessage({type:"cx-revert", stepIndex:m.stepIndex}); }; n.appendChild(rv);
         const br=document.createElement("button"); br.className="msgbranch"; br.title="从此消息开分支(原会话保持不变)"; br.textContent="⑂";
@@ -1967,6 +2446,38 @@ class CascadePanelProvider {
         it.appendChild(h); it.appendChild(c);
         if(mm.tags&&mm.tags.length){ const tg=document.createElement("div"); tg.className="mtags"; tg.textContent=mm.tags.join(" · "); it.appendChild(tg); }
         memList.appendChild(it); }
+    }
+    else if(m.type==="timeline"){
+      // 官方式用户主线轨迹: 时间戳 + 图标 + 摘要(倒序近 40 步)
+      tlList.innerHTML="";
+      const h=document.createElement("div"); h.className="mh";
+      const t=document.createElement("span"); t.className="mt"; t.textContent="活动轨迹 ("+(m.items||[]).length+") · "+(m.branch||""); h.appendChild(t); tlList.appendChild(h);
+      if(!(m.items||[]).length){ const d=document.createElement("div"); d.textContent="(无轨迹步骤)"; d.style.opacity=".6"; tlList.appendChild(d); }
+      for(const it of m.items||[]){ const d=document.createElement("div"); d.className="mc"; d.textContent=(it.ts?it.ts+"  ":"")+it.icon+" "+(it.text||""); tlList.appendChild(d); }
+    }
+    else if(m.type==="outline"){
+      // 官方式文件大纲: 类◆/函数ƒ 按行号升序, 点击跳行
+      olList.innerHTML="";
+      const h=document.createElement("div"); h.className="mh";
+      const t=document.createElement("span"); t.className="mt"; t.textContent="大纲 ("+(m.items||[]).length+") · "+String(m.file||"").split("/").pop(); h.appendChild(t); olList.appendChild(h);
+      if(!(m.items||[]).length){ const d=document.createElement("div"); d.textContent="(无符号)"; d.style.opacity=".6"; olList.appendChild(d); }
+      for(const it of m.items||[]){ const d=document.createElement("div"); d.className="mc"; d.style.cursor="pointer"; d.textContent=String(it.line).padStart(4," ")+"  "+it.icon+" "+(it.text||""); d.onclick=()=>vscode.postMessage({type:"open-file-line", path:m.file, line:it.line}); olList.appendChild(d); }
+    }
+    else if(m.type==="status-info"){
+      // 官方式诊断页: LS 端口/工作区/仓库分支/日志尾部
+      stList.innerHTML="";
+      const info=m.info||{};
+      function sec(title){ const h=document.createElement("div"); h.className="mh"; const t=document.createElement("span"); t.className="mt"; t.textContent=title; h.appendChild(t); stList.appendChild(h); }
+      function row(txt){ const d=document.createElement("div"); d.className="mc"; d.textContent=txt; stList.appendChild(d); }
+      sec("Language Server");
+      { const h=stList.lastElementChild; const bt=document.createElement("span"); bt.className="mi"; bt.title="CreateWorktree: 新建隔离 worktree"; bt.textContent="⎇＋"; bt.onclick=()=>vscode.postMessage({type:"worktree-create"}); h.appendChild(bt); }
+      row("RPC: "+(info.lsUrl||"?")+"  ·  LSP port: "+(info.lspPort||"?"));
+      sec("Workspaces ("+(info.workspaces||[]).length+")");
+      for(const w of info.workspaces||[]) row(w);
+      sec("Repos");
+      for(const r of info.repos||[]) row(r.name+" · "+(r.branches||[]).length+" branches: "+(r.branches||[]).slice(0,8).join(", ")+((r.branches||[]).length>8?" …":""));
+      sec("LS 日志尾部");
+      for(const l of info.logs||[]) row(l);
     }
     else if(m.type==="mcp"){
       // 官方式 MCP 面板: server 状态 + 工具清单; ↻ 刷新 / ＋ 添加 / ⚙ 打开 mcp_config.json
@@ -2035,6 +2546,18 @@ class CascadePanelProvider {
       gb.onclick=()=>{ const p=gi.value.trim(); if(!p) return; gs.textContent="生成中…"; vscode.postMessage({type:"codemap-generate", prompt:p}); };
       gi.addEventListener("keydown",(e)=>{ if(e.key==="Enter") gb.onclick(); });
       gen.appendChild(gi); gen.appendChild(gb); cmList.appendChild(gen); cmList.appendChild(gs);
+      // 官方式 Suggested maps: 候选卡(标题/副题/起点), 点选即以其 prompt 发起生成
+      const sugs=m.suggestions||[];
+      if(sugs.length){
+        const sh=document.createElement("div"); sh.textContent="Suggested maps"; sh.style.cssText="font-size:11px;color:var(--dim);margin:6px 0 2px;"; cmList.appendChild(sh);
+        for(const sg of sugs){ const sc=document.createElement("div"); sc.className="mem"; sc.style.cursor="pointer"; sc.title="点击以此建议生成地图";
+          const st=document.createElement("div"); st.textContent="✧ "+sg.prompt; st.style.fontSize="12px";
+          const ss=document.createElement("div"); ss.textContent=sg.subtitle+((sg.startingPoints||[]).length?" · "+sg.startingPoints.join(", "):""); ss.style.cssText="font-size:11px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+          sc.appendChild(st); sc.appendChild(ss);
+          sc.onclick=()=>{ gi.value=sg.prompt; gs.textContent="生成中…"; vscode.postMessage({type:"codemap-generate", prompt:sg.prompt}); };
+          cmList.appendChild(sc);
+        }
+      }
       const arr=m.maps||[];
       if(!arr.length){ const d=document.createElement("div"); d.textContent="(暂无地图 —— 输入提示生成)"; d.style.opacity=".6"; cmList.appendChild(d); }
       for(const mp of arr){ const it=document.createElement("div"); it.className="mem";
@@ -2265,6 +2788,37 @@ class CascadePanelProvider {
         state.history.push({role:"assistant",content:fin}); vscode.setState(state); attachMsgCopy(node); }
       const pl=logEl.querySelector('.plan[data-active]'); if(pl) delete pl.dataset.active;
       setBusy(false);
+    } else if(m.type==="arena-start"){
+      const n=findNode(m.id); if(n){ n.textContent=""; n.dataset.acc="";
+        const wrap=document.createElement("div"); wrap.className="arena"; wrap.id="arenaWrap";
+        for(let i=0;i<(m.count||2);i++){ const col=document.createElement("div"); col.className="arenacol";
+          const h=document.createElement("div"); h.className="ah"; h.textContent="⚔ 候选 "+(i+1);
+          const b=document.createElement("div"); b.className="ab";
+          const p=document.createElement("button"); p.className="apick"; p.textContent="选用此回复"; p.disabled=true;
+          p.onclick=()=>vscode.postMessage({type:"arena-pick", slot:i});
+          col.appendChild(h); col.appendChild(b); col.appendChild(p); wrap.appendChild(col); }
+        n.appendChild(wrap); }
+    } else if(m.type==="arena-delta"){
+      const n=findNode(m.id); const cols=n?n.querySelectorAll(".arenacol .ab"):[];
+      if(cols[m.slot]){ cols[m.slot].textContent+=m.text; logEl.scrollTop=logEl.scrollHeight; }
+    } else if(m.type==="arena-done"){
+      const n=findNode(m.id); if(n) n.querySelectorAll(".apick").forEach(p=>{p.disabled=false;});
+      setBusy(false);
+    } else if(m.type==="worktree-info"){
+      wtBar.style.display=m.on?"flex":"none"; wtTxt.textContent=m.text||"";
+      wtUndo.style.display=m.undo?"":"none";
+    } else if(m.type==="user-settings"){
+      autoOpenCk.checked=!!m.openRecent;
+      if(!arenaBtn.disabled){ arenaOn=!!m.arena; arenaBtn.classList.toggle("on",arenaOn); }
+    } else if(m.type==="arena-avail"){
+      arenaBtn.disabled=!m.ok; arenaBtn.style.opacity=m.ok?"":".4"; arenaBtn.title=m.ok?arenaTitle:(m.reason||arenaTitle);
+      if(!m.ok){ arenaOn=false; arenaBtn.classList.remove("on"); }
+    } else if(m.type==="arena-picked"){
+      const wrap=document.getElementById("arenaWrap");
+      if(wrap){ wrap.querySelectorAll(".arenacol").forEach((c,i)=>{ c.classList.toggle("win",i===m.slot); c.classList.toggle("lose",i!==m.slot); });
+        wrap.querySelectorAll(".apick").forEach(p=>p.remove()); wrap.removeAttribute("id"); }
+    } else if(m.type==="msg-stats"){ const node=findNode(m.id);
+      if(node&&m.text){ let sf=node.querySelector(".msgstats"); if(!sf){ sf=document.createElement("div"); sf.className="msgstats"; node.appendChild(sf); } sf.textContent=m.text; }
     } else if(m.type==="error"){ addMsg("assistant","⚠ "+m.text); setBusy(false); }
   });
 
