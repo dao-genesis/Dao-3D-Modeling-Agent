@@ -2,7 +2,7 @@
   "name": "dao-freecad",
   "displayName": "DAO · FreeCAD 归一工作台",
   "description": "把 FreeCAD 全部功能以单网页形式嵌入 IDE 中间面板：模型树 / 3D 视口 / 属性 / Python 控制台 / GUI 命令，桥接 FreeCAD 本体，适配任何 VS Code 系 IDE（含 AI IDE）。",
-  "version": "0.7.0",
+  "version": "0.8.1",
   "publisher": "dao",
   "engines": {
     "vscode": "^1.75.0"
@@ -23,6 +23,10 @@
       {
         "command": "dao-freecad.open",
         "title": "DAO FreeCAD: 打开归一工作台"
+      },
+      {
+        "command": "dao-freecad.openShell",
+        "title": "DAO FreeCAD: 归一总控外壳 /shell（主页 + FreeCAD 整窗 + 工作台 + Proxy Pro 平级板块）"
       },
       {
         "command": "dao-freecad.openWindow",
@@ -164,6 +168,11 @@
           "type": "number",
           "default": 18920,
           "description": "桥接 HTTP 端口"
+        },
+        "dao-freecad.shellPort": {
+          "type": "number",
+          "default": 9920,
+          "description": "归一外壳 /shell 端口（与 dao-one 归一网页同源习惯；被占用时自动后退相邻端口，与 dao-vsix 本地 API 并行不悖）"
         },
         "dao-freecad.autoStart": {
           "type": "boolean",
