@@ -1,0 +1,42 @@
+{
+ "design": {
+  "scale": "1:18 真车架构(滑板底盘/中置电池/前舱PCB/后横置电机)",
+  "wheelbase_mm": 130.0,
+  "track_mm": 76,
+  "wheel_dia_mm": 36.0,
+  "fit_clearance_mm": 0.3
+ },
+ "gear_train": {
+  "module": 0.5,
+  "z_pinion": 10,
+  "z_spur": 40,
+  "ratio": 4.0,
+  "center_distance_mm": 12.65,
+  "backlash_mm": 0.15
+ },
+ "performance": {
+  "motor_rpm_loaded": 8000.0,
+  "wheel_rpm": 2000.0,
+  "speed_m_s": 3.77,
+  "speed_km_h": 13.57,
+  "total_mass_g": 228.8
+ },
+ "interference": [],
+ "mass_g": {
+  "AxleFront": 9.96,
+  "AxleRear": 9.96,
+  "BatteryPack": 22.34,
+  "BodyShell": 45.47,
+  "Chassis": 48.42,
+  "Hood": 8.9,
+  "MotorMount": 1.17,
+  "PCB": 1.78,
+  "Pinion": 0.61,
+  "SpurGear": 11.65,
+  "WheelFL": 12.64,
+  "WheelFR": 12.64,
+  "WheelRL": 12.64,
+  "WheelRR": 12.64
+ },
+ "total_mass_g": 591.9
+}

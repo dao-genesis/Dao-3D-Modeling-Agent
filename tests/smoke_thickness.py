@@ -48,6 +48,16 @@ def main():
           % (h["min_thickness"], h["ok"], len(h["thin_walls"])))
     assert abs(h["min_thickness"] - 3.0) < 1e-3 and not h["ok"], h
 
+    # shell mis-use must fail with a clear, actionable message, not an opaque OCC
+    # NullShape: (a) no open_faces -> cannot hollow; (b) an out-of-range face.
+    s.act("solid.box", {"name": "h1", "length": 20, "width": 20, "height": 20})
+    no_open = s.act("solid.shell", {"name": "h1", "thickness": -2, "out": "x"})
+    assert not no_open.ok and "open_faces" in (no_open.error or ""), no_open
+    oob = s.act("solid.shell", {"name": "h1", "thickness": -2,
+                                "open_faces": [99], "out": "x"})
+    assert not oob.ok and "out of range" in (oob.error or ""), oob
+    print("shell guard  -> no-open_faces & out-of-range both rejected clearly")
+
     print("THICKNESS SMOKE OK", s.summary())
     s.registry.kernel.shutdown()
 

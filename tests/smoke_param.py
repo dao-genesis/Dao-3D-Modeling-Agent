@@ -11,6 +11,13 @@ def main():
     k = s.registry.kernel
     print("ops with param.*:", [o for o in k.ops if o.startswith("param.")])
 
+    # a non-string body name used to leak 'TypeError: argument 2 must be str,
+    # not int' from addObject; it must be refused with guidance.
+    nb = s.act("param.body", {"name": 123})
+    assert not nb.ok and "must be a string" in (nb.error or ""), nb.error
+    assert "TypeError" not in (nb.error or ""), nb.error
+    print("non-string param.body name refused (no raw TypeError): %s" % nb.error)
+
     # 1) parametric plate: pad a centered 60x40 rect to height 8
     assert s.act("param.body", {"name": "P"}).ok
     r = s.act("param.pad", {"body": "P", "feature": "Plate",
@@ -26,6 +33,39 @@ def main():
     assert r.ok, r.error
     print("after pocket volume", r.data["volume"])
     assert abs(r.data["volume"] - (60 * 40 * 8 - math.pi * 64 * 8)) < 1.0
+
+    # --- malformed-input guards (no_raw_leak): practice exposed that these
+    #     leaked raw TypeError/AttributeError/ValueError("could not convert ...")
+    #     instead of guided messages. ------------------------------------------
+    def _guided(r, token):
+        err = r.error or ""
+        assert not r.ok, "expected failure, got %r" % (r.data,)
+        for raw in ("TypeError", "AttributeError", "OCCError", "KeyError",
+                    "could not convert", "string indices"):
+            assert raw not in err, "leaked raw %s: %r" % (raw, err)
+        assert token in err, "error %r lacks %r" % (err, token)
+
+    _guided(s.act("param.pad", {"body": "P", "feature": "Bad", "profile": "rect",
+                                "length": 5}), "profile must be a dict")
+    _guided(s.act("param.pad", {"body": "P", "feature": "Bad",
+                                "profile": {"rect": [10, 10]}, "length": "x"}), "length")
+    _guided(s.act("param.fillet", {"body": "P", "edges": "all", "radius": 1}),
+            "integer indices")
+    _guided(s.act("param.fillet", {"body": "P", "radius": "x"}), "radius")
+    _guided(s.act("param.chamfer", {"body": "P", "size": "x"}), "size")
+    _guided(s.act("param.loft", {"body": "P", "sections": "x"}), "sections")
+    _guided(s.act("param.mirror", {"body": "P", "feature": 123}), "must be a string")
+    # numeric coercion happens before newObject (no half-built feature, no raw
+    # 'could not convert string to float').
+    _guided(s.act("param.shell", {"body": "P", "thickness": "x"}), "thickness")
+    _guided(s.act("param.pattern_linear", {"body": "P", "length": "x"}), "length")
+    _guided(s.act("param.pattern_linear", {"body": "P", "count": "x"}), "count")
+    _guided(s.act("param.pattern_polar", {"body": "P", "angle": "x"}), "angle")
+    _guided(s.act("param.pattern_polar", {"body": "P", "count": "x"}), "count")
+    # measuring a body with no feature yet must guide, not leak a null-shape OCCError.
+    assert s.act("param.body", {"name": "Empty"}).ok
+    _guided(s.act("param.measure", {"body": "Empty"}), "no valid solid")
+    print("param.* malformed-input guards all refused cleanly")
 
     # 3) diagnose — should be fully healthy (DoF 0, no conflicts)
     d = s.act("param.diagnose", {})
@@ -278,6 +318,80 @@ def main():
     assert not chained.ok and "chaining transforms" in (chained.error or ""), chained.error
     print("enclosure faces:", cm.data["faces"], "vol:", round(cm.data["volume"], 1),
           "| transform-chain rejected:", chained.error.split(";")[0])
+
+    # dressups/transforms on an EMPTY body (no tip feature yet) must guide,
+    # not leak "'NoneType' object has no attribute 'Shape'/'Visibility'".
+    def _bad(res, *needles):
+        assert not res.ok, ("expected failure", res.data)
+        e = res.error or ""
+        for raw in ("could not convert", "TypeError", "AttributeError",
+                    "KeyError", "invalid literal", "NoneType"):
+            assert raw not in e, (raw, e)
+        for n in needles:
+            assert n in e, (n, e)
+    assert s.act("param.body", {"name": "Empty"}).ok
+    _bad(s.act("param.fillet", {"body": "Empty", "radius": 1}), "no feature")
+    _bad(s.act("param.chamfer", {"body": "Empty", "size": 1}), "no feature")
+    _bad(s.act("param.mirror", {"body": "Empty", "plane": "XY"}),
+         "no feature")
+    # gear lofts coerce module/teeth with bare float()/int(): a non-numeric
+    # value must guide, not leak 'could not convert'/'invalid literal'.
+    _bad(s.act("param.helical", {"body": "Empty", "module": "x", "teeth": 12}),
+         "module")
+    _bad(s.act("param.bevel", {"body": "Empty", "module": 2, "teeth": "x"}),
+         "teeth")
+    # module/teeth == 0 makes pitch radius 0 -> used to leak ZeroDivisionError.
+    _bad(s.act("param.helical", {"body": "Empty", "module": 0, "teeth": 12}),
+         "module > 0")
+    _bad(s.act("param.bevel", {"body": "Empty", "module": 2, "teeth": 0}),
+         "teeth >= 1")
+    # malformed nested profile/sweep specs must guide, never leak a bare
+    # float() 'could not convert', a 'string indices' or an OCC/RuntimeError.
+    assert s.act("param.body", {"name": "PF"}).ok
+    _bad(s.act("param.pad", {"body": "PF", "feature": "p1",
+                             "profile": {"rect": "x"}, "length": 5}), "rect")
+    _bad(s.act("param.pad", {"body": "PF", "feature": "p2",
+                             "profile": {"circle": "x"}, "length": 5}), "circle")
+    _bad(s.act("param.pad", {"body": "PF", "feature": "p3",
+                             "profile": {"polygon": "x"}, "length": 5}), "polygon")
+    _bad(s.act("param.pad", {"body": "PF", "feature": "p4",
+                             "profile": {"polygon": [[0, 0]]}, "length": 5}),
+         "at least 3 points")
+    _bad(s.act("param.sweep", {"body": "PF", "feature": "s1",
+                               "profile": {"circle": 2}, "path": "x"}), "path")
+    _bad(s.act("param.sweep", {"body": "PF", "feature": "s2",
+                               "profile": {"circle": 2},
+                               "path": {"points": "x"}}), "points")
+    _bad(s.act("param.sweep", {"body": "PF", "feature": "s3",
+                               "profile": {"circle": 2},
+                               "path": {"points": [[0, 0]]}}), "at least 2")
+    _bad(s.act("param.sweep", {"body": "PF", "feature": "s4",
+                               "profile": {"circle": 2},
+                               "path": {"helix": "x"}}), "helix")
+    print("param empty-body, gear-arg and nested-profile guards ok")
+
+    # 20) natural spellings: flat shape args coerce to profiles, and features
+    # can reuse a sketch made earlier with param.sketch.
+    assert s.act("param.body", {"name": "Nat"}).ok
+    r = s.act("param.pad", {"body": "Nat", "feature": "NatPlate",
+                            "shape": "rectangle", "width": 30, "height": 20,
+                            "length": 5})
+    assert r.ok, r.error
+    assert abs(r.data["volume"] - 30 * 20 * 5) < 1e-3, r.data
+    r = s.act("param.pocket", {"body": "Nat", "feature": "NatHole",
+                               "shape": "circle", "radius": 3, "at": [5, 5],
+                               "through": True})
+    assert r.ok, r.error
+    assert abs(r.data["volume"] - (3000 - math.pi * 9 * 5)) < 1.0, r.data
+    sk = s.act("param.sketch", {"body": "Nat", "name": "reuse_sk",
+                                "profile": {"circle": 2, "at": [-5, -5]}})
+    assert sk.ok, sk.error
+    r = s.act("param.pocket", {"body": "Nat", "feature": "ReuseHole",
+                               "sketch": "reuse_sk", "through": True})
+    assert r.ok, r.error
+    _bad(s.act("param.pad", {"body": "Nat", "feature": "NoSk",
+                             "sketch": "ghost_sk", "length": 5}), "no such sketch")
+    print("natural shape args + sketch reuse ok")
 
     print("PARAM SMOKE OK", s.summary())
     k.shutdown()

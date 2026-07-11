@@ -32,6 +32,27 @@ def main():
     print("fillet ok", r.ok, "faces", r.data.get("faces"))
     r = s.act("solid.inspect", {"name": "flange_f", "density": 0.00785})  # steel g/mm^3
     print("inspect mass(g)", r.data.get("mass"), "com", r.data.get("center_of_mass"))
+    # inspect must report the structural counts the reverse pipeline keys on:
+    # is this one body or an assembly? (a downloaded STEP that came in as a
+    # single-solid compound vs a real multi-solid assembly).
+    assert r.data["solids"] == 1 and r.data["shells"] == 1, r.data
+    s.act("solid.box", {"name": "tb1", "length": 5, "width": 5, "height": 5})
+    s.act("solid.box", {"name": "tb2", "length": 5, "width": 5, "height": 5, "pos": [20, 0, 0]})
+    s.act("solid.compound", {"names": ["tb1", "tb2"], "out": "asm2"})
+    ai = s.act("solid.inspect", {"name": "asm2"})
+    assert ai.data["solids"] == 2 and ai.data["shells"] == 2, ai.data
+    print("inspect structure: single body solids=1; 2-box compound solids=2")
+
+    # selecting an out-of-range edge must fail with a clear message (which index,
+    # what range), not leak a bare IndexError the caller cannot act on.
+    s.act("solid.box", {"name": "cube", "length": 10, "width": 10, "height": 10})
+    fr = s.act("solid.fillet", {"name": "cube", "radius": 1, "edges": [999], "out": "cf"})
+    assert not fr.ok and "out of range" in (fr.error or ""), fr
+    cr = s.act("solid.chamfer", {"name": "cube", "size": 1, "edges": [999], "out": "cc"})
+    assert not cr.ok and "out of range" in (cr.error or ""), cr
+    ok_edge = s.act("solid.chamfer", {"name": "cube", "size": 1, "edges": [0], "out": "cc"})
+    assert ok_edge.ok, ok_edge.error
+    print("edge-index guard ok: out-of-range rejected, valid index chamfers")
 
     # interference: overlap two boxes
     s.act("solid.box", {"name": "A", "length": 10, "width": 10, "height": 10})

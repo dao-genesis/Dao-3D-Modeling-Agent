@@ -20,6 +20,11 @@ def test_box_named_and_keyword_dims():
     assert s["args"]["length"] == 30 and s["args"]["height"] == 5
 
 
+def test_box_named_past_tense():
+    s = first(Planner().plan("box 20x20x20 named cube"))
+    assert s["tool"] == "solid.box" and s["args"]["name"] == "cube"
+
+
 def test_cylinder_diameter_to_radius():
     s = first(Planner().plan("cylinder diameter 16 h 40"))
     assert s["tool"] == "solid.cylinder" and s["args"]["radius"] == 8 and s["args"]["height"] == 40

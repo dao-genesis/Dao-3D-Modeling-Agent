@@ -19,6 +19,13 @@ def main():
     assert s.act("param.pad", {"body": "Block", "feature": "BlockPad",
                               "profile": {"rect": [20, 20]}, "length": 20}).ok
 
+    # a non-string assembly name used to leak 'TypeError: argument 2 must be
+    # str, not int' from addObject; it must be refused with guidance.
+    na = s.act("asm.create", {"name": 123})
+    assert not na.ok and "must be a string" in (na.error or ""), na.error
+    assert "TypeError" not in (na.error or ""), na.error
+    print("non-string asm.create name refused (no raw TypeError): %s" % na.error)
+
     # assemble
     assert s.act("asm.create", {"name": "Asm"}).ok
     assert s.act("asm.add", {"name": "base", "body": "Base", "fixed": True}).ok
@@ -30,6 +37,12 @@ def main():
     # stack block on top of base -> no clash, block sits at z = base top
     r = s.act("asm.stack", {"base": "base", "top": "block", "gap": 0})
     print("after stack block pos:", r.data["placement"])
+    p0 = list(r.data["placement"])
+    # 'a'/'b' aliases (asm.align's argument shape) and a dx nudge off-centre
+    r = s.act("asm.stack", {"a": "base", "b": "block", "dx": 5})
+    assert r.ok, r.error
+    assert abs(r.data["placement"][0] - (p0[0] + 5)) < 1e-6, r.data
+    assert s.act("asm.stack", {"a": "base", "b": "block"}).ok  # recentre
     r = s.act("asm.interference", {})
     print("post-stack clashes:", r.data["clash_count"], r.data["clashes"])
     assert r.data["clash_count"] == 0, r.data["clashes"]
@@ -56,6 +69,13 @@ def main():
     r = s.act("asm.export", {"path": os.path.join(out, "assembly.step")})
     print("export bytes:", r.data["bytes"])
     assert r.data["bytes"] > 0
+
+    # a non-string export path used to leak 'TypeError: argument 2 must be
+    # str ...' from Import.export; it must be refused with guidance.
+    ep = s.act("asm.export", {"path": 123})
+    assert not ep.ok and "path" in (ep.error or "") and "string" in (ep.error or ""), ep.error
+    assert "TypeError" not in (ep.error or ""), ep.error
+    print("non-string asm.export path refused (no raw TypeError): %s" % ep.error)
 
     print("ASM SMOKE OK", s.summary())
     k.shutdown()
@@ -195,8 +215,54 @@ def main():
     clashing = _overlap(0.0)              # unphased -> tooth meets tooth
     assert meshed < 1e-6, ("phased gears should not overlap", meshed)
     assert clashing > meshed, ("unphased gears should clash", clashing)
+
+    # reverse inference reads assembly components at their PLACED pose: two
+    # gear-blank cylinders whose masters both sit at the origin (coaxial
+    # there) mesh externally at the working centre distance as instances.
+    assert p.act("solid.cylinder", {"name": "bk1", "radius": 18,
+                                    "height": 8}).ok
+    assert p.act("solid.cylinder", {"name": "bk2", "radius": 12,
+                                    "height": 8}).ok
+    assert p.act("asm.add", {"name": "blank1", "body": "bk1"}).ok
+    assert p.act("asm.add", {"name": "blank2", "body": "bk2"}).ok
+    assert p.act("asm.place", {"name": "blank2", "pos": [30, 0, 0]}).ok
+    gm = p.act("solid.gearmesh", {"parts": ["blank1", "blank2"]})
+    assert gm.ok, gm.error
+    assert gm.data["meshes"] == 1, gm.data
+    assert gm.data["mesh_list"][0]["type"] == "external", gm.data
+    assert abs(gm.data["mesh_list"][0]["center_distance"] - 30) < 1e-3, gm.data
+    print("placed gearmesh:", gm.data["mesh_list"][0])
     print("gear pair center dist:", dist, "meshed overlap:", round(meshed, 4),
           "unphased overlap:", round(clashing, 1))
+
+    # malformed numeric/vector args must guide, never leak a bare float()
+    # 'could not convert' or a KeyError on an out-of-range axis letter.
+    def _bad(res, *needles):
+        assert not res.ok, ("expected failure", res.data)
+        e = res.error or ""
+        for raw in ("could not convert", "TypeError", "AttributeError",
+                    "KeyError", "invalid literal", "Expected sequence",
+                    "not enough values", "string indices"):
+            assert raw not in e, (raw, e)
+        for n in needles:
+            assert n in e, (n, e)
+    _bad(p.act("asm.rotate", {"name": "g2", "angle": "x"}), "angle")
+    _bad(p.act("asm.rotate", {"name": "g2", "angle": 5, "axis": "x"}), "axis")
+    _bad(p.act("asm.align", {"a": "g1", "b": "g2", "offset": "x"}), "offset")
+    _bad(p.act("asm.align", {"a": "g1", "b": "g2", "axis": "q"}),
+         "'x'/'y'/'z'")
+    _bad(p.act("asm.stack", {"base": "g1", "top": "g2", "gap": "x"}), "gap")
+    _bad(p.act("asm.bom", {"density": "x"}), "density")
+    # nested placement / move-vector / inertia-axis specs used to leak a bare
+    # float() 'could not convert' or a V(*seq) 'Expected sequence of size 3'.
+    _bad(p.act("asm.place", {"name": "g2", "pos": "x"}), "pos")
+    _bad(p.act("asm.place", {"name": "g2", "axis": [1, 2]}), "axis")
+    _bad(p.act("asm.place", {"name": "g2", "angle": "x"}), "angle")
+    _bad(p.act("asm.move", {"name": "g2", "vector": "x"}), "vector")
+    _bad(p.act("asm.move", {"name": "g2", "vector": ["x", 0, 0]}), "vector")
+    _bad(p.act("asm.measure", {"inertia_axis": "x"}), "inertia_axis")
+    _bad(p.act("asm.measure", {"inertia_axis": {"point": "x"}}), "point")
+    print("asm malformed-arg guards ok")
     pk.shutdown()
 
 
