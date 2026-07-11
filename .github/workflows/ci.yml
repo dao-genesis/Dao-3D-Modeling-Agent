@@ -12,9 +12,9 @@ jobs:
       PYTHONUTF8: "1"
       PYTHONIOENCODING: "utf-8"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -52,9 +52,15 @@ jobs:
           python -m pytest "60-实战_Projects/ORS6_Stewart/sr6_truth/tests/test_truth.py" -v
           cp "60-实战_Projects/ORS6_Stewart/sr6_truth/report.json" docs/models/verify_report.json
 
+      - name: "Gate 6 - SR6 full-machine assembly poses + L5 mesh validation"
+        run: |
+          pip install trimesh networkx python-fcl
+          python "80-装配_Assembly/anchors/sr6/solve_home_poses.py"
+          python "80-装配_Assembly/anchors/sr6/validate_home.py"
+
       - name: Upload SR6 closure artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sr6-closure-report
           path: "60-实战_Projects/ORS6_Stewart/closed_loop/out/"

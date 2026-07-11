@@ -1,7 +1,7 @@
 # Cold-start CI deps for the closed-loop proofs (no OCCT/CAD kernel needed).
 # The heavy modeling kernel lives in requirements.txt; these three proofs run
 # on a clean `pip install -r requirements-ci.txt` VM.
-numpy>=1.20
-scipy>=1.10
-matplotlib>=3.5
+numpy>=2.2.6
+scipy>=1.15.3
+matplotlib>=3.10.9
 pytest>=7.0
