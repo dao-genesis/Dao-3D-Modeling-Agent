@@ -70,6 +70,16 @@ def _fvec(seq, label):
             "%s components must all be numbers (got %r)" % (label, seq))
 
 
+def _assign_qty(obj, prop, text, number):
+    """Assign a unit-carrying constraint property across FreeCAD versions:
+    >= 1.0 the property accepts a Quantity; older builds expose a bare
+    PropertyFloat taking the number in the property's canonical unit."""
+    try:
+        setattr(obj, prop, App.Units.Quantity(text))
+    except TypeError:
+        setattr(obj, prop, float(number))
+
+
 def _check_sel(sel):
     """A non-dict face selector leaks 'str/int has no attribute lower/get' or
     'string indices must be integers'; demand a real dict up front."""
@@ -242,7 +252,12 @@ def register(state):
         shape = obj.Shape
 
         analysis = ObjectsFem.makeAnalysis(doc, "Analysis")
-        solver = ObjectsFem.makeSolverCalculiXCcxTools(doc, "CalculiX")
+        # FreeCAD >= 0.21 spells it makeSolverCalculiXCcxTools; 0.19/0.20
+        # use makeSolverCalculixCcxTools (lowercase x).
+        if hasattr(ObjectsFem, "makeSolverCalculiXCcxTools"):
+            solver = ObjectsFem.makeSolverCalculiXCcxTools(doc, "CalculiX")
+        else:
+            solver = ObjectsFem.makeSolverCalculixCcxTools(doc, "CalculiX")
         solver.AnalysisType = "static"
         solver.GeometricalNonlinearity = "linear"
         solver.MatrixSolverType = "default"
@@ -276,10 +291,18 @@ def register(state):
             else max(1.0, bb.DiagonalLength / 18.0)
         order = _fnum(a, "order", 2, "'order'")
         mesh = ObjectsFem.makeMeshGmsh(doc, "FEMMesh")
-        mesh.Shape = obj
+        # the geometry link is ``Shape`` on FreeCAD >= 1.0, ``Part`` before.
+        if hasattr(mesh, "Shape"):
+            mesh.Shape = obj
+        else:
+            mesh.Part = obj
         mesh.CharacteristicLengthMax = float(size)
         mesh.CharacteristicLengthMin = float(size) / 4.0
         mesh.ElementOrder = "2nd" if order >= 2 else "1st"
+        # straight-edged 2nd-order elements: curved midside nodes from older
+        # gmsh builds produce nonpositive-Jacobian elements that abort ccx.
+        if hasattr(mesh, "SecondOrderLinear"):
+            mesh.SecondOrderLinear = True
         analysis.addObject(mesh)
         doc.recompute()
 
@@ -348,7 +371,7 @@ def register(state):
             free = ax not in axes
             setattr(c, ax + "Free", free)
             if not free:
-                setattr(c, ax + "Displacement", App.Units.Quantity("0 mm"))
+                _assign_qty(c, ax + "Displacement", "0 mm", 0.0)
         analysis.addObject(c)
         state.fem["constraints"].append(c.Name)
         doc.recompute()
@@ -404,7 +427,7 @@ def register(state):
             c = ObjectsFem.makeConstraintPressure(doc, "Pressure")
             c.References = [(obj, n) for n in names]
             # PropertyPressure stores base units (mN/mm^2); 1 MPa = 1 N/mm^2.
-            c.Pressure = App.Units.Quantity("%s MPa" % value)
+            _assign_qty(c, "Pressure", "%s MPa" % value, value)
             c.Reversed = bool(a.get("reversed", False))
             analysis.addObject(c)
             out = {"constraint": "pressure", "faces": names, "mpa": value}
@@ -413,7 +436,7 @@ def register(state):
             c.References = [(obj, n) for n in names]
             # PropertyForce stores base units (mN); assign as a N quantity so the
             # solver sees Newtons, not milli-Newtons (a silent 1000x error).
-            c.Force = App.Units.Quantity("%s N" % value)
+            _assign_qty(c, "Force", "%s N" % value, value)
             dvec = a.get("direction")
             d = V(*_fvec(dvec, "fem.load 'direction'")) if dvec is not None \
                 else V(0, 0, -1)
@@ -528,11 +551,11 @@ def register(state):
         ref = _fnum(a, "ref", 0.0, "fem.temperature 'ref'")
         tval = _fnum(a, "value", None, "fem.temperature 'value'")
         init = ObjectsFem.makeConstraintInitialTemperature(doc, "Tref")
-        init.initialTemperature = App.Units.Quantity("%s K" % ref)
+        _assign_qty(init, "initialTemperature", "%s K" % ref, ref)
         analysis.addObject(init)
         ct = ObjectsFem.makeConstraintTemperature(doc, "Temp")
         ct.References = [(obj, n) for n in names]
-        ct.Temperature = App.Units.Quantity("%s K" % tval)
+        _assign_qty(ct, "Temperature", "%s K" % tval, tval)
         analysis.addObject(ct)
         state.fem["constraints"] += [init.Name, ct.Name]
         state.fem["dT"] = tval - ref
@@ -633,7 +656,7 @@ def register(state):
         line.Shape = Part.makeLine(base - axis * span, base + axis * span)
         cf = ObjectsFem.makeConstraintCentrif(doc, "Centrif")
         # RotationFrequency is a true frequency (Hz = rev/s); omega = 2*pi*f.
-        cf.RotationFrequency = App.Units.Quantity("%s Hz" % hz)
+        _assign_qty(cf, "RotationFrequency", "%s Hz" % hz, hz)
         cf.RotationAxis = [(line, "Edge1")]
         analysis.addObject(cf)
         state.fem["constraints"].append(cf.Name)
