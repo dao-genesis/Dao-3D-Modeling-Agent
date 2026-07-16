@@ -17,6 +17,8 @@ Runs inside freecadcmd. ``register(state)`` returns ``{op_name: callable}``.
 """
 import math
 import os
+import shutil
+import subprocess
 import tempfile
 
 import FreeCAD as App
@@ -89,6 +91,119 @@ def _check_sel(sel):
             "{'index':[1]} / {'normal':[0,0,1]} / {'cyl_radius':r}; got %r"
             % (sel,))
     return sel
+
+
+def _gmsh_inp_mesh(shape, size, order):
+    """Mesh a shape with gmsh directly into an Abaqus/CalculiX .inp and parse
+    it: returns (nodes {id: (x,y,z)}, elements [(id, [node ids])], etype).
+
+    This is the ground truth mesh used to detect and bypass builds whose
+    ``FemMesh`` python property copy silently drops elements (the SMESH copy
+    in FreeCAD 0.19 loses most volume elements on every assignment, which
+    leaves the ccx deck nearly unconstrained and the displacement field
+    astronomically wrong). gmsh writes the C3D4/C3D10 connectivity in native
+    Abaqus ordering, so no UNV permutation guessing is needed.
+    """
+    gmsh_bin = shutil.which("gmsh")
+    if not gmsh_bin:
+        raise RuntimeError("gmsh binary not found on PATH")
+    workdir = tempfile.mkdtemp(prefix="daomesh_")
+    brep = os.path.join(workdir, "geom.brep")
+    inp = os.path.join(workdir, "mesh.inp")
+    shape.exportBrep(brep)
+    geo = os.path.join(workdir, "mesh.geo")
+    with open(geo, "w") as f:
+        f.write(
+            'Merge "%s";\n'
+            "Mesh.CharacteristicLengthMax = %s;\n"
+            "Mesh.CharacteristicLengthMin = %s;\n"
+            "Mesh.Optimize = 1;\n"
+            "Mesh.ElementOrder = %d;\n"
+            "Mesh.SecondOrderLinear = 1;\n"
+            "Mesh.Algorithm = 2;\n"
+            "Mesh.Algorithm3D = 1;\n"
+            "Geometry.Tolerance = 1e-06;\n"
+            "Mesh 3;\n"
+            "Coherence Mesh;\n"
+            "Mesh.SaveAll = 1;\n"
+            'Save "%s";\n' % (brep, float(size), float(size) / 4.0,
+                              2 if order >= 2 else 1, inp))
+    proc = subprocess.run([gmsh_bin, "-", geo], capture_output=True, text=True,
+                          timeout=600)
+    if not os.path.exists(inp):
+        raise RuntimeError("gmsh meshing failed: %s" % proc.stderr[-800:])
+    nodes = {}
+    elements = []
+    etype = None
+    mode = None
+    pending = None
+    for line in open(inp):
+        ls = line.strip()
+        if ls.startswith("*NODE") or ls.startswith("*Node"):
+            mode = "n"
+            continue
+        if ls.startswith("*ELEMENT") or ls.startswith("*Element"):
+            up = ls.upper()
+            if "C3D10" in up or "C3D4" in up:
+                mode = "e"
+                etype = "C3D10" if "C3D10" in up else "C3D4"
+            else:
+                mode = None
+            continue
+        if ls.startswith("*"):
+            mode = None
+            continue
+        if not ls:
+            continue
+        if mode == "n":
+            p = ls.split(",")
+            nodes[int(p[0])] = (float(p[1]), float(p[2]), float(p[3]))
+        elif mode == "e":
+            vals = [int(x) for x in ls.rstrip(",").split(",") if x.strip()]
+            need = 10 if etype == "C3D10" else 4
+            if pending is None:
+                pending = (vals[0], vals[1:])
+            else:
+                pending = (pending[0], pending[1] + vals)
+            if len(pending[1]) >= need:
+                elements.append(pending)
+                pending = None
+    if not elements:
+        raise RuntimeError("gmsh produced no volume elements")
+    return nodes, elements, etype
+
+
+def _von_mises(s):
+    sxx, syy, szz, sxy, syz, szx = s
+    return math.sqrt(0.5 * ((sxx - syy) ** 2 + (syy - szz) ** 2
+                            + (szz - sxx) ** 2)
+                     + 3.0 * (sxy ** 2 + syz ** 2 + szx ** 2))
+
+
+def _parse_frd(path):
+    """Read nodal displacement magnitudes and von-Mises stress out of a ccx
+    .frd. Returns (disp {node: |u|}, vm {node: von Mises})."""
+    disp = {}
+    vm = {}
+    block = None
+    for line in open(path):
+        if line.startswith(" -4"):
+            name = line[5:18].strip().upper()
+            block = "d" if name.startswith("DISP") else \
+                ("s" if name.startswith("STRESS") else None)
+            continue
+        if line.startswith(" -3"):
+            block = None
+            continue
+        if block and line.startswith(" -1"):
+            nid = int(line[3:13])
+            vals = [float(line[13 + i * 12:25 + i * 12])
+                    for i in range((len(line.rstrip("\n")) - 13) // 12)]
+            if block == "d" and len(vals) >= 3:
+                disp[nid] = math.sqrt(vals[0] ** 2 + vals[1] ** 2 + vals[2] ** 2)
+            elif block == "s" and len(vals) >= 6:
+                vm[nid] = _von_mises(vals[:6])
+    return disp, vm
 
 
 def _parse_buckling_factors(workdir):
@@ -315,11 +430,30 @@ def register(state):
 
         state.fem = {"analysis": analysis.Name, "solver": solver.Name,
                      "material": mat.Name, "mesh": mesh.Name, "target": obj.Name,
-                     "yield": mp["yield"], "E": mp["E"], "alpha": mp.get("alpha"),
-                     "constraints": []}
+                     "yield": mp["yield"], "E": mp["E"], "nu": mp["nu"],
+                     "alpha": mp.get("alpha"),
+                     "constraints": [], "bcs": []}
+
+        # Ground-truth the mesh: mesh the same shape with gmsh directly and
+        # compare element counts. Builds with the lossy FemMesh property copy
+        # (FreeCAD 0.19 drops most volume elements on assignment) get flagged
+        # for the own-deck solve path, which writes the ccx deck from this
+        # mesh instead of the corrupted document mesh.
+        nodes_out, elems_out = fm.NodeCount, fm.VolumeCount
+        try:
+            gnodes, gelems, etype = _gmsh_inp_mesh(shape, size, order)
+            if len(gelems) > fm.VolumeCount * 1.2:
+                state.fem["deck"] = {"nodes": gnodes, "elements": gelems,
+                                     "etype": etype}
+                nodes_out, elems_out = len(gnodes), len(gelems)
+        except Exception as exc:
+            state.fem["deck_error"] = repr(exc)
+
         return {"target": a["target"], "material": mp["name"], "yield_mpa": mp["yield"],
-                "mesh_size": _round(size), "nodes": fm.NodeCount,
-                "elements": fm.VolumeCount, "faces": _faces_info(shape)}
+                "mesh_size": _round(size), "nodes": nodes_out,
+                "elements": elems_out,
+                "own_deck": bool(state.fem.get("deck")),
+                "faces": _faces_info(shape)}
 
     def _need():
         if not state.fem.get("analysis"):
@@ -336,6 +470,8 @@ def register(state):
         c.References = [(obj, n) for n in names]
         analysis.addObject(c)
         state.fem["constraints"].append(c.Name)
+        state.fem.setdefault("bcs", []).append(
+            {"kind": "fix", "faces": names, "axes": ["x", "y", "z"]})
         doc.recompute()
         return {"constraint": "fixed", "faces": names}
 
@@ -374,6 +510,8 @@ def register(state):
                 _assign_qty(c, ax + "Displacement", "0 mm", 0.0)
         analysis.addObject(c)
         state.fem["constraints"].append(c.Name)
+        state.fem.setdefault("bcs", []).append(
+            {"kind": "fix", "faces": names, "axes": axes})
         doc.recompute()
         return {"constraint": "support", "faces": names, "zeroed": axes}
 
@@ -430,6 +568,10 @@ def register(state):
             _assign_qty(c, "Pressure", "%s MPa" % value, value)
             c.Reversed = bool(a.get("reversed", False))
             analysis.addObject(c)
+            total_area = sum(obj.Shape.Faces[int(n[4:]) - 1].Area for n in names)
+            state.fem.setdefault("bcs", []).append(
+                {"kind": "pressure", "faces": names, "mpa": value,
+                 "area": total_area, "reversed": bool(a.get("reversed", False))})
             out = {"constraint": "pressure", "faces": names, "mpa": value}
         else:
             c = ObjectsFem.makeConstraintForce(doc, "Force")
@@ -457,6 +599,9 @@ def register(state):
                 c.Reversed = True
                 doc.recompute()
                 dv = c.DirectionVector
+            state.fem.setdefault("bcs", []).append(
+                {"kind": "force", "faces": names, "newtons": value,
+                 "dir": [d.normalize().x, d.normalize().y, d.normalize().z]})
             out = {"constraint": "force", "faces": names, "newtons": value,
                    "direction_ref": sub, "reversed": bool(c.Reversed),
                    "effective_dir": [_round(dv.x, 3), _round(dv.y, 3), _round(dv.z, 3)]}
@@ -504,11 +649,118 @@ def register(state):
                 "loads or constraints to solve; add fem.fix and fem.load first")
         return results
 
+    def _deck_face_nodes(shape, names):
+        """Node ids of the own-deck mesh lying on the given faces (BRep
+        distance test against the real face geometry)."""
+        deck = state.fem["deck"]
+        out = set()
+        for fname in names:
+            face = shape.Faces[int(fname[4:]) - 1]
+            for nid, (x, y, z) in deck["nodes"].items():
+                vtx = Part.Vertex(x, y, z)
+                if face.distToShape(vtx)[0] <= 1e-4:
+                    out.add(nid)
+        return sorted(out)
+
+    def _deck_static_solve():
+        """Write the ccx deck straight from the ground-truth gmsh mesh and run
+        ccx as a subprocess -- used when the document FemMesh copy is lossy.
+        Returns (vm list, disp list)."""
+        deck = state.fem["deck"]
+        obj = doc.getObject(state.fem["target"])
+        shape = obj.Shape
+        bcs = state.fem.get("bcs", [])
+        fixes = [b for b in bcs if b["kind"] == "fix"]
+        loads = [b for b in bcs if b["kind"] in ("force", "pressure")]
+        if not fixes or not loads:
+            raise ValueError(
+                "cannot run the solve yet: define boundary conditions with "
+                "fem.fix / fem.support and apply loads with fem.load first")
+        workdir = tempfile.mkdtemp(prefix="daofem_")
+        state.fem["workdir"] = workdir
+        lines = ["*NODE, NSET=Nall"]
+        for nid in sorted(deck["nodes"]):
+            x, y, z = deck["nodes"][nid]
+            lines.append("%d, %.10g, %.10g, %.10g" % (nid, x, y, z))
+        lines.append("*ELEMENT, TYPE=%s, ELSET=Eall" % deck["etype"])
+        for eid, conn in deck["elements"]:
+            lines.append(", ".join(str(v) for v in [eid] + list(conn)))
+        dofmap = {"x": 1, "y": 2, "z": 3}
+        for i, b in enumerate(fixes):
+            nids = _deck_face_nodes(shape, b["faces"])
+            if not nids:
+                raise ValueError("fix matched no mesh nodes: %r" % b["faces"])
+            lines.append("*NSET,NSET=Fix%d" % i)
+            lines += ["%d," % n for n in nids]
+        lines += ["*MATERIAL, NAME=Material", "*ELASTIC",
+                  "%.6g, %.4g" % (state.fem["E"], state.fem.get("nu", 0.3)),
+                  "*SOLID SECTION, ELSET=Eall, MATERIAL=Material",
+                  "*STEP", "*STATIC", "*BOUNDARY"]
+        for i, b in enumerate(fixes):
+            for ax in b["axes"]:
+                lines.append("Fix%d,%d" % (i, dofmap[ax]))
+        lines.append("*CLOAD")
+        for b in loads:
+            nids = _deck_face_nodes(shape, b["faces"])
+            if not nids:
+                raise ValueError("load matched no mesh nodes: %r" % b["faces"])
+            if b["kind"] == "force":
+                total, d = b["newtons"], b["dir"]
+            else:
+                # pressure -> equivalent total normal force on the faces
+                face = shape.Faces[int(b["faces"][0][4:]) - 1]
+                u0, u1, v0, v1 = face.ParameterRange
+                n = face.normalAt((u0 + u1) / 2.0, (v0 + v1) / 2.0).normalize()
+                sign = 1.0 if b.get("reversed") else -1.0
+                total = b["mpa"] * b["area"]
+                d = [n.x * sign, n.y * sign, n.z * sign]
+            per = total / float(len(nids))
+            for nid in nids:
+                for dof in (1, 2, 3):
+                    comp = d[dof - 1] * per
+                    if abs(comp) > 1e-12:
+                        lines.append("%d,%d,%.10g" % (nid, dof, comp))
+        lines += ["*NODE FILE", "U", "*EL FILE", "S", "*END STEP", ""]
+        job = os.path.join(workdir, "deck")
+        with open(job + ".inp", "w") as f:
+            f.write("\n".join(lines))
+        ccx = shutil.which("ccx")
+        if not ccx:
+            raise RuntimeError("ccx binary not found on PATH")
+        env = dict(os.environ, OMP_NUM_THREADS="1")
+        proc = subprocess.run([ccx, "-i", job], capture_output=True, text=True,
+                              timeout=1200, cwd=workdir, env=env)
+        frd = job + ".frd"
+        if not os.path.exists(frd):
+            raise RuntimeError("ccx failed: %s" % (proc.stdout + proc.stderr)[-800:])
+        disp, vm = _parse_frd(frd)
+        return list(vm.values()), list(disp.values())
+
     def solve(a):
         """Run CalculiX static analysis; return max von-Mises + displacement + safety.
 
         args: allowable_mpa(optional, default=material yield)
         """
+        if state.fem.get("deck"):
+            vm, disp = _deck_static_solve()
+            if not vm and not disp:
+                raise ValueError(
+                    "CalculiX produced no stress/displacement field — the "
+                    "static solve did not converge; refine the mesh or drop "
+                    "to 1st-order elements")
+            max_vm = max(vm) if vm else 0.0
+            max_disp = max(disp) if disp else 0.0
+            allow = _fnum(a, "allowable_mpa",
+                          state.fem.get("yield") or 250.0, "'allowable_mpa'") \
+                if a.get("allowable_mpa") is not None \
+                else (state.fem.get("yield") or 250.0)
+            sf = (allow / max_vm) if max_vm > 1e-9 else float("inf")
+            return {"max_von_mises_mpa": _round(max_vm),
+                    "max_disp_mm": _round(max_disp, 6),
+                    "allowable_mpa": _round(allow),
+                    "safety_factor": _round(sf, 3),
+                    "passed": bool(max_vm <= allow), "own_deck": True,
+                    "result_nodes": len(vm)}
         solver = doc.getObject(state.fem["solver"])
         solver.AnalysisType = "static"
         result = _run_ccx()[0]
