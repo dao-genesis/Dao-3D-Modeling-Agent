@@ -83,6 +83,27 @@ def _axis_vec(d):
     return V(base.x * sign, base.y * sign, base.z * sign)
 
 
+def _sketch_dof(sk):
+    """Sketch degrees of freedom across FreeCAD versions: the ``DoF`` property
+    only exists on FreeCAD >= 0.20; before that ``solve()`` returns the DoF
+    count (or -1 on solver failure), with FullyConstrained deciding 0."""
+    if hasattr(sk, "DoF"):
+        return int(sk.DoF)
+    if bool(sk.FullyConstrained):
+        return 0
+    solved = sk.solve()
+    return int(solved) if solved >= 0 else -1
+
+
+def _attach(sketch, plane_obj):
+    """Attach a sketch to a datum plane across FreeCAD versions: the property
+    is ``AttachmentSupport`` on FreeCAD >= 1.0 and ``Support`` before."""
+    if hasattr(sketch, "AttachmentSupport"):
+        sketch.AttachmentSupport = [(plane_obj, "")]
+    else:
+        sketch.Support = [(plane_obj, "")]
+
+
 def _origin_plane(body, plane):
     """Return the body's origin datum plane object for 'XY'/'XZ'/'YZ'."""
     want = {"XY": "XY_Plane", "XZ": "XZ_Plane", "YZ": "YZ_Plane"}[plane.upper()]
@@ -282,7 +303,7 @@ def register(state):
         """
         _check_profile(profile)
         sk = body.newObject("Sketcher::SketchObject", sketch_name)
-        sk.AttachmentSupport = [(_origin_plane(body, plane), "")]
+        _attach(sk, _origin_plane(body, plane))
         sk.MapMode = "FlatFace"
         if offset:
             sk.AttachmentOffset = App.Placement(V(0, 0, float(offset)), ROT())
@@ -515,7 +536,7 @@ def register(state):
         sk = _profile_sketch(body, a.get("plane", "XY"), _coerce_profile(a), feat,
                              a.get("name", feat + "_sk"), bodyname=a["body"],
                              offset=float(a.get("offset", 0)))
-        return {"sketch": sk.Name, "dof": sk.DoF, "fully_constrained": bool(sk.FullyConstrained)}
+        return {"sketch": sk.Name, "dof": _sketch_dof(sk), "fully_constrained": bool(sk.FullyConstrained)}
 
     # ---- additive / subtractive features --------------------------------- #
     def _feature(a, kind):
@@ -558,7 +579,7 @@ def register(state):
         doc.recompute()
         if f.Shape.isNull() or not f.Shape.isValid():
             raise RuntimeError("%s produced invalid shape" % kind)
-        return {"feature": feat, **_metrics(body.Tip.Shape), "dof": sk.DoF}
+        return {"feature": feat, **_metrics(body.Tip.Shape), "dof": _sketch_dof(sk)}
 
     def op_pad(a):
         return _feature(a, "Pad")
@@ -751,7 +772,7 @@ def register(state):
         prof.Visibility = False
         # path sketch: a polyline in the given plane
         psk = body.newObject("Sketcher::SketchObject", feat + "_path")
-        psk.AttachmentSupport = [(_origin_plane(body, pathspec.get("plane", "XZ")), "")]
+        _attach(psk, _origin_plane(body, pathspec.get("plane", "XZ")))
         psk.MapMode = "FlatFace"
         doc.recompute()
         ppts = pathspec.get("points")
@@ -1045,10 +1066,10 @@ def register(state):
             if o.TypeId == "Sketcher::SketchObject":
                 if scope is not None and o.getParentGeoFeatureGroup() is not scope:
                     continue
-                dof = int(o.DoF)
+                dof = _sketch_dof(o)
                 total_dof += dof
-                conflict = list(o.ConflictingConstraints)
-                redun = list(o.RedundantConstraints)
+                conflict = list(getattr(o, "ConflictingConstraints", []))
+                redun = list(getattr(o, "RedundantConstraints", []))
                 malformed = list(getattr(o, "MalformedConstraints", []))
                 healthy = (dof == 0 and not conflict and not redun and not malformed)
                 all_ok = all_ok and healthy
