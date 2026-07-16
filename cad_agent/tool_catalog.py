@@ -40,6 +40,8 @@ CATEGORIES: Dict[str, Dict[str, str]] = {
             "desc": "活动文档的实时视口：截图/场景/选择/报错/视角 — 在 GUI 内才有。"},
     "doc": {"title": "文档 Document",
             "desc": "保存/信息/属性编辑/文档间差异 — 把 .FCStd 当可编辑对象。"},
+    "code": {"title": "代码化 CAD Code",
+             "desc": "CadQuery/build123d 语义层：AI 生成通用 Python CAD 代码跑在 OCCT 上，产物落入文档。"},
     "verify": {"title": "核审 Verify",
                "desc": "八层核审门：拓扑/几何/工程/格式/参数/意图/感知 一次审到位，交付前必过。"},
     "project": {"title": "工程状态 Project",
@@ -245,6 +247,10 @@ _CURATED: Dict[str, Dict[str, Any]] = {
                                           "limit": _INT}, ["query"])},
     "resource.platforms": {"desc": "列出可检索的资源平台。", "params": _schema({})},
     "resource.download": {"desc": "下载某检索结果的模型文件。", "params": _schema({"url": _STR, "dest": _STR})},
+    # ── code.* 代码化 CAD ─────────────────────────────────────────
+    "code.run": {"desc": "执行 CadQuery/build123d 脚本(变量 cq/b3d 预置)，把最终形体赋给 result，落入文档并返回体积/面积/包围盒。可选 export 直接出 STEP/STL。",
+                 "params": _schema({"code": _STR, "name": _STR, "export": _STR}, ["code"])},
+    "code.env": {"desc": "探针代码化 CAD 引擎(cadquery/build123d)可用性与版本。", "params": _schema({})},
     # ── verify.* 核审 ───────────────────────────────────────────────
     "verify.audit": {"desc": "八层核审一个对象(拓扑/几何/工程/格式/参数/意图/感知)，给出 grade+score+问题清单。",
                      "params": _schema({"object": _STR,
