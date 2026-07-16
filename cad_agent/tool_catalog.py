@@ -40,6 +40,8 @@ CATEGORIES: Dict[str, Dict[str, str]] = {
             "desc": "活动文档的实时视口：截图/场景/选择/报错/视角 — 在 GUI 内才有。"},
     "doc": {"title": "文档 Document",
             "desc": "保存/信息/属性编辑/文档间差异 — 把 .FCStd 当可编辑对象。"},
+    "verify": {"title": "核审 Verify",
+               "desc": "八层核审门：拓扑/几何/工程/格式/参数/意图/感知 一次审到位，交付前必过。"},
     "project": {"title": "工程状态 Project",
                 "desc": "工程级快照/差异/健康自检/简报 — 闭环验证的骨架。"},
     "resource": {"title": "天下资源 Resource",
@@ -243,6 +245,13 @@ _CURATED: Dict[str, Dict[str, Any]] = {
                                           "limit": _INT}, ["query"])},
     "resource.platforms": {"desc": "列出可检索的资源平台。", "params": _schema({})},
     "resource.download": {"desc": "下载某检索结果的模型文件。", "params": _schema({"url": _STR, "dest": _STR})},
+    # ── verify.* 核审 ───────────────────────────────────────────────
+    "verify.audit": {"desc": "八层核审一个对象(拓扑/几何/工程/格式/参数/意图/感知)，给出 grade+score+问题清单。",
+                     "params": _schema({"object": _STR,
+                                       "vol_range": {"type": "array", "items": _NUM},
+                                       "specs": {"type": "object"},
+                                       "intent": {"type": "object"},
+                                       "process": _STR}, ["object"])},
 }
 
 
