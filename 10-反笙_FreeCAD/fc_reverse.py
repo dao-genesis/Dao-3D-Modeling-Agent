@@ -292,6 +292,42 @@ def _parse_sketch_node(obj_el: ET.Element) -> Dict[str, Any]:
                          "radius": float(el.get("Radius", 0)),
                          "start_angle": float(el.get("StartAngle", 0)),
                          "end_angle": float(el.get("EndAngle", 0))}
+            elif gtype == "Part::GeomEllipse":
+                el = geo.find("Ellipse")
+                if el is not None:
+                    g = {"type": "ellipse",
+                         "center": [float(el.get("CenterX", 0)), float(el.get("CenterY", 0))],
+                         "major_radius": float(el.get("MajorRadius", 1)),
+                         "minor_radius": float(el.get("MinorRadius", 1)),
+                         "angle_xu": float(el.get("AngleXU", 0)),
+                         "normal_z": float(el.get("NormalZ", 1))}
+            elif gtype == "Part::GeomArcOfEllipse":
+                el = geo.find("ArcOfEllipse")
+                if el is not None:
+                    g = {"type": "arc_of_ellipse",
+                         "center": [float(el.get("CenterX", 0)), float(el.get("CenterY", 0))],
+                         "major_radius": float(el.get("MajorRadius", 1)),
+                         "minor_radius": float(el.get("MinorRadius", 1)),
+                         "angle_xu": float(el.get("AngleXU", 0)),
+                         "normal_z": float(el.get("NormalZ", 1)),
+                         "start_angle": float(el.get("StartAngle", 0)),
+                         "end_angle": float(el.get("EndAngle", 0))}
+            elif gtype == "Part::GeomBSplineCurve":
+                el = geo.find("BSplineCurve")
+                if el is not None:
+                    poles, weights = [], []
+                    for p in el.findall("Pole"):
+                        poles.append([float(p.get("X", 0)), float(p.get("Y", 0))])
+                        weights.append(float(p.get("Weight", 1)))
+                    knots, mults = [], []
+                    for k in el.findall("Knot"):
+                        knots.append(float(k.get("Value", 0)))
+                        mults.append(int(k.get("Mult", 1)))
+                    g = {"type": "bspline",
+                         "poles": poles, "weights": weights,
+                         "knots": knots, "mults": mults,
+                         "degree": int(el.get("Degree", 3)),
+                         "periodic": el.get("IsPeriodic", "0") in ("1", "true")}
             elif gtype == "Part::GeomPoint":
                 el = geo.find("GeomPoint")
                 if el is None:
