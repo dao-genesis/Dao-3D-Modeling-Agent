@@ -179,6 +179,21 @@ def register(state):
         state.components[a["name"]]["fixed"] = True
         return {"component": a["name"], "fixed": True}
 
+    _ALL_DOF = ("tx", "ty", "tz", "rx", "ry", "rz")
+
+    def _record_mate(kind, comp, other, constrains, axis=None):
+        state.mates.append({"type": kind, "component": comp, "other": other,
+                            "constrains": sorted(constrains),
+                            "axis": axis})
+
+    def _axis_labels(caxis):
+        """DOF labels a coaxial mate removes: the two translations and two
+        rotations perpendicular to the mate axis (dominant world component)."""
+        comps = [abs(caxis.x), abs(caxis.y), abs(caxis.z)]
+        along = ("x", "y", "z")[comps.index(max(comps))]
+        perp = [ax for ax in ("x", "y", "z") if ax != along]
+        return {"t" + perp[0], "t" + perp[1], "r" + perp[0], "r" + perp[1]}, along
+
     def op_align(a):
         """Place component ``b`` offset from ``a`` along an axis (axis mate)."""
         sa = _global_shape(a["a"]).BoundBox
@@ -192,6 +207,7 @@ def register(state):
         delta = deltas[axis]
         link_b.Placement = App.Placement(ca + delta, link_b.Placement.Rotation)
         doc.recompute()
+        _record_mate("align", a["b"], a["a"], {"tx", "ty", "tz"}, axis)
         return {"component": a["b"], "placement": list(link_b.Placement.Base)}
 
     def _cyl_of(shape, pick, axis=None):
@@ -299,6 +315,10 @@ def register(state):
             p.Base = p.Base + u.multiply(offset)
             link.Placement = p
             doc.recompute()
+        constrained, along = _axis_labels(caxis)
+        if seat is not None:
+            constrained.add("t" + along)
+        _record_mate("coaxial", a["pin"], a["hole"], constrained, along)
         return {"component": a["pin"],
                 "axis": [_round(x) for x in caxis],
                 "placement": [_round(x) for x in link.Placement.Base]}
@@ -327,6 +347,7 @@ def register(state):
         p.Base = p.Base + V(dx, dy, dz)
         top_link.Placement = p
         doc.recompute()
+        _record_mate("stack", top, base, {"tx", "ty", "tz"}, "z")
         return {"component": top, "placement": list(top_link.Placement.Base)}
 
     # ---- analysis -------------------------------------------------------- #
@@ -463,6 +484,28 @@ def register(state):
                           "fixed": rec["fixed"], "pos": [_round(x) for x in link.Placement.Base]})
         return {"assembly": state.assembly, "components": comps}
 
+    def op_dof(a):
+        """Per-component remaining degrees of freedom from the recorded mate
+        graph (nominal rigid-body accounting: fixed=0, coaxial removes the
+        perpendicular translations/rotations, align/stack pin the position)."""
+        comps = {}
+        for name, rec in state.components.items():
+            mates = [m for m in state.mates if m["component"] == name]
+            if rec["fixed"]:
+                free = []
+            else:
+                constrained = set()
+                for m in mates:
+                    constrained.update(m["constrains"])
+                free = [d for d in _ALL_DOF if d not in constrained]
+            comps[name] = {"fixed": rec["fixed"], "dof": len(free),
+                           "free": free,
+                           "mates": [{"type": m["type"], "other": m["other"],
+                                      "axis": m["axis"]} for m in mates]}
+        total = sum(c["dof"] for c in comps.values())
+        return {"components": comps, "total_dof": total,
+                "fully_constrained": total == 0, "mate_count": len(state.mates)}
+
     def op_solve(a):
         asm = doc.getObject(state.assembly) if state.assembly else None
         if asm is None:
@@ -501,4 +544,5 @@ def register(state):
         "asm.coaxial": op_coaxial,
         "asm.interference": op_interference, "asm.bom": op_bom, "asm.measure": op_measure,
         "asm.tree": op_tree, "asm.solve": op_solve, "asm.export": op_export,
+        "asm.dof": op_dof,
     }
