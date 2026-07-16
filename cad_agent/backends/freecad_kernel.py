@@ -332,6 +332,11 @@ def _build_handlers(state):
         handlers.update(freecad_project.register(state))
     except Exception as exc:  # whole-project awareness is optional
         sys.stderr.write("project load failed: %r\n" % (exc,))
+    try:
+        import freecad_verify
+        handlers.update(freecad_verify.register(state))
+    except Exception as exc:  # 八层核审 needs OCP alongside FreeCAD
+        sys.stderr.write("verify load failed: %r\n" % (exc,))
     return handlers
 
 

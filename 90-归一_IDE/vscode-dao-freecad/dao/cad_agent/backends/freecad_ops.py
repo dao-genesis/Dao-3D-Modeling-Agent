@@ -823,6 +823,16 @@ def register(state):
 
     # ---- booleans --------------------------------------------------------- #
     def _boolean(kind, a):
+        # Accept the catalog-contract spellings alongside the bare a/b form:
+        # cut{base,tool} and union/common{objects:[x,y]}.
+        if "a" not in a or "b" not in a:
+            a = dict(a)
+            if "base" in a and "tool" in a:
+                a.setdefault("a", a["base"])
+                a.setdefault("b", a["tool"])
+            elif isinstance(a.get("objects"), (list, tuple)) and len(a["objects"]) == 2:
+                a.setdefault("a", a["objects"][0])
+                a.setdefault("b", a["objects"][1])
         if "a" not in a or "b" not in a:
             raise ValueError(
                 "%s needs two operands 'a' and 'b' (solid names)" % kind)
@@ -850,7 +860,7 @@ def register(state):
             }[kind]
             raise ValueError(
                 "%s produced an empty solid: %s" % (kind, why))
-        out = a.get("out", a["a"])
+        out = a.get("out") or a.get("name") or a["a"]
         _put(out, s)
         # absorb the operands like FreeCAD's own Part booleans do: hide any
         # consumed input that is not itself the output, so the live workspace
