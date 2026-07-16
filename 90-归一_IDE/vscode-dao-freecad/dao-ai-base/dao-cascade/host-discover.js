@@ -11,18 +11,24 @@ const os = require("os");
 const path = require("path");
 const { execSync } = require("child_process");
 
-let hostState = null;
-try { ({ hostState } = require("../windsurf-shim")); } catch (_) {}
+// 宿主态中枢(零 IDE 依赖): 发现即灌入单例并落盘, 供进程内面板与跨进程 headless 核共享。
+const { hostState, hostFire } = require("./host-state");
 
 const SVC = "/exa.language_server_pb.LanguageServerService/";
 
-function apiKey() {
+// 登录态 apiKey 候选集: 与 ls-bridge 同源(credentials.toml 真源 + 各 IDE state.vscdb 登录态)。
+// 返回有序去重数组 —— 逐个探测选中官方 LS 实际接受者(切号/多登录态不误判)。
+function apiKeyCandidates() {
+  try {
+    const c = require("./ls-bridge").apiKeyCandidates();
+    if (c && c.length) return c;
+  } catch (_) {}
   try {
     const t = fs.readFileSync(path.join(os.homedir(), ".local", "share", "devin", "credentials.toml"), "utf8");
     const m = t.match(/windsurf_api_key\s*=\s*"([^"]+)"/);
-    if (m) return m[1];
+    if (m) return [m[1]];
   } catch (_) {}
-  return "";
+  return [];
 }
 
 // language_server 进程 PID(Linux: /proc 扫 cmdline; 其余平台: pgrep)。
@@ -111,20 +117,22 @@ function probe(port, csrf, key) {
 }
 
 // 发现并灌入 hostState.lsPort/csrfToken。命中返回 {lsPort,csrfToken}; 未就绪返回 null。
+// 逐个候选 key 探测: 命中即把该 key 回灌 ls-bridge 缓存(后续 RPC 用官方 LS 实际接受者)。
 async function discover() {
-  const key = apiKey();
-  if (!key) return null;
+  const keys = apiKeyCandidates();
+  if (!keys.length) return null;
   for (const pid of lsPids()) {
     const csrf = csrfOf(pid);
     if (!csrf) continue;
     for (const port of listenPortsOf(pid)) {
-      if (await probe(port, csrf, key)) {
-        if (hostState) {
+      for (const key of keys) {
+        if (await probe(port, csrf, key)) {
           const h = hostState();
           h.lsPort = port; h.csrfToken = csrf;
-          for (const fn of h.listeners || []) { try { fn(h); } catch (_) {} }
+          try { require("./ls-bridge").setApiKey(key); } catch (_) {}
+          hostFire(); // 广播监听者 + 落盘, 供跨进程 headless 核复用
+          return { lsPort: port, csrfToken: csrf };
         }
-        return { lsPort: port, csrfToken: csrf };
       }
     }
   }
