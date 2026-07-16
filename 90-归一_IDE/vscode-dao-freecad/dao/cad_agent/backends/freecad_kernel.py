@@ -45,6 +45,8 @@ class KernelState:
         self.assembly = None
         self.components = {}
         self.joints = {}
+        # Recorded mates (asm.align/stack/coaxial) feeding the asm.dof report.
+        self.mates = []
         self._undo = []
 
     def recompute(self):
