@@ -116,6 +116,17 @@ FC_TYPE_TO_OP: Dict[str, Tuple[str, Dict[str, str], bool]] = {
 # 通用几何容器 (仅存BRep引用, 需要 import_brep 回放)
 FC_FEATURE_TYPES = {"Part::Feature", "Part::FeaturePython"}
 
+# 草图 (几何+约束 → sketch op)
+FC_SKETCH_TYPES = {"Sketcher::SketchObject"}
+
+# Sketcher 约束枚举 (Sketcher/App/Constraint.h · XML Type 属性为此序号)
+SKETCH_CONSTRAINT_TYPES = [
+    "None", "Coincident", "Horizontal", "Vertical", "Parallel", "Tangent",
+    "Distance", "DistanceX", "DistanceY", "Angle", "Perpendicular", "Radius",
+    "Equal", "PointOnObject", "Symmetric", "InternalAlignment", "SnellsLaw",
+    "Block", "Diameter", "Weight",
+]
+
 # 资源扫描根目录 (按优先级) — 定义天下之所在
 _FC_1_0 = Path(r"D:\安装的软件\FreeCAD 1.0")
 _FC_021 = Path(r"D:\安装的软件\FreeCAD 0.21")
@@ -167,6 +178,9 @@ _RE_STRING_PROP = re.compile(
 _RE_LINK_PROP   = re.compile(
     r'<Property\s+name="([^"]+)"[^>]*>\s*<Link\s+value="([^"]+)"'
 )
+_RE_LINKSUB_PROP = re.compile(
+    r'<Property\s+name="([^"]+)"[^>]*>\s*<LinkSub\s+value="([^"]+)"'
+)
 _RE_PLACEMENT   = re.compile(
     r'<Property\s+name="Placement"[^>]*>\s*<PropertyPlacement\s+'
     r'Px="([^"]+)"\s+Py="([^"]+)"\s+Pz="([^"]+)"'
@@ -201,6 +215,9 @@ def _parse_object_properties(body: str) -> Dict[str, Any]:
     for m in _RE_LINK_PROP.finditer(body):
         # 保留原始 Link 结构，带 _LINK 前缀以便替换成 op_id
         props[m.group(1)] = {"_link": m.group(2)}
+    for m in _RE_LINKSUB_PROP.finditer(body):
+        # LinkSub (如 PartDesign::Pad.Profile → Sketch) 同样解为引用
+        props[m.group(1)] = {"_link": m.group(2)}
     # Placement
     pm = _RE_PLACEMENT.search(body)
     if pm:
@@ -216,6 +233,112 @@ def _parse_object_properties(body: str) -> Dict[str, Any]:
     if sm:
         props["_brp_ref"] = sm.group(1)
     return props
+
+
+def _sketch_construction_flag(geo_el: ET.Element) -> bool:
+    """判断一段草图几何是否为构造几何 (兼容新旧两种序化):
+      旧 (≤0.18): <Construction value="1"/>
+      新 (0.19+): GeoExtension[Sketcher::SketchGeometryExtension]@geometryModeFlags bit1
+    """
+    c = geo_el.find("Construction")
+    if c is not None:
+        return c.get("value", "0").lower() in ("1", "true")
+    for ext in geo_el.iter("GeoExtension"):
+        if ext.get("type") == "Sketcher::SketchGeometryExtension":
+            flags = ext.get("geometryModeFlags", "")
+            try:
+                return bool(int(flags, 2) & 0b10)  # bit1 = Construction
+            except ValueError:
+                return False
+    return False
+
+
+def _parse_sketch_node(obj_el: ET.Element) -> Dict[str, Any]:
+    """从 ObjectData/Object (Sketcher::SketchObject) 提取几何+约束.
+
+    返回 {"geometry": [...], "constraints": [...], "unsupported": [...]}
+    几何坐标均为草图局部 2D (x, y).
+    """
+    geometry: List[Dict[str, Any]] = []
+    unsupported: List[str] = []
+
+    geo_prop = None
+    for prop in obj_el.iter("Property"):
+        if prop.get("name") == "Geometry":
+            geo_prop = prop
+            break
+    if geo_prop is not None:
+        for geo in geo_prop.iter("Geometry"):
+            gtype = (geo.get("type") or "").strip()
+            construction = _sketch_construction_flag(geo)
+            g: Optional[Dict[str, Any]] = None
+            if gtype == "Part::GeomLineSegment":
+                el = geo.find("LineSegment")
+                if el is not None:
+                    g = {"type": "line",
+                         "start": [float(el.get("StartX", 0)), float(el.get("StartY", 0))],
+                         "end":   [float(el.get("EndX", 0)),   float(el.get("EndY", 0))]}
+            elif gtype == "Part::GeomCircle":
+                el = geo.find("Circle")
+                if el is not None:
+                    g = {"type": "circle",
+                         "center": [float(el.get("CenterX", 0)), float(el.get("CenterY", 0))],
+                         "radius": float(el.get("Radius", 0))}
+            elif gtype == "Part::GeomArcOfCircle":
+                el = geo.find("ArcOfCircle")
+                if el is not None:
+                    g = {"type": "arc",
+                         "center": [float(el.get("CenterX", 0)), float(el.get("CenterY", 0))],
+                         "radius": float(el.get("Radius", 0)),
+                         "start_angle": float(el.get("StartAngle", 0)),
+                         "end_angle": float(el.get("EndAngle", 0))}
+            elif gtype == "Part::GeomPoint":
+                el = geo.find("GeomPoint")
+                if el is None:
+                    el = geo.find("Point")
+                if el is not None:
+                    g = {"type": "point",
+                         "point": [float(el.get("X", 0)), float(el.get("Y", 0))]}
+            else:
+                unsupported.append(gtype or "unknown")
+            if g is not None:
+                if construction:
+                    g["construction"] = True
+                geometry.append(g)
+
+    constraints: List[Dict[str, Any]] = []
+    for con in obj_el.iter("Constrain"):
+        try:
+            type_raw = con.get("Type", "0")
+            try:
+                tname = SKETCH_CONSTRAINT_TYPES[int(type_raw)]
+            except (ValueError, IndexError):
+                tname = type_raw  # 新版可能直接存名字
+            c: Dict[str, Any] = {"type": tname}
+            for ent, pos in (("First", "FirstPos"), ("Second", "SecondPos"),
+                             ("Third", "ThirdPos")):
+                v = int(float(con.get(ent, "-2000")))
+                if v == -2000:
+                    continue
+                c[ent.lower()] = v
+                pv = int(float(con.get(pos, "0")))
+                if pv:
+                    c[ent.lower() + "_pos"] = pv
+            val = float(con.get("Value", "0"))
+            if tname in ("Distance", "DistanceX", "DistanceY", "Angle",
+                         "Radius", "Diameter", "Weight", "SnellsLaw"):
+                c["value"] = val
+            name = con.get("Name", "")
+            if name:
+                c["name"] = name
+            if con.get("IsDriving", "1") in ("0", "false"):
+                c["driving"] = False
+            constraints.append(c)
+        except Exception:
+            continue
+
+    return {"geometry": geometry, "constraints": constraints,
+            "unsupported": unsupported}
 
 
 def _parse_fcstd_full(path: Path) -> Dict[str, Any]:
@@ -275,6 +398,7 @@ def _parse_fcstd_full(path: Path) -> Dict[str, Any]:
     info["dependencies"] = deps
 
     # Properties 值解析: 在每个 ObjectData/Object 的 XML 串上跑正则
+    name_to_type = {n: t for t, n in obj_order}
     obj_data: Dict[str, Dict[str, Any]] = {}
     for obj in root.findall("./ObjectData/Object"):
         name = obj.get("name", "")
@@ -283,6 +407,9 @@ def _parse_fcstd_full(path: Path) -> Dict[str, Any]:
         # 序列化此节点为字符串再跑属性正则
         body = ET.tostring(obj, encoding="unicode")
         obj_data[name] = _parse_object_properties(body)
+        # 草图: 额外结构化提取几何+约束
+        if name_to_type.get(name) in FC_SKETCH_TYPES:
+            obj_data[name]["_sketch"] = _parse_sketch_node(obj)
 
     for t, n in obj_order:
         info["objects"].append({
@@ -388,6 +515,28 @@ def _fcstd_objects_to_ops(
                 op["pos"] = pos
             ops.append(op)
             leaf_id = oid
+
+        elif t in FC_SKETCH_TYPES:
+            sk = props.get("_sketch") or {}
+            geometry = sk.get("geometry", [])
+            if not geometry:
+                warnings.append(f"{name}: sketch has no supported geometry (skipped)")
+            else:
+                op = {"op": "sketch", "id": oid, "geometry": geometry}
+                if sk.get("constraints"):
+                    op["constraints"] = sk["constraints"]
+                pm = props.get("Placement")
+                if isinstance(pm, dict):
+                    pos = pm.get("pos") or [0, 0, 0]
+                    if sum(abs(x) for x in pos) >= 1e-9:
+                        op["pos"] = pos
+                    axis, angle = pm.get("axis"), pm.get("angle", 0)
+                    if axis and abs(angle) >= 1e-9:
+                        op["axis"], op["angle"] = axis, angle
+                for ug in sk.get("unsupported", []):
+                    warnings.append(f"{name}: sketch geometry '{ug}' unsupported (skipped)")
+                ops.append(op)
+                leaf_id = oid
 
         elif t in FC_FEATURE_TYPES:
             # Part::Feature - 仅含 BRep 引用, 需提取并用 import_brep 重放
