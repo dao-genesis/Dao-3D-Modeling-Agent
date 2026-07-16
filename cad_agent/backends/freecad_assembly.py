@@ -487,24 +487,57 @@ def register(state):
     def op_dof(a):
         """Per-component remaining degrees of freedom from the recorded mate
         graph (nominal rigid-body accounting: fixed=0, coaxial removes the
-        perpendicular translations/rotations, align/stack pin the position)."""
+        perpendicular translations/rotations, align/stack pin the position).
+
+        Deepened diagnostics:
+        - grounding: a mate only pins a part in the WORLD frame if its mate
+          chain reaches a fixed component; parts on a floating island are
+          flagged ``grounded: false`` (their 'free' list is only relative).
+        - redundancy: a DOF label removed by more than one mate on the same
+          component is reported in ``redundant`` (over-constraint candidate).
+        - optional ``interference: true`` runs the clash check and marks each
+          clashing pair as mated or unmated (unmated contact = design smell).
+        """
+        # union-find style reachability from fixed components over mate edges
+        grounded = {n for n, r in state.components.items() if r["fixed"]}
+        edges = [(m["component"], m["other"]) for m in state.mates]
+        changed = True
+        while changed:
+            changed = False
+            for x, y in edges:
+                if (x in grounded) != (y in grounded):
+                    grounded.update((x, y))
+                    changed = True
         comps = {}
         for name, rec in state.components.items():
             mates = [m for m in state.mates if m["component"] == name]
+            seen, dup = set(), set()
+            for m in mates:
+                dup.update(seen & set(m["constrains"]))
+                seen.update(m["constrains"])
             if rec["fixed"]:
                 free = []
             else:
-                constrained = set()
-                for m in mates:
-                    constrained.update(m["constrains"])
-                free = [d for d in _ALL_DOF if d not in constrained]
+                free = [d for d in _ALL_DOF if d not in seen]
             comps[name] = {"fixed": rec["fixed"], "dof": len(free),
                            "free": free,
+                           "grounded": name in grounded,
+                           "redundant": sorted(dup),
                            "mates": [{"type": m["type"], "other": m["other"],
                                       "axis": m["axis"]} for m in mates]}
         total = sum(c["dof"] for c in comps.values())
-        return {"components": comps, "total_dof": total,
-                "fully_constrained": total == 0, "mate_count": len(state.mates)}
+        floating = sorted(n for n, c in comps.items() if not c["grounded"])
+        out = {"components": comps, "total_dof": total,
+               "fully_constrained": total == 0 and not floating,
+               "floating": floating, "mate_count": len(state.mates)}
+        if a.get("interference"):
+            mated_pairs = {frozenset((m["component"], m["other"]))
+                           for m in state.mates}
+            clash = op_interference({})
+            for c in clash.get("clashes", []):
+                c["mated"] = frozenset((c["a"], c["b"])) in mated_pairs
+            out["interference"] = clash
+        return out
 
     def op_solve(a):
         asm = doc.getObject(state.assembly) if state.assembly else None

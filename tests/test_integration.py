@@ -97,6 +97,40 @@ class TestAssembly:
         pairs = {tuple(sorted((c["a"], c["b"]))): c["overlap_volume"] for c in clashes}
         assert pairs.get(("disc", "pin"), 0.0) > 100.0, pairs
 
+    def test_dof_grounding_redundancy_and_interference_link(self, freecad_session):
+        s = freecad_session
+        s.act("solid.box", {"name": "GBase", "length": 40, "width": 40, "height": 10})
+        s.act("solid.box", {"name": "GTop", "length": 10, "width": 10, "height": 10})
+        s.act("solid.box", {"name": "GIsle", "length": 8, "width": 8, "height": 8})
+        s.act("solid.box", {"name": "GIsle2", "length": 8, "width": 8, "height": 8})
+        s.act("asm.create", {"name": "G"})
+        s.act("asm.add", {"name": "gbase", "body": "GBase", "fixed": True})
+        s.act("asm.add", {"name": "gtop", "body": "GTop"})
+        s.act("asm.add", {"name": "gisle", "body": "GIsle"})
+        s.act("asm.add", {"name": "gisle2", "body": "GIsle2"})
+        s.act("asm.stack", {"base": "gbase", "top": "gtop"})
+        # duplicate mate -> every translation label removed twice = redundant
+        s.act("asm.stack", {"base": "gbase", "top": "gtop"})
+        # island: two parts mated to each other but never to anything fixed
+        s.act("asm.place", {"name": "gisle", "pos": [200, 200, 0]})
+        s.act("asm.stack", {"base": "gisle", "top": "gisle2"})
+        r = s.act("asm.dof", {"interference": True})
+        assert r.ok, r
+        d = r.data
+        comps = d["components"]
+        assert comps["gbase"]["fixed"] and comps["gbase"]["grounded"]
+        assert comps["gtop"]["grounded"]
+        assert comps["gtop"]["redundant"] == ["tx", "ty", "tz"]
+        # session state may carry parts from sibling tests; only assert ours
+        assert {"gisle", "gisle2"} <= set(d["floating"])
+        assert not comps["gisle2"]["grounded"]
+        assert d["fully_constrained"] is False
+        # interference linkage: gtop sits ON gbase (mated, touching not clashing)
+        inter = d["interference"]
+        assert "clash_count" in inter
+        for c in inter["clashes"]:
+            assert "mated" in c
+
 
 @requires_freecad
 class TestAdvanced:
