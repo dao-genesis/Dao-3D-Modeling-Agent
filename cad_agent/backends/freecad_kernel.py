@@ -337,6 +337,11 @@ def _build_handlers(state):
         handlers.update(freecad_verify.register(state))
     except Exception as exc:  # 八层核审 needs OCP alongside FreeCAD
         sys.stderr.write("verify load failed: %r\n" % (exc,))
+    try:
+        import freecad_code
+        handlers.update(freecad_code.register(state))
+    except Exception as exc:  # 代码化 CAD 语义层 needs cadquery/build123d
+        sys.stderr.write("code load failed: %r\n" % (exc,))
     return handlers
 
 
