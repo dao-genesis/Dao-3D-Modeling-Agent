@@ -238,6 +238,33 @@ def run_ops(ops):
                     if t == "point":
                         px, py = g["point"]
                         return Part.Point(Base.Vector(px, py, 0))
+                    if t in ("ellipse", "arc_of_ellipse"):
+                        cx, cy = g["center"]
+                        M = float(g["major_radius"])
+                        m = float(g["minor_radius"])
+                        theta = float(g.get("angle_xu", 0))
+                        nz = float(g.get("normal_z", 1))
+                        if nz < 0:
+                            theta = -theta + _math.pi
+                        c = Base.Vector(cx, cy, 0)
+                        s1 = c + Base.Vector(_math.cos(theta), _math.sin(theta), 0) * M
+                        s2 = c + Base.Vector(-_math.sin(theta), _math.cos(theta), 0) * m
+                        ell = Part.Ellipse(s1, s2, c)
+                        if t == "ellipse":
+                            return ell
+                        a0 = float(g.get("start_angle", 0))
+                        a1 = float(g.get("end_angle", _math.pi))
+                        if nz < 0:
+                            a0, a1 = -a1, -a0
+                        return Part.ArcOfEllipse(ell, a0, a1)
+                    if t == "bspline":
+                        poles = [Base.Vector(p[0], p[1], 0) for p in g["poles"]]
+                        bs = Part.BSplineCurve()
+                        bs.buildFromPolesMultsKnots(
+                            poles, g["mults"], g["knots"],
+                            bool(g.get("periodic")), int(g.get("degree", 3)),
+                            g.get("weights") or [1.0] * len(poles))
+                        return bs
                     raise ValueError(f"sketch geometry type '{t}' unsupported")
 
                 sh = None
