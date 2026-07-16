@@ -188,6 +188,8 @@ _CURATED: Dict[str, Dict[str, Any]] = {
     "asm.coaxial": {"desc": "添加同轴约束(两圆柱/孔共轴)。",
                     "params": _schema({"a": _STR, "b": _STR})},
     "asm.solve": {"desc": "求解装配约束，把零件移到满足约束的位姿。", "params": _schema({})},
+    "asm.dof": {"desc": "自由度报告：按已记录配合(align/stack/coaxial/fix)逐零件给出剩余自由度与配合图。",
+                "params": _schema({})},
     "asm.interference": {"desc": "全装配干涉检查，列出相交零件对与体积。", "params": _schema({})},
     "asm.bom": {"desc": "生成物料清单(BOM)：零件、数量、材料。", "params": _schema({})},
     "asm.tree": {"desc": "列出装配层级树。", "params": _schema({})},
