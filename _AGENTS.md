@@ -122,7 +122,8 @@ sys.path.insert(0, str(_DAO_ROOT)); import _paths as _dao_paths
 | Part::Extrusion/Revolution/Loft/Sweep | extrude/revolve/loft/pipe | 衍生 |
 | PartDesign::Pad/Pocket/Fillet | partdesign_pad/pocket/fillet | 特征 |
 | Part::Feature (BRep引用) | import_brep (自动提取) | 通用容器 |
-| Sketcher::SketchObject / Part::Part2DObjectPython | (未支持, 增强空间) |
+| Sketcher::SketchObject | sketch (几何 line/circle/arc/point + 约束全枚举 + 构造几何) | 反演+重放+改参全闭环, CI Gate 0b |
+| Part::Part2DObjectPython | (未支持, 增强空间) |
 
 ## 入口
 

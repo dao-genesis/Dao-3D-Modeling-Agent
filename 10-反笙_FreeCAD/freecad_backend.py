@@ -215,6 +215,99 @@ def run_ops(ops):
                 shapes[op_id] = wire
                 results["shapes"][op_id] = _shape_summary(wire)
 
+            elif op == "sketch":
+                # 草图重放: fc_reverse Sketcher::SketchObject 反演结果 → Face/Wire
+                # 首选真 Sketcher (保约束语义), 兜底纯 Part 边线组装.
+                import math as _math
+                geoms = op_spec.get("geometry", [])
+                cons  = op_spec.get("constraints", [])
+
+                def _geo_obj(g):
+                    t = g.get("type")
+                    if t == "line":
+                        (x1, y1), (x2, y2) = g["start"], g["end"]
+                        return Part.LineSegment(Base.Vector(x1, y1, 0), Base.Vector(x2, y2, 0))
+                    if t == "circle":
+                        cx, cy = g["center"]
+                        return Part.Circle(Base.Vector(cx, cy, 0), Base.Vector(0, 0, 1), float(g["radius"]))
+                    if t == "arc":
+                        cx, cy = g["center"]
+                        circ = Part.Circle(Base.Vector(cx, cy, 0), Base.Vector(0, 0, 1), float(g["radius"]))
+                        return Part.ArcOfCircle(circ, float(g.get("start_angle", 0)),
+                                                float(g.get("end_angle", _math.pi)))
+                    if t == "point":
+                        px, py = g["point"]
+                        return Part.Point(Base.Vector(px, py, 0))
+                    raise ValueError(f"sketch geometry type '{t}' unsupported")
+
+                sh = None
+                try:
+                    import Sketcher
+                    doc_sk = App.newDocument("_sk")
+                    try:
+                        sk = doc_sk.addObject("Sketcher::SketchObject", "Sketch")
+                        for g in geoms:
+                            sk.addGeometry(_geo_obj(g), bool(g.get("construction")))
+                        for c in cons:
+                            try:
+                                args = [c["type"], c["first"]]
+                                if "first_pos" in c: args.append(c["first_pos"])
+                                if "second" in c:
+                                    args.append(c["second"])
+                                    if "second_pos" in c: args.append(c["second_pos"])
+                                if "third" in c:
+                                    args.append(c["third"])
+                                    if "third_pos" in c: args.append(c["third_pos"])
+                                if "value" in c: args.append(float(c["value"]))
+                                sk.addConstraint(Sketcher.Constraint(*args))
+                            except Exception as _ce:
+                                results.setdefault("warnings", []).append(
+                                    f"sketch constraint {c.get('type')} skipped: {_ce}")
+                        doc_sk.recompute()
+                        sh = sk.Shape.copy()
+                    finally:
+                        try: App.closeDocument("_sk")
+                        except Exception: pass
+                except Exception as _ske:
+                    results.setdefault("warnings", []).append(f"Sketcher fallback to Part: {_ske}")
+                    sh = None
+
+                if sh is None or sh.isNull():
+                    # 纯 Part 兜底: 非构造几何 → edges → wires
+                    edges = [_geo_obj(g).toShape() for g in geoms
+                             if not g.get("construction") and g.get("type") != "point"]
+                    if not edges:
+                        raise ValueError("sketch has no drawable geometry")
+                    wires = []
+                    for w in Part.sortEdges(edges):
+                        wires.append(Part.Wire(w))
+                    sh = Part.Compound(wires) if len(wires) > 1 else wires[0]
+
+                # 闭合 wire → Face (多闭合环自动打洞: 最大环为外框)
+                try:
+                    closed = [Part.Wire(w) for w in
+                              (sh.Wires if sh.ShapeType in ("Compound", "Wire") else [sh])
+                              if w.isClosed()]
+                    if closed:
+                        closed.sort(key=lambda w: Part.Face(w).Area, reverse=True)
+                        face = Part.Face(closed[0])
+                        for hole in closed[1:]:
+                            face = face.cut(Part.Face(hole))
+                        sh = face
+                except Exception as _fe:
+                    results.setdefault("warnings", []).append(f"sketch face build skipped: {_fe}")
+
+                pos = op_spec.get("pos")
+                axis, angle = op_spec.get("axis"), float(op_spec.get("angle", 0) or 0)
+                if axis and angle:
+                    sh = sh.copy()
+                    sh.rotate(Base.Vector(0, 0, 0), _vec(axis), angle)
+                if pos:
+                    sh = sh.copy() if not (axis and angle) else sh
+                    sh.translate(_vec(pos))
+                shapes[op_id] = sh
+                results["shapes"][op_id] = _shape_summary(sh)
+
             elif op == "make_face":
                 wire_id = op_spec.get("wire")
                 if wire_id not in shapes:

@@ -23,6 +23,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-ci.txt
 
+      - name: "Gate 0 - dao_kernel full self-verify + dao_audit minimal closure (OCP)"
+        run: |
+          pip install cadquery-ocp trimesh
+          python "30-验证_Verify/_核审_ci.py"
+
+      - name: "Gate 0b - Sketcher reverse (FCStd sketch -> ops, pure python)"
+        run: python -m pytest tests/test_fc_reverse_sketch.py -v
+
       - name: "Gate 1 - universal 8-dimension verifier (self-demo + tests)"
         run: |
           python "80-实践_Practice/verifier.py"

@@ -528,7 +528,7 @@ function registerSubplugin(log) {
         endpoint: "http://127.0.0.1:" + port,
         invoke_url: "http://127.0.0.1:" + port + "/exec",
         shell_url: "http://127.0.0.1:" + (shell.shellPort() || shellPort()) + "/shell",
-        verbs: verbs,
+        verbs: verbs.map((v) => (typeof v === "string" ? { name: v } : v)),
         updated: new Date().toISOString(),
       };
       fs.writeFileSync(file, JSON.stringify(spec, null, 2));
@@ -603,10 +603,40 @@ function activate(context) {
   extCtx = context;
   // AI 交互基底(dao-ai-base · Devin Desktop 同源): Cascade 三模式面板 + windsurf 垫片,
   // 命名空间 daoFreecad.cascade*, 与其他领域插件同装互不相撞。
-  try {
-    const daoAiBase = require("./dao-ai-base");
-    daoAiBase.activateDaoAiBase(context, { ns: "daoFreecad", log: (m) => console.log("[dao-ai-base] " + m), domain: freecadDomain() });
-  } catch (e) { console.error("[dao-ai-base] 基底激活失败: " + (e && e.stack ? e.stack : e)); }
+  // 归一宿主内: 单一 Cascade 基底已统辖, 不再另起 daoFreecad.cascade 面板(免碎片化);
+  // FreeCAD 领域塑形经宿主模式枢纽(domain:freecad 画像现算)生效。独立安装才起自带基底。
+  const unifiedHost = globalThis.__DAO_UNIFIED_HOST__;
+  if (unifiedHost) {
+    // 归一宿主: 把 FreeCAD 领域画像适配成塑形器登记到宿主分派器,
+    // domain:freecad 模式激活时由单一 Cascade 基底自动塑形(每会话首条注入全量 SP)。
+    try {
+      const dom = freecadDomain();
+      let sp = "";
+      let injected = new Set();
+      const refresh = () => Promise.resolve(dom.systemPrompt(true))
+        .then((s) => { if (typeof s === "string" && s) sp = s; }).catch(() => {});
+      refresh();
+      unifiedHost.registerDomainShaper("freecad", {
+        wrap(text, ctx) {
+          const key = ((ctx && ctx.agent) || "?") + ":" + ((ctx && ctx.epoch) || 0);
+          if (injected.has(key)) return "[FreeCAD 模式] " + text;
+          injected.add(key); refresh();
+          const body = sp || FC_REMINDER.replace("<port>", String(cfg().get("port")));
+          return "<dao_freecad_mode>\n" + body + "\n</dao_freecad_mode>\n\n" + text;
+        },
+        status() {
+          return { mode: "freecad", label: "☯ FreeCAD",
+            hint: "FreeCAD 领域模式: 建模/装配/测量走 dao-freecad 工具面", spChars: sp.length };
+        },
+        toggle() { injected = new Set(); refresh(); },
+      });
+    } catch (e) { console.error("[dao-freecad] 领域塑形器登记失败: " + (e && e.stack ? e.stack : e)); }
+  } else {
+    try {
+      const daoAiBase = require("./dao-ai-base");
+      daoAiBase.activateDaoAiBase(context, { ns: "daoFreecad", log: (m) => console.log("[dao-ai-base] " + m), domain: freecadDomain() });
+    } catch (e) { console.error("[dao-ai-base] 基底激活失败: " + (e && e.stack ? e.stack : e)); }
+  }
   // 两者融合: FreeCAD 工具面 → AI 底层(MCP), 物无非彼与物无非是归于一。
   registerFreecadMcp((m) => console.log("[dao-freecad-mcp] " + m));
   // 四体系归宗之钩: 向 dao-vsix 第7板块登记 FreeCAD 子板块描述符。
@@ -614,17 +644,21 @@ function activate(context) {
   // 三插件合一之三: dao-proxy-pro(外接 API / 提示词隔离替换 / 本源观照面板) vendored 折入。
   // 在 Devin Desktop / Windsurf 宿主内全量生效(LS 锚定/ACP 代理/模型解锁);
   // 纯 VS Code 宿主中优雅降级(面板与外接 API 可用, MITM 锚定自然无为)。
-  try {
-    const daoProxyPro = require("./dao-proxy-pro/extension.js");
-    daoProxyPro.activate(context);
-    console.log("[dao-proxy-pro] ✓ 外接 API / 提示词隔离模块就位");
-  } catch (e) { console.error("[dao-proxy-pro] 激活失败(不影响 FreeCAD/Cascade 主链路): " + (e && e.stack ? e.stack : e)); }
+  // 归一宿主内: 提示词隔离替换引擎(dao-proxy-pro)由宿主单例统辖, 此处不再重复激活(免双引擎相争)。
+  if (!unifiedHost) {
+    try {
+      const daoProxyPro = require("./dao-proxy-pro/extension.js");
+      daoProxyPro.activate(context);
+      console.log("[dao-proxy-pro] ✓ 外接 API / 提示词隔离模块就位");
+    } catch (e) { console.error("[dao-proxy-pro] 激活失败(不影响 FreeCAD/Cascade 主链路): " + (e && e.stack ? e.stack : e)); }
+  }
   // 插件即本体：IDE 启动 → 内核自起（探到本机 FreeCAD 直接路由，缺失才按平台调度下载）
-  if (cfg().get("autoStart")) {
+  if (!unifiedHost && cfg().get("autoStart")) {
     ensureBridge(true).finally(startWatchdog);
   }
-  // 归一外壳随插件常驻(浏览器端同源可达)
-  ensureShell().catch((e) => console.error("[dao-shell] " + (e && e.message || e)));
+  if (!unifiedHost) {
+    ensureShell().catch((e) => console.error("[dao-shell] " + (e && e.message || e)));
+  }
   context.subscriptions.push(
     vscode.commands.registerCommand("dao-freecad.open", openWorkbench),
     vscode.commands.registerCommand("dao-freecad.openShell", openShell),
