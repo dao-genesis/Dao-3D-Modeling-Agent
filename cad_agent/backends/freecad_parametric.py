@@ -195,6 +195,14 @@ def _coerce_profile(a):
     p = a.get("profile")
     if p is not None:
         return _check_profile(p)
+    # catalog contract: sketch{geometry:[...]} — a list of profile dicts.
+    g = a.get("geometry")
+    if isinstance(g, list) and g:
+        if len(g) == 1:
+            return _check_profile(g[0])
+        raise ValueError(
+            "sketch 'geometry' supports one profile per sketch for now "
+            "(got %d); build additional sketches for the rest" % len(g))
     out = None
     for k in ("rect", "circle", "polygon"):
         if k in a:
@@ -1080,12 +1088,19 @@ def register(state):
                     "healthy": healthy})
         return {"sketches": sketches, "total_dof": total_dof, "all_healthy": all_ok}
 
+    def _tree_of(name):
+        body = _body(name)
+        feats = [{"name": o.Name, "type": o.TypeId.split("::")[-1]}
+                 for o in body.Group]
+        return {"body": name, "tip": body.Tip.Name if body.Tip else None,
+                "features": feats}
+
     def op_tree(a):
-        body = _body(a["body"])
-        feats = []
-        for o in body.Group:
-            feats.append({"name": o.Name, "type": o.TypeId.split("::")[-1]})
-        return {"body": a["body"], "tip": body.Tip.Name if body.Tip else None, "features": feats}
+        # catalog contract: no required args -> report every body's tree.
+        name = a.get("body") or a.get("name")
+        if name:
+            return _tree_of(name)
+        return {"bodies": [_tree_of(n) for n in sorted(state.bodies)]}
 
     def op_measure(a):
         body = _body(a["body"])

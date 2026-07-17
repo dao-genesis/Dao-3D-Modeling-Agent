@@ -101,3 +101,27 @@ def test_gui_state_mirrors_kernel_state_surface():
     for required in ("shapes", "bodies", "params", "assembly",
                      "components", "joints", "mates", "_undo"):
         assert required in attrs, "GuiState.__init__ missing self.%s" % required
+
+
+def test_gui_engine_registers_kernel_module_surface():
+    """The GUI bridge engine (dao_engine._build_handlers) must register the
+    same optional op modules as the headless kernel (fem/path/surface/arch/
+    bop/code included), or the /toolspec surface silently loses whole groups."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(root, "freecad", "DAO", "dao_engine.py"),
+               encoding="utf-8").read()
+    for mod in ("freecad_parametric", "freecad_assembly", "freecad_perceive",
+                "freecad_advanced", "freecad_measure", "freecad_percept",
+                "freecad_project", "freecad_resource", "freecad_fem",
+                "freecad_path", "freecad_surface", "freecad_arch",
+                "freecad_bop", "freecad_code"):
+        assert '"%s"' % mod in src, "dao_engine missing module %s" % mod
+
+
+def test_bridge_tool_keyerror_is_guided():
+    """POST /tool must never leak a bare KeyError('name') for a missing
+    documented argument; the server maps it to the kernel-style guidance."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(root, "10-反笙_FreeCAD", "_fc_remote_server.py"),
+               encoding="utf-8").read()
+    assert "missing required argument" in src
