@@ -149,6 +149,33 @@ def test_object_protocol_ops_registered():
     assert "obj" in tool_catalog.CATEGORIES
 
 
+def test_sketch_protocol_and_mcp_bridge_proxy():
+    """Wave-5: the direct Sketcher protocol must be registered, gui.select must
+    drive the official selection, doc.import must exist, verify must fall back
+    natively without OCP, and the MCP server must proxy the live bridge with
+    sanitized tool names."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sk = open(os.path.join(root, "cad_agent", "backends", "freecad_sketch.py"),
+              encoding="utf-8").read()
+    for op in ('"sketch.create"', '"sketch.add"', '"sketch.constrain"',
+               '"sketch.geometry"', '"sketch.constraints"', '"sketch.dof"',
+               '"sketch.remove"'):
+        assert op in sk, "freecad_sketch missing %s" % op
+    per = open(os.path.join(root, "freecad", "DAO", "dao_perceive.py"),
+               encoding="utf-8").read()
+    assert '"gui.select"' in per
+    objmod = open(os.path.join(root, "cad_agent", "backends",
+                               "freecad_object.py"), encoding="utf-8").read()
+    assert '"doc.import"' in objmod
+    ver = open(os.path.join(root, "cad_agent", "backends",
+                            "freecad_verify.py"), encoding="utf-8").read()
+    assert "_native_audit" in ver and "ImportError" in ver
+    sys.path.insert(0, root)
+    from cad_agent import mcp_server
+    assert mcp_server._mcp_name("solid.box") == "solid_box"
+    assert hasattr(mcp_server, "BridgeProxy")
+
+
 def test_engine_has_doc_lifecycle_and_command_dispatch():
     """The unified protocol needs official doc lifecycle + undo/redo on the
     engine and command enumeration/dispatch + workbench switching in gui.*."""

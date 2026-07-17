@@ -161,6 +161,30 @@ def register(state):
             out["value"] = _enc(getattr(o, prop.split(".")[0], None))
         return out
 
+    def op_import(a):
+        """Import any supported file into the live document by extension
+        (STEP/IGES/BREP via Import, STL/OBJ/PLY via Mesh, else FreeCAD's
+        registered importer)."""
+        import os as _os
+        path = a["path"]
+        if not _os.path.isfile(path):
+            raise ValueError("doc.import: no such file: %s" % path)
+        before = {o.Name for o in state.doc.Objects}
+        ext = path.rsplit(".", 1)[-1].lower()
+        if ext in ("step", "stp", "iges", "igs", "brep", "brp"):
+            import Import
+            Import.insert(path, state.doc.Name)
+        elif ext in ("stl", "obj", "ply", "ast", "off"):
+            import Mesh
+            Mesh.insert(path, state.doc.Name)
+        else:
+            App.loadFile(path)
+        state.doc.recompute()
+        state.sync_from_doc()
+        new = [{"name": o.Name, "label": o.Label, "type": o.TypeId}
+               for o in state.doc.Objects if o.Name not in before]
+        return {"path": path, "imported": new, "count": len(new)}
+
     # ---- preference tree (App.ParamGet) ---------------------------------- #
     _KINDS = (("Int", int), ("Float", float), ("Bool", bool), ("String", str))
 
@@ -217,6 +241,7 @@ def register(state):
         "obj.delete": op_delete,
         "obj.copy": op_copy,
         "obj.expr": op_expr,
+        "doc.import": op_import,
         "pref.list": op_pref_list,
         "pref.get": op_pref_get,
         "pref.set": op_pref_set,

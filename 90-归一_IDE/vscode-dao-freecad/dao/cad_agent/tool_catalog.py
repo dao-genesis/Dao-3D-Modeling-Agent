@@ -64,6 +64,8 @@ CATEGORIES: Dict[str, Dict[str, str]] = {
                 "desc": "整个 FreeCAD Python 面一个闸门：call/get/set 任意 API，$ref 句柄可链式调用 — 精选工具不够时的兜底。"},
     "wire": {"title": "线框 Wire 2D",
              "desc": "免草图 2D 轮廓：点造线、偏置、圆角、求交、镜像、法线。"},
+    "sketch": {"title": "草图 Sketcher",
+               "desc": "官方草图器直控：逐条加几何/约束、查 DoF/冲突、删除 — 和人在 Sketcher 工作台里画图一样。"},
 }
 
 # --------------------------------------------------------------------------- #
@@ -286,6 +288,29 @@ _CURATED: Dict[str, Dict[str, Any]] = {
                  "params": _schema({"name": _STR, "with_dependencies": _BOOL, "new_label": _STR}, ["name"])},
     "obj.expr": {"desc": "表达式引擎：expression 给字符串则绑定该属性(如 'Spreadsheet.L*2')，给 null 则清除；不给则只读当前绑定。",
                  "params": _schema({"name": _STR, "prop": _STR, "expression": {}}, ["name"])},
+    "doc.import": {"desc": "按扩展名把任意支持格式(STEP/IGES/BREP/STL/OBJ…)导入当前文档，返回新增对象。",
+                   "params": _schema({"path": _STR}, ["path"])},
+    # ── sketch.* 草图器直控 ────────────────────────────────────────
+    "sketch.create": {"desc": "新建草图，可挂到 body、可选 XY/XZ/YZ 平面。",
+                      "params": _schema({"name": _STR, "body": _STR, "plane": _STR})},
+    "sketch.add": {"desc": "加一条几何：kind=line{start,end}/circle{center,radius}/arc{center,radius,start_angle,end_angle}/point{at}，construction 可选，返回索引。",
+                   "params": _schema({"sketch": _STR, "kind": _STR, "start": {}, "end": {},
+                                     "center": {}, "radius": _NUM, "at": {},
+                                     "start_angle": _NUM, "end_angle": _NUM,
+                                     "construction": _BOOL}, ["sketch", "kind"])},
+    "sketch.constrain": {"desc": "加官方约束：type 如 Coincident/Distance/Radius/Angle/Horizontal/Vertical，first/first_pos/second/second_pos 为几何索引与点位，value 为尺寸(角度用度)。返回剩余 DoF。",
+                         "params": _schema({"sketch": _STR, "type": _STR, "first": _INT,
+                                           "first_pos": _INT, "second": _INT,
+                                           "second_pos": _INT, "value": {}, "name": _STR},
+                                          ["sketch", "type", "first"])},
+    "sketch.geometry": {"desc": "列草图全部几何(索引/类型/端点/半径)。", "params": _schema({"sketch": _STR}, ["sketch"])},
+    "sketch.constraints": {"desc": "列草图全部约束(类型/名/値)。", "params": _schema({"sketch": _STR}, ["sketch"])},
+    "sketch.dof": {"desc": "求解器状态：剩余自由度/冲突/冗余约束。", "params": _schema({"sketch": _STR}, ["sketch"])},
+    "sketch.remove": {"desc": "按索引删几何或约束(what=geometry|constraint)。",
+                      "params": _schema({"sketch": _STR, "index": _INT, "what": _STR}, ["sketch", "index"])},
+    "gui.select": {"desc": "驱动官方选择集：选对象(可带 Face3/Edge1 子元素)，不给参数则清空。",
+                   "params": _schema({"object": _STR, "subs": {"type": "array", "items": _STR},
+                                     "objects": {"type": "array"}, "clear": _BOOL})},
     # ── pref.* 偏好参数 ─────────────────────────────────────────────
     "pref.list": {"desc": "列出偏好树某组的子组与键值(path 如 'Preferences/Units')。",
                   "params": _schema({"path": _STR}, ["path"])},

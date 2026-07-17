@@ -310,6 +310,11 @@ def _build_handlers(state):
     except Exception as exc:  # generic object protocol is optional
         sys.stderr.write("object load failed: %r\n" % (exc,))
     try:
+        import freecad_sketch
+        handlers.update(freecad_sketch.register(state))
+    except Exception as exc:  # direct Sketcher protocol is optional
+        sys.stderr.write("sketch load failed: %r\n" % (exc,))
+    try:
         import freecad_arch
         handlers.update(freecad_arch.register(state))
     except Exception as exc:  # BIM/Arch is optional
