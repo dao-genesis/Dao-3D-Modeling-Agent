@@ -286,6 +286,55 @@ class _ReverseFacet:
 
     probe = 诊
 
+    # ── 版本化 (diff/merge/依賴圖) ────────────────────────────
+    def 差(self, path_a: str, path_b: str) -> Res:
+        """反·差: 兩件模型級語義 diff (對象/參數/草圖幾何/約束)."""
+        try:
+            from fc_diff import FCDiff
+            return Res.succ(data=FCDiff.diff_files(path_a, path_b))
+        except Exception as e:
+            return Res.fail(f"反·差: {e}")
+
+    diff = 差
+
+    def 合(self, base: list, ours: list, theirs: list) -> Res:
+        """反·合: ops 三方語義合併, 非重疊自動合, 重疊列 conflicts."""
+        try:
+            from fc_diff import FCDiff
+            return Res.succ(data=FCDiff.merge3(base, ours, theirs))
+        except Exception as e:
+            return Res.fail(f"反·合: {e}")
+
+    merge = 合
+
+    def 图(self, path: str) -> Res:
+        """反·圖: 件 → ops 特徵依賴 DAG (deps/rdeps/order/roots/leaves/cycles)."""
+        try:
+            from fc_dag import FCDag
+            FC = self._load_inner()
+            ops = FC.reverse(path).get("ops", [])
+            return Res.succ(data=FCDag.build(ops))
+        except Exception as e:
+            return Res.fail(f"反·圖: {e}")
+
+    dag = 图
+
+    def 变(self, path: str, patch: Dict[str, Any], replay: bool = False,
+           **kw) -> Res:
+        """反·變: 增量改參 — 只重算受影響鏈路 (patch_plan), replay=True 即重放."""
+        try:
+            from fc_dag import FCDag
+            FC = self._load_inner()
+            ops = FC.reverse(path).get("ops", [])
+            plan = FCDag.patch_plan(ops, patch)
+            if replay and plan["replay_ops"]:
+                plan["replay"] = FC.replay(plan["replay_ops"], **kw)
+            return Res.succ(data=plan)
+        except Exception as e:
+            return Res.fail(f"反·變: {e}")
+
+    evolve = 变
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # ⑤ 秀·面 (show facet) · FreeCAD GUI 為天生展示台
