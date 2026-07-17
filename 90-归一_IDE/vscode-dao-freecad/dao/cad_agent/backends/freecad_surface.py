@@ -596,6 +596,80 @@ def register(state):
         return {"cloud": out, "object": po.Name, "points": len(kept),
                 "from": len(pts), "stride": stride}
 
+    def op_draft_text(a):
+        """3D annotation text in the model space (Draft Text)."""
+        import Draft
+        doc = state.doc
+        txt = a.get("text")
+        if not txt:
+            raise ValueError("draft.text needs 'text' (string or list of lines)")
+        lines = [txt] if isinstance(txt, str) else [str(t) for t in txt]
+        pos = a.get("position", [0, 0, 0])
+        t = Draft.make_text(lines, placement=App.Placement(
+            V(float(pos[0]), float(pos[1]), float(pos[2])), App.Rotation()))
+        if a.get("name"):
+            t.Label = a["name"]
+        if a.get("height"):
+            try:
+                t.ViewObject.FontSize = float(a["height"])
+            except Exception:
+                pass
+        doc.recompute()
+        return {"object": t.Name, "lines": lines, "position": list(pos)}
+
+    def op_draft_dimension(a):
+        """3D linear dimension between two points in model space (Draft
+        Dimension) -- annotation the human sees in the viewport."""
+        import Draft
+        doc = state.doc
+        p1, p2 = a.get("start"), a.get("end")
+        for lbl, p in (("start", p1), ("end", p2)):
+            if isinstance(p, (str, bytes)) or not isinstance(p, (list, tuple)) \
+                    or len(p) != 3:
+                raise ValueError("draft.dimension %r must be [x, y, z] (got %r)"
+                                 % (lbl, p))
+        via = a.get("via") or [(p1[0] + p2[0]) / 2.0,
+                               (p1[1] + p2[1]) / 2.0,
+                               (p1[2] + p2[2]) / 2.0 + 5]
+        d = Draft.make_linear_dimension(
+            V(*[float(x) for x in p1]), V(*[float(x) for x in p2]),
+            dim_line=V(*[float(x) for x in via]))
+        if a.get("name"):
+            d.Label = a["name"]
+        doc.recompute()
+        dist = (V(*[float(x) for x in p2]) - V(*[float(x) for x in p1])).Length
+        return {"object": d.Name, "distance": round(dist, 4)}
+
+    def op_draft_clone(a):
+        """Parametric clone of a document object (Draft Clone): tracks the
+        original and can be scaled independently."""
+        import Draft
+        doc = state.doc
+        src = doc.getObject(a["object"])
+        if src is None:
+            raise ValueError("draft.clone: no such object: %s" % a["object"])
+        c = Draft.make_clone(src)
+        if a.get("name"):
+            c.Label = a["name"]
+        s = a.get("scale")
+        if s is not None:
+            if isinstance(s, (int, float)):
+                s = [s, s, s]
+            c.Scale = V(float(s[0]), float(s[1]), float(s[2]))
+        pos = a.get("position")
+        if pos is not None:
+            c.Placement = App.Placement(
+                V(float(pos[0]), float(pos[1]), float(pos[2])), App.Rotation())
+        doc.recompute()
+        vol = None
+        try:
+            vol = round(c.Shape.Volume, 4)
+        except Exception:
+            pass
+        sc = getattr(c, "Scale", V(1, 1, 1))
+        return {"object": c.Name, "source": src.Name,
+                "scale": [sc.x, sc.y, sc.z], "volume": vol}
+
     return {
         "surface.fill": op_fill,
         "surface.ruled": op_ruled,
@@ -603,6 +677,9 @@ def register(state):
         "surface.offset": op_offset,
         "surface.extrude": op_extrude,
         "surface.revolve": op_revolve,
+        "draft.text": op_draft_text,
+        "draft.dimension": op_draft_dimension,
+        "draft.clone": op_draft_clone,
         "draft.ortho_array": op_ortho_array,
         "draft.polar_array": op_polar_array,
         "draft.path_array": op_path_array,

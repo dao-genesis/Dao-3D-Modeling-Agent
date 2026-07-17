@@ -219,3 +219,23 @@ def test_wave6_appearance_camera_draw_export_expressions():
                "sketch.external", "sketch.expression"):
         spec = tool_catalog.spec_for(op)
         assert spec, "no catalog spec for %s" % op
+
+
+def test_wave7_hole_draft_and_draft_annotations():
+    """Wave-7: official PartDesign Hole + Draft (face taper) features and
+    Draft-workbench text/dimension/clone annotations must be registered with
+    catalog schemas."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    par = open(os.path.join(root, "cad_agent", "backends",
+                            "freecad_parametric.py"), encoding="utf-8").read()
+    assert '"param.hole"' in par and '"param.draft"' in par
+    assert "PartDesign::Hole" in par and "PartDesign::Draft" in par
+    sur = open(os.path.join(root, "cad_agent", "backends",
+                            "freecad_surface.py"), encoding="utf-8").read()
+    for op in ('"draft.text"', '"draft.dimension"', '"draft.clone"'):
+        assert op in sur, "freecad_surface missing %s" % op
+    sys.path.insert(0, root)
+    from cad_agent import tool_catalog
+    for op in ("param.hole", "param.draft", "draft.text",
+               "draft.dimension", "draft.clone"):
+        assert tool_catalog.spec_for(op), "no catalog spec for %s" % op
