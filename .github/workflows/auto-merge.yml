@@ -61,6 +61,24 @@ jobs:
               if (pr.draft) { core.info(`#${number}: draft, skip`); continue; }
               if (pr.mergeable === false) { core.info(`#${number}: has conflicts, leaving for manual resolution`); continue; }
               if (pr.mergeable !== true) { core.info(`#${number}: mergeability still unknown, skip this run`); continue; }
+              // CI 未全绿不合并: 任一 check-run 失败/未完成即跳过 (定时扫描会兜底重试)。
+              // 排除自动合并家族自身的 check, 避免自锁。
+              const SELF = /auto-?merge|dao-auto|auto-label|自动合并|自动打标/i;
+              const runs = await github.paginate(github.rest.checks.listForRef, {
+                owner, repo, ref: pr.head.sha, per_page: 100,
+              });
+              const relevant = runs.filter(r => !SELF.test(r.name));
+              const pending = relevant.filter(r => r.status !== 'completed');
+              const failed = relevant.filter(r => r.status === 'completed' &&
+                !['success', 'neutral', 'skipped'].includes(r.conclusion));
+              if (failed.length) {
+                core.info(`#${number}: failing checks [${failed.map(r => r.name).join(', ')}], skip`);
+                continue;
+              }
+              if (pending.length) {
+                core.info(`#${number}: checks still running [${pending.map(r => r.name).join(', ')}], skip this run`);
+                continue;
+              }
               try {
                 await github.rest.pulls.merge({ owner, repo, pull_number: number, merge_method: 'merge' });
                 core.notice(`#${number}: merged`);
