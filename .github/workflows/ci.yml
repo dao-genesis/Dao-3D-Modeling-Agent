@@ -76,3 +76,29 @@ jobs:
           name: sr6-closure-report
           path: "60-实战_Projects/ORS6_Stewart/closed_loop/out/"
           if-no-files-found: warn
+
+  freecad-real:
+    # 实机 FreeCAD 门: ubuntu-latest apt FreeCAD (1.x 系) 上跑核心建模/装配/反演回归,
+    # 与 VM 的 FreeCAD 0.19 形成双版本覆盖。
+    runs-on: ubuntu-latest
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: "utf-8"
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install FreeCAD + FEM toolchain (apt)
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq freecad gmsh calculix-ccx
+          freecadcmd --version
+
+      - name: Install python deps
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install pytest
+
+      - name: "Gate F - real-FreeCAD regression (integration + reverse/diff/dag)"
+        run: |
+          python3 -m pytest tests/test_integration.py tests/test_fc_reverse_sketch.py \
+            tests/test_fc_reverse_sketch_ext.py tests/test_fc_diff.py tests/test_fc_dag.py -v
