@@ -58,6 +58,7 @@ async function ensureDisplayRoute() {
       "--xvfb=" + XPRA_XVFB,
       "--html=on",
       "--bind-tcp=127.0.0.1:" + XPRA_PORT,
+      "--sharing=yes", // 多个工作台标签各嵌一个 HTML5 客户端, 非共享会互踢断连
       "--daemon=yes",
     ]);
   } catch (e) {
@@ -430,6 +431,18 @@ function fcCatalogBlock(spec) {
   return lines.join("\n");
 }
 
+// FreeCAD 模式总闸: 开 → 工具层提示词注入(AI 知道 dao-freecad 工具面);
+// 关 → 不注入任何 FreeCAD 内容, 完全回归官方 AI 编程模式(道并行而不相悖)。
+// 工具本身(MCP 注册)始终在位, 开关只控制 AI 是否“知道”——太上下知有之。
+function fcModeOn() {
+  return extCtx ? extCtx.globalState.get("dao-freecad.fcMode", true) : true;
+}
+function fcModeToggle() {
+  const next = !fcModeOn();
+  if (extCtx) extCtx.globalState.update("dao-freecad.fcMode", next);
+  return next;
+}
+
 const FC_REMINDER = "【FreeCAD 模式生效中】一切建模/装配/测量/感知操作必须经 dao-freecad 工具面" +
   "(MCP server `dao-freecad` 的工具, 或 POST http://127.0.0.1:<port>/tool {op,args})完成;" +
   " 不要以读写文件方式改模型。先感知(percept/measure)后动作, 动作后必验证。";
@@ -440,6 +453,7 @@ function freecadDomain() {
     name: "FreeCAD",
     async systemPrompt(full) {
       const port = cfg().get("port");
+      if (!fcModeOn()) return "";
       if (!full) return FC_REMINDER.replace("<port>", String(port));
       ensureBridge(true).catch(() => {});
       const spec = await fetchToolspec();
@@ -575,9 +589,32 @@ async function ensureShell() {
       const port = proxyMod.getCachedPort ? proxyMod.getCachedPort() : 0;
       return proxyMod.getEaConfigHtml(port, undefined, { foldBridge: true });
     },
+    envInfo: () => ({
+      found: findFreeCAD(),
+      embedded: runtime.embeddedExe(runtimeDir()),
+      platform: process.platform,
+    }),
+    fcMode: () => fcModeOn(),
     actions: {
       restartBridge: async () => { await ensureBridge(true); startWatchdog(); return "bridge " + (await ping() ? "在线" : "启动中"); },
       fit: async () => { fitFreeCADWindow(); return "已按面板尺寸收拢主窗"; },
+      fcMode: async () => ({ on: fcModeToggle() }),
+      provision: async () => {
+        const p = await ensureFreeCADRuntime(true);
+        return p ? "运行时就绪: " + p : "安装失败/已取消";
+      },
+      workbench: async (a) => {
+        const wb = a && a.wb;
+        if (!wb || !/^[A-Za-z]+Workbench$/.test(wb)) throw new Error("非法工作台: " + wb);
+        if (!(await ensureBridge(true))) throw new Error("桥接离线, 先启动/重启桥接");
+        const body = await postJSON("/exec", { code:
+          "import FreeCADGui as Gui\nGui.activateWorkbench(" + JSON.stringify(wb) + ")" });
+        let r = null;
+        try { r = JSON.parse(body); } catch (_) {}
+        if (!r || r.ok === false)
+          throw new Error((r && r.error) || "切换失败(桥接响应异常): " + String(body).slice(0, 200));
+        return wb + " 已激活";
+      },
     },
   }, (m) => console.log("[dao-shell] " + m));
 }
@@ -618,6 +655,7 @@ function activate(context) {
       refresh();
       unifiedHost.registerDomainShaper("freecad", {
         wrap(text, ctx) {
+          if (!fcModeOn()) return text; // 总闸关: 零注入, 完全回归官方
           const key = ((ctx && ctx.agent) || "?") + ":" + ((ctx && ctx.epoch) || 0);
           if (injected.has(key)) return "[FreeCAD 模式] " + text;
           injected.add(key); refresh();
@@ -625,8 +663,9 @@ function activate(context) {
           return "<dao_freecad_mode>\n" + body + "\n</dao_freecad_mode>\n\n" + text;
         },
         status() {
-          return { mode: "freecad", label: "☯ FreeCAD",
-            hint: "FreeCAD 领域模式: 建模/装配/测量走 dao-freecad 工具面", spChars: sp.length };
+          return { mode: "freecad", label: fcModeOn() ? "☯ FreeCAD" : "☯ FreeCAD(关)",
+            hint: fcModeOn() ? "FreeCAD 领域模式: 建模/装配/测量走 dao-freecad 工具面"
+              : "FreeCAD 模式已关: 完全回归官方 AI 编程模式", spChars: sp.length };
         },
         toggle() { injected = new Set(); refresh(); },
       });
@@ -670,6 +709,11 @@ function activate(context) {
     vscode.commands.registerCommand("dao-freecad.restartBridge", async () => {
       await ensureBridge();
       startWatchdog();
+    }),
+    vscode.commands.registerCommand("dao-freecad.toggleMode", () => {
+      const on = fcModeToggle();
+      vscode.window.showInformationMessage(
+        "DAO FreeCAD 模式: " + (on ? "开(FreeCAD 工具层提示词注入)" : "关(完全回归官方 AI 编程模式)"));
     })
   );
 }
