@@ -114,7 +114,8 @@ def test_gui_engine_registers_kernel_module_surface():
                 "freecad_advanced", "freecad_measure", "freecad_percept",
                 "freecad_project", "freecad_resource", "freecad_fem",
                 "freecad_path", "freecad_surface", "freecad_arch",
-                "freecad_bop", "freecad_code"):
+                "freecad_bop", "freecad_code",
+                "freecad_reflect", "freecad_verify", "freecad_wire"):
         assert '"%s"' % mod in src, "dao_engine missing module %s" % mod
 
 
@@ -125,3 +126,18 @@ def test_bridge_tool_keyerror_is_guided():
     src = open(os.path.join(root, "10-反笙_FreeCAD", "_fc_remote_server.py"),
                encoding="utf-8").read()
     assert "missing required argument" in src
+
+
+def test_engine_has_doc_lifecycle_and_command_dispatch():
+    """The unified protocol needs official doc lifecycle + undo/redo on the
+    engine and command enumeration/dispatch + workbench switching in gui.*."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    eng = open(os.path.join(root, "freecad", "DAO", "dao_engine.py"),
+               encoding="utf-8").read()
+    for op in ('"doc.new"', '"doc.open"', '"doc.close"', '"doc.list"',
+               '"doc.undo"', '"doc.redo"'):
+        assert op in eng, "dao_engine missing %s" % op
+    per = open(os.path.join(root, "freecad", "DAO", "dao_perceive.py"),
+               encoding="utf-8").read()
+    for op in ('"gui.commands"', '"gui.command"', '"gui.workbench"'):
+        assert op in per, "dao_perceive missing %s" % op

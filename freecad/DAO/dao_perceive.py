@@ -203,8 +203,51 @@ def register(state):
                 bad.append({"name": o.Name, "label": o.Label, "state": st})
         return {"problems": bad, "count": len(bad)}
 
+    # ---- official command surface: enumerate + dispatch ------------------ #
+    def op_commands(a):
+        """Enumerate the official GUI command surface (optionally filtered).
+
+        Every toolbar button / menu entry in FreeCAD is a named command; this
+        is the complete list of what the application itself can do."""
+        names = sorted(Gui.listCommands())
+        q = (a.get("query") or "").lower()
+        if q:
+            names = [n for n in names if q in n.lower()]
+        return {"commands": names, "count": len(names)}
+
+    def op_command(a):
+        """Dispatch an official GUI command by name (``Gui.runCommand``) —
+        the same path a human's toolbar click takes."""
+        name = a["name"]
+        known = name in Gui.listCommands()
+        Gui.runCommand(name, int(a.get("index", 0)))
+        doc.recompute()
+        return {"command": name, "known": known,
+                "objects": len(doc.Objects)}
+
+    def op_workbench(a):
+        """Report all workbenches, or activate one when ``name`` is given."""
+        wbs = Gui.listWorkbenches()
+        name = a.get("name")
+        if name:
+            match = next((k for k in wbs
+                          if k.lower() == name.lower()
+                          or k.lower() == (name + "Workbench").lower()), None)
+            if match is None:
+                return {"error": "No such workbench: %s" % name,
+                        "available": sorted(wbs)}
+            Gui.activateWorkbench(match)
+        try:
+            active = Gui.activeWorkbench().name()
+        except Exception:
+            active = None
+        return {"active": active, "available": sorted(wbs)}
+
     return {
         "gui.snapshot": op_snapshot,
+        "gui.commands": op_commands,
+        "gui.command": op_command,
+        "gui.workbench": op_workbench,
         "gui.view": op_view,
         "gui.fit": op_fit,
         "gui.scene": op_scene,
