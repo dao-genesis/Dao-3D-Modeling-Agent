@@ -21,6 +21,12 @@ description: Test the vscode-dao-freecad plugin (归一工作台/整窗归一) a
 - **0.21 基础安装无 AssemblyWorkbench/BIMWorkbench**（BIM 是外置插件，仅有 ArchWorkbench），装配/BIM 标签预期报「No such workbench」；切 CAM(Path) 首次会弹官方单位制 Warning 模态框，需点 Ok，模态期间 /exec 阻塞。
 - **外壳测试更宜用 Chrome 直开 `http://127.0.0.1:9920/shell`**（与 IDE 面板同源同 UI），录屏更清晰；`/api/status`、`GET :18920/status` 的 active_workbench 可做切换佐证。
 
+## 统一协议 /tool 直调（PR #29 起 245 op）
+- 单工具直调走 `POST :18920/tool`，body 必须是 `{"op":"solid.box","args":{...}}`（字段名是 `op` 不是 `tool`，参数名以 `/toolspec` 为准，如 box 用 length/width/height 而非 dx/dy/dz）。
+- 变更类 op 已包官方事务：`doc.undo`/`doc.redo` 一步对应一次工具调用，可视化验证撤销/重做（视口对象消失/恢复）。
+- `gui.workbench {name}` 切工作台、`gui.commands/gui.command {name}` 枚举/调度官方命令（如 Std_New）、`reflect.call/get/free`（free 需 `ref` 或 `all:true`）触达任意官方 API。
+- 桥启动约需 45-60 秒才回 /status；重启桥别用 `pkill -f _fc_remote_server`（会匹配到 shell 自身），用 `pkill -f "[_]fc_remote_server"`。
+
 ## 建模/装配脚本测试（经桥接）
 - 一切建模走 `POST :18920/exec`（GUI 实时可见）；参考 `60-实战_Projects/玩具小车_ToyCar/build_toycar.py`（七阶段: 建模→装配→运动学→干涉→导出）。
 - FreeCAD 0.19 注意: `Part::MultiFuse` 结果是 Compound，无 `CenterOfMass`，需按 `Shape.Solids` 加权求质心；`dao_kinematics` 的 Link 无 mass 参数，Joint origin 要用 `SE3.from_translation`。
@@ -29,6 +35,11 @@ description: Test the vscode-dao-freecad plugin (归一工作台/整窗归一) a
 
 ## Git/PR
 - 仓库经 Devin git 代理可能 403（未接入 org）；可用用户 PAT 直推 `https://x-access-token:$PAT@github.com/...` 并经 GitHub API 建 PR/评论；图片先用 upload_attachment 换 URL。
+
+## 环境依赖坑
+- 系统 matplotlib 与 NumPy 2.x 二进制不兼容：`pip install "numpy<2"` 修复。
+- FEM 测试需 gmsh：`pip install gmsh` 后 `PATH=$HOME/.local/bin:$PATH` 跑 pytest。
+- Devin 账号验证可直接 Chrome 登录 app.devin.ai（邮箱+密码流程无验证码，直达 org 主页）。
 
 ## Devin Secrets Needed
 - `GITHUB_PAT`（zhouyoukang1234-spec/Dao-3D-Modeling-Agent 的推送/PR 权限；当前环境变量里的可能已失效，需核验）
