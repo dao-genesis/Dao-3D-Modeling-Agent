@@ -239,3 +239,14 @@ def test_wave7_hole_draft_and_draft_annotations():
     for op in ("param.hole", "param.draft", "draft.text",
                "draft.dimension", "draft.clone"):
         assert tool_catalog.spec_for(op), "no catalog spec for %s" % op
+
+
+def test_wave8_assembly_contract_parity():
+    """Wave-8: assembly component ops must accept the 'object'/'position'
+    aliases used by asm.add, and a named-but-missing assembly must error
+    instead of silently answering for the singleton."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    asm = open(os.path.join(root, "cad_agent", "backends",
+                            "freecad_assembly.py"), encoding="utf-8").read()
+    assert "_comp_arg" in asm and "_check_assembly" in asm
+    assert "no such assembly" in asm

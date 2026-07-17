@@ -91,6 +91,13 @@ def register(state):
             return doc.getObject(state.shapes[ref])
         raise KeyError("no body/solid named %s" % ref)
 
+    def _check_assembly(a):
+        """If the caller names an assembly, it must actually exist -- silently
+        answering for the singleton otherwise hides typos."""
+        ref = a.get("assembly")
+        if ref and doc.getObject(ref) is None and ref != state.assembly:
+            raise KeyError("no such assembly: %s" % ref)
+
     def _comp(name):
         rec = state.components.get(name)
         if not rec or doc.getObject(rec["link"]) is None:
@@ -153,19 +160,31 @@ def register(state):
         return {"component": name, "linked": src.Name}
 
     # ---- mates (placement-based) ----------------------------------------- #
+    def _comp_arg(a):
+        # contract parity with asm.add: 'object' is an accepted alias of 'name'
+        name = a.get("name") or a.get("object") or a.get("component")
+        if not name:
+            raise ValueError("needs 'name' (component; aliases: 'object', "
+                             "'component')")
+        return name
+
     def op_place(a):
-        link = _comp(a["name"])
+        name = _comp_arg(a)
+        link = _comp(name)
+        if "position" in a and "pos" not in a:
+            a = dict(a); a["pos"] = a["position"]
         link.Placement = _placement(a)
         doc.recompute()
-        return {"component": a["name"], "placement": list(link.Placement.Base)}
+        return {"component": name, "placement": list(link.Placement.Base)}
 
     def op_move(a):
-        link = _comp(a["name"])
+        name = _comp_arg(a)
+        link = _comp(name)
         p = link.Placement
         p.Base = p.Base + V(*_vec3(a["vector"], "move 'vector'"))
         link.Placement = p
         doc.recompute()
-        return {"component": a["name"], "placement": list(link.Placement.Base)}
+        return {"component": name, "placement": list(link.Placement.Base)}
 
     def op_rotate(a):
         """Rotate a component in place by ``angle`` degrees about ``axis`` through
@@ -494,6 +513,7 @@ def register(state):
         return out
 
     def op_tree(a):
+        _check_assembly(a)
         comps = []
         for name, rec in state.components.items():
             link = doc.getObject(rec["link"])
