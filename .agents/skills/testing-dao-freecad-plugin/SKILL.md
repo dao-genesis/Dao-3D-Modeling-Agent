@@ -16,6 +16,10 @@ description: Test the vscode-dao-freecad plugin (归一工作台/整窗归一) a
 - **整窗归一面板白屏/只见局部**：FreeCAD 主窗大于面板可视区所致；跑「DAO FreeCAD: 面板适配」命令，或手动 `DISPLAY=:100 xdotool search --name FreeCAD | while read w; do xdotool windowsize $w 900 660; done`。
 - **webview 内快捷键被 xpra 吞掉**：Ctrl+Shift+P 前先点击 VS Code 非 webview 区域（如资源管理器）夺回焦点。
 - **首次打开工作区**：Restricted Mode 需先 Trust Workspace，否则扩展不激活。
+- **整窗突然变成空 FreeCAD（无 DAO 文档）**：openShell/watchdog 可能在桥接已在线时重复 spawn 第二个 FreeCAD（新实例绑 18920 失败留 traceback，但空窗抢占 xpra 前台）。`pgrep -af freecad` 核对，kill 掉后起的那个即可恢复。
+- **工作台切换失败的 tip 4 秒自动消失**：想截取失败信息，直接开 `http://127.0.0.1:9920/board/wb-<key>` 并在 2 秒内截图（key: part/sketch/asm/bim/fem/draw/cam）。
+- **0.21 基础安装无 AssemblyWorkbench/BIMWorkbench**（BIM 是外置插件，仅有 ArchWorkbench），装配/BIM 标签预期报「No such workbench」；切 CAM(Path) 首次会弹官方单位制 Warning 模态框，需点 Ok，模态期间 /exec 阻塞。
+- **外壳测试更宜用 Chrome 直开 `http://127.0.0.1:9920/shell`**（与 IDE 面板同源同 UI），录屏更清晰；`/api/status`、`GET :18920/status` 的 active_workbench 可做切换佐证。
 
 ## 建模/装配脚本测试（经桥接）
 - 一切建模走 `POST :18920/exec`（GUI 实时可见）；参考 `60-实战_Projects/玩具小车_ToyCar/build_toycar.py`（七阶段: 建模→装配→运动学→干涉→导出）。
