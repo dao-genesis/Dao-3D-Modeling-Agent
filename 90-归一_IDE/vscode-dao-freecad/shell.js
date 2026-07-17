@@ -73,7 +73,8 @@ function shellHtml() {
   #burger { position: relative; margin-right: 8px; }
   #burger > span { cursor: pointer; padding: 4px 9px; border-radius: 6px; border: 1px solid #2c3038; }
   #burger > span:hover { background: #262b34; }
-  #menu { display: none; position: absolute; top: 30px; left: 0; z-index: 99; min-width: 190px;
+  /* fixed 脱离 #bar 的 overflow 裁剪(否则下拉伸出 36px 栏外部分不可见不可点) */
+  #menu { display: none; position: fixed; top: 34px; left: 8px; z-index: 99; min-width: 190px;
     background: #1e2127; border: 1px solid #2c3038; border-radius: 8px; padding: 6px; box-shadow: 0 6px 24px rgba(0,0,0,.5); }
   #menu.open { display: block; }
   #menu .mi { padding: 6px 10px; border-radius: 5px; cursor: pointer; white-space: nowrap; }
@@ -254,7 +255,7 @@ function iframeBoard(url, title) {
 // 工作台板块: 加载即经 /api/action 切到目标工作台, 再把整窗 xpra 路由进本标签
 function workbenchBoard(xpraPort, wbKey) {
   const wb = WORKBENCHES[wbKey];
-  const url = `http://127.0.0.1:${xpraPort}/index.html?reconnect=true&sound=false&clipboard=true&floating_menu=no&autohide=1&video=false`;
+  const url = `http://127.0.0.1:${xpraPort}/index.html?reconnect=true&sound=false&clipboard=true&floating_menu=no&autohide=1&video=false&sharing=true`;
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${wb[1]}</title>
 <style>html,body{height:100%;margin:0;overflow:hidden;background:#16181d}iframe{width:100%;height:100%;border:0}
 #tip{position:fixed;top:6px;right:10px;z-index:9;font:12px system-ui;color:#8a919e;background:#1e2127cc;padding:3px 10px;border-radius:10px}</style>
@@ -333,7 +334,7 @@ function startShell(port, deps, log) {
           return send(res, 200, "text/html; charset=utf-8", workbenchBoard(deps.xpraPort, wbm[1]));
         if (p === "/board/freecad")
           return send(res, 200, "text/html; charset=utf-8", iframeBoard(
-            `http://127.0.0.1:${deps.xpraPort}/index.html?reconnect=true&sound=false&clipboard=true&floating_menu=no&autohide=1&video=false`,
+            `http://127.0.0.1:${deps.xpraPort}/index.html?reconnect=true&sound=false&clipboard=true&floating_menu=no&autohide=1&video=false&sharing=true`,
             "FreeCAD 整窗归一"));
         if (p === "/board/bench")
           return send(res, 200, "text/html; charset=utf-8", iframeBoard(

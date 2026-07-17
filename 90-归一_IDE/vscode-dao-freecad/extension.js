@@ -58,6 +58,7 @@ async function ensureDisplayRoute() {
       "--xvfb=" + XPRA_XVFB,
       "--html=on",
       "--bind-tcp=127.0.0.1:" + XPRA_PORT,
+      "--sharing=yes", // 多个工作台标签各嵌一个 HTML5 客户端, 非共享会互踢断连
       "--daemon=yes",
     ]);
   } catch (e) {
@@ -606,8 +607,12 @@ async function ensureShell() {
         const wb = a && a.wb;
         if (!wb || !/^[A-Za-z]+Workbench$/.test(wb)) throw new Error("非法工作台: " + wb);
         if (!(await ensureBridge(true))) throw new Error("桥接离线, 先启动/重启桥接");
-        await postJSON("/exec", { code:
+        const body = await postJSON("/exec", { code:
           "import FreeCADGui as Gui\nGui.activateWorkbench(" + JSON.stringify(wb) + ")" });
+        let r = null;
+        try { r = JSON.parse(body); } catch (_) {}
+        if (!r || r.ok === false)
+          throw new Error((r && r.error) || "切换失败(桥接响应异常): " + String(body).slice(0, 200));
         return wb + " 已激活";
       },
     },
