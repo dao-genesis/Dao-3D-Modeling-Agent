@@ -20,6 +20,18 @@ const BOARD_META = {
   proxy: ["🔀", "Proxy Pro"],
 };
 
+// FreeCAD 各工作台 → 平级网页模块(汉堡面板快开·按需建标签): 打开即经桥接切到
+// 对应工作台, 再把整窗以 xpra 指令级路由进本标签 —— 每个 FreeCAD 面板都是一张网页。
+const WORKBENCHES = {
+  part: ["🧩", "参数化零件", "PartDesignWorkbench"],
+  sketch: ["✏️", "2D 草图", "SketcherWorkbench"],
+  asm: ["🔩", "装配", "AssemblyWorkbench"],
+  bim: ["🏗️", "BIM/结构", "BIMWorkbench"],
+  fem: ["🌡️", "FEM 仿真", "FemWorkbench"],
+  draw: ["📐", "工程图", "TechDrawWorkbench"],
+  cam: ["🛠️", "CAM 加工", "PathWorkbench"],
+};
+
 let _server = null;
 let _port = 0;
 let _deps = null; // { bridgePort(), xpraPort, proxyHtml(), status() }
@@ -47,6 +59,7 @@ function fetchJson(port, path_) {
 
 function shellHtml() {
   const metaJson = JSON.stringify(BOARD_META);
+  const wbJson = JSON.stringify(WORKBENCHES);
   return `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>☯ 归一 · DAO FreeCAD</title>
@@ -57,6 +70,19 @@ function shellHtml() {
   #bar { display: flex; align-items: center; gap: 2px; height: 36px; padding: 0 8px;
     background: #1e2127; border-bottom: 1px solid #2c3038; overflow-x: auto; }
   #bar .brand { font-weight: 700; margin-right: 10px; white-space: nowrap; }
+  #burger { position: relative; margin-right: 8px; }
+  #burger > span { cursor: pointer; padding: 4px 9px; border-radius: 6px; border: 1px solid #2c3038; }
+  #burger > span:hover { background: #262b34; }
+  #menu { display: none; position: absolute; top: 30px; left: 0; z-index: 99; min-width: 190px;
+    background: #1e2127; border: 1px solid #2c3038; border-radius: 8px; padding: 6px; box-shadow: 0 6px 24px rgba(0,0,0,.5); }
+  #menu.open { display: block; }
+  #menu .mi { padding: 6px 10px; border-radius: 5px; cursor: pointer; white-space: nowrap; }
+  #menu .mi:hover { background: #262b34; }
+  #menu .sep { border-top: 1px solid #2c3038; margin: 5px 2px; }
+  #fcmode { margin-left: auto; cursor: pointer; padding: 4px 10px; border-radius: 12px;
+    border: 1px solid #3a4150; white-space: nowrap; user-select: none; opacity: .9; }
+  #fcmode.on { color: #6fdb8c; border-color: #3d6b4a; }
+  #fcmode.off { color: #8a919e; }
   .tab { padding: 5px 12px; border-radius: 6px 6px 0 0; cursor: pointer; user-select: none;
     white-space: nowrap; opacity: .65; border: 1px solid transparent; }
   .tab:hover { opacity: 1; }
@@ -65,11 +91,13 @@ function shellHtml() {
   #frames iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: none; background: #16181d; }
   #frames iframe.active { display: block; }
 </style></head><body>
-<div id="bar"><span class="brand">☯ 归一</span></div>
+<div id="bar"><span id="burger"><span>☰</span>
+  <div id="menu"></div></span><span class="brand">☯ 归一</span></div>
 <div id="frames"></div>
 <script>
 (function(){
   var META = ${metaJson};
+  var WB = ${wbJson};
   var bar = document.getElementById("bar"), frames = document.getElementById("frames");
   var cur = null, made = {};
   function open(key){
@@ -96,6 +124,53 @@ function shellHtml() {
     t.onclick = function(){ open(k); };
     bar.appendChild(t);
   });
+  // 汉堡面板: FreeCAD 各模块(工作台)快捷打开 —— 点即新建平级标签并切到对应工作台
+  var menu = document.getElementById("menu");
+  var burger = document.getElementById("burger").firstElementChild;
+  function mi(label, fn){
+    var d = document.createElement("div");
+    d.className = "mi"; d.textContent = label;
+    d.onclick = function(e){ e.stopPropagation(); menu.classList.remove("open"); fn(); };
+    menu.appendChild(d);
+  }
+  function openWb(k){
+    var key = "wb-" + k;
+    if(!META[key]){
+      META[key] = [WB[k][0], WB[k][1]];
+      var t = document.createElement("span");
+      t.className = "tab"; t.dataset.k = key;
+      t.textContent = WB[k][0] + " " + WB[k][1];
+      t.onclick = function(){ open(key); };
+      bar.insertBefore(t, document.getElementById("fcmode"));
+    }
+    open(key);
+  }
+  Object.keys(WB).forEach(function(k){ mi(WB[k][0] + " " + WB[k][1], function(){ openWb(k); }); });
+  var sep = document.createElement("div"); sep.className = "sep"; menu.appendChild(sep);
+  Object.keys(META).forEach(function(k){ mi(META[k][0] + " " + META[k][1], function(){ open(k); }); });
+  burger.onclick = function(e){ e.stopPropagation(); menu.classList.toggle("open"); };
+  document.addEventListener("click", function(){ menu.classList.remove("open"); });
+  window.addEventListener("message", function(ev){
+    var d = ev && ev.data;
+    if(d && d.dao === "open"){ if(d.wb && WB[d.wb]) openWb(d.wb); else if(d.board && META[d.board]) open(d.board); }
+  });
+  // FreeCAD 模式开/关: 提示词工具层注入的总闸(关=完全回归官方 AI 编程模式)
+  var sw = document.createElement("span");
+  sw.id = "fcmode"; sw.textContent = "☯ FreeCAD 模式 …";
+  sw.onclick = function(){
+    fetch("/api/action", { method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({op:"fcMode"}) })
+      .then(function(r){ return r.json(); })
+      .then(function(j){ paintMode(j.result && j.result.on); })
+      .catch(function(){});
+  };
+  function paintMode(on){
+    sw.className = on ? "on" : "off";
+    sw.textContent = "☯ FreeCAD 模式 " + (on ? "开" : "关");
+  }
+  bar.appendChild(sw);
+  fetch("/api/status").then(function(r){ return r.json(); })
+    .then(function(s){ paintMode(!!(s.fcmode && s.fcmode.on)); }).catch(function(){});
   open((location.hash || "#home").slice(1) in META ? (location.hash || "#home").slice(1) : "home");
 })();
 </script></body></html>`;
@@ -121,6 +196,9 @@ function homeHtml() {
 <h1>☯ 归一 · DAO FreeCAD 总控</h1>
 <div class="sub">dao-desktop AI 底层 × Proxy Pro × FreeCAD 全模块 · 单网页归一外壳(浏览器 / IDE 面板同源)</div>
 <div class="grid">
+  <div class="card"><h2>🧊 FreeCAD 环境管理</h2><div id="c-env">…</div>
+    <button onclick="parent.postMessage({dao:'open',board:'freecad'},'*')">打开整窗</button>
+    <button onclick="act('provision')">安装内置运行时</button></div>
   <div class="card"><h2>🧠 FreeCAD 内核桥接</h2><div id="c-bridge">…</div>
     <button onclick="act('restartBridge')">启动/重启桥接</button></div>
   <div class="card"><h2>🖥 显示路由 (xpra)</h2><div id="c-xpra">…</div>
@@ -132,6 +210,13 @@ function homeHtml() {
 <script>
 function kv(k,v,cls){ return '<div class="kv"><span>'+k+'</span><span class="'+(cls||'')+'">'+v+'</span></div>'; }
 function paint(s){
+  var env = s.env || {};
+  document.getElementById('c-env').innerHTML =
+    kv('本机安装', env.found ? '已探到' : '未探到', env.found ? 'ok' : 'bad') +
+    kv('路径', env.found || '—') +
+    kv('内置运行时', env.embedded ? '已就绪' : '未安装', env.embedded ? 'ok' : '') +
+    kv('平台', env.platform || '—') +
+    kv('FreeCAD 模式', s.fcmode && s.fcmode.on ? '开(工具层已注入)' : '关(官方原生)', s.fcmode && s.fcmode.on ? 'ok' : '');
   document.getElementById('c-bridge').innerHTML =
     kv('状态', s.bridge.ok ? '在线' : '离线', s.bridge.ok ? 'ok' : 'bad') +
     kv('端口', s.bridge.port) +
@@ -166,6 +251,26 @@ function iframeBoard(url, title) {
 </head><body><iframe src="${url}" allow="clipboard-read; clipboard-write"></iframe></body></html>`;
 }
 
+// 工作台板块: 加载即经 /api/action 切到目标工作台, 再把整窗 xpra 路由进本标签
+function workbenchBoard(xpraPort, wbKey) {
+  const wb = WORKBENCHES[wbKey];
+  const url = `http://127.0.0.1:${xpraPort}/index.html?reconnect=true&sound=false&clipboard=true&floating_menu=no&autohide=1&video=false`;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${wb[1]}</title>
+<style>html,body{height:100%;margin:0;overflow:hidden;background:#16181d}iframe{width:100%;height:100%;border:0}
+#tip{position:fixed;top:6px;right:10px;z-index:9;font:12px system-ui;color:#8a919e;background:#1e2127cc;padding:3px 10px;border-radius:10px}</style>
+</head><body><div id="tip">${wb[0]} ${wb[1]} · 切换中…</div>
+<iframe src="${url}" allow="clipboard-read; clipboard-write"></iframe>
+<script>
+fetch("/api/action",{method:"POST",headers:{"Content-Type":"application/json"},
+  body:JSON.stringify({op:"workbench",wb:${JSON.stringify(wb[2])}})})
+  .then(function(r){return r.json();})
+  .then(function(j){document.getElementById("tip").textContent=
+    ${JSON.stringify(wb[0] + " " + wb[1])} + (j.ok ? " · 已切入" : " · 切换失败: " + (j.error||""));
+    setTimeout(function(){document.getElementById("tip").style.display="none";}, 4000);})
+  .catch(function(e){document.getElementById("tip").textContent="切换失败: "+e;});
+</script></body></html>`;
+}
+
 function emptyBoard(msg) {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 body{background:#16181d;color:#d5d9e0;font:13px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
@@ -182,7 +287,11 @@ async function collectStatus() {
   ]);
   let proxyPort = 0;
   try { proxyPort = d.proxyPort() || 0; } catch (_) {}
+  let env = null, fcmode = null;
+  try { env = d.envInfo ? d.envInfo() : null; } catch (_) {}
+  try { fcmode = d.fcMode ? { on: !!d.fcMode() } : null; } catch (_) {}
   return {
+    env, fcmode,
     bridge: {
       ok: !!(st && st.ok), port: bridgePort,
       version: st && st.freecad_version ? st.freecad_version.slice(0, 3).filter(Boolean).join(".") : null,
@@ -219,6 +328,9 @@ function startShell(port, deps, log) {
         const p = u.pathname;
         if (p === "/" || p === "/shell") return send(res, 200, "text/html; charset=utf-8", shellHtml());
         if (p === "/board/home") return send(res, 200, "text/html; charset=utf-8", homeHtml());
+        const wbm = p.match(/^\/board\/wb-([a-z]+)$/);
+        if (wbm && WORKBENCHES[wbm[1]])
+          return send(res, 200, "text/html; charset=utf-8", workbenchBoard(deps.xpraPort, wbm[1]));
         if (p === "/board/freecad")
           return send(res, 200, "text/html; charset=utf-8", iframeBoard(
             `http://127.0.0.1:${deps.xpraPort}/index.html?reconnect=true&sound=false&clipboard=true&floating_menu=no&autohide=1&video=false`,
@@ -242,7 +354,7 @@ function startShell(port, deps, log) {
               const j = JSON.parse(b || "{}");
               const fn = deps.actions[j.op];
               if (!fn) return send(res, 400, "application/json", JSON.stringify({ ok: false, error: "未知动作 " + j.op }));
-              const r = await fn();
+              const r = await fn(j);
               send(res, 200, "application/json", JSON.stringify({ ok: true, result: r === undefined ? null : r }));
             } catch (e) { send(res, 500, "application/json", JSON.stringify({ ok: false, error: String(e && e.message || e) })); }
           });
@@ -278,4 +390,4 @@ function stopShell() {
 
 function shellPort() { return _port; }
 
-module.exports = { startShell, stopShell, shellPort, BOARD_META };
+module.exports = { startShell, stopShell, shellPort, BOARD_META, WORKBENCHES };
