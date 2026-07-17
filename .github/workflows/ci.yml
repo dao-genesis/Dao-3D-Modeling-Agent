@@ -23,6 +23,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-ci.txt
 
+      - name: "Gate S - single-source: embedded copies match canonical (zero drift)"
+        run: python scripts/sync_embedded.py --check
+
       - name: "Gate 0 - dao_kernel full self-verify + dao_audit minimal closure (OCP)"
         run: |
           pip install cadquery-ocp trimesh
