@@ -1060,12 +1060,22 @@ def _handle_tool(body):
     if not op:
         return {"ok": False, "error": "op required"}
 
+    # Mutating groups run inside an official undo transaction so every /tool
+    # call is one Ctrl+Z step — same contract as /agent plans. Perception,
+    # document lifecycle and the undo/redo ops themselves stay outside it.
+    _no_txn = ("gui.", "doc.", "reflect.roots", "reflect.methods",
+               "reflect.help", "reflect.get", "reflect.free", "verify.",
+               "measure.", "view.")
+
     def _fn():
         eng = _get_engine()
-        eng._ensure_doc()
+        doc = eng._ensure_doc()
         fn = eng.handlers.get(op)
         if fn is None:
             return {"ok": False, "error": "unknown op: %s" % op}
+        txn = not op.startswith(_no_txn)
+        if txn:
+            doc.openTransaction("DAO tool: %s" % op)
         try:
             data = fn(args)
         except KeyError as exc:
@@ -1076,6 +1086,10 @@ def _handle_tool(body):
             if isinstance(key, str) and key and all(c.isalnum() or c == "_" for c in key):
                 return {"ok": False, "error": "%s missing required argument '%s'" % (op, key)}
             raise
+        finally:
+            if txn:
+                doc.commitTransaction()
+                doc.recompute()
         if not isinstance(data, dict):
             data = {"value": data}
         return {"ok": True, "op": op, "data": data}

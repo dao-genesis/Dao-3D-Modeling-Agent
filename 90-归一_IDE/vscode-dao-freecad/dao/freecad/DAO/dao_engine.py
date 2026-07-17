@@ -92,7 +92,8 @@ def _build_handlers(state):
                     "freecad_measure", "freecad_percept",
                     "freecad_project", "freecad_resource",
                     "freecad_fem", "freecad_path", "freecad_surface",
-                    "freecad_arch", "freecad_bop", "freecad_code"):
+                    "freecad_arch", "freecad_bop", "freecad_code",
+                    "freecad_reflect", "freecad_verify", "freecad_wire"):
         try:
             mod = importlib.import_module(modname)
             handlers.update(mod.register(state))
@@ -160,6 +161,78 @@ def _build_handlers(state):
     handlers["doc.inspect"] = _inspect
     handlers["doc.diff"] = _diff
     handlers["doc.edit"] = _edit
+
+    # ---- document lifecycle + official undo/redo (unified protocol) ------ #
+    def _rebind(doc):
+        """Point the whole handler surface at ``doc`` in place: every closure
+        keeps referencing this same state object."""
+        state.doc = doc
+        for d in (state.shapes, state.bodies, state.components, state.joints):
+            d.clear()
+        del state.mates[:]
+        state.assembly = None
+        state.sync_from_doc()
+        return {"document": doc.Name, "objects": len(doc.Objects)}
+
+    def _doc_new(a):
+        doc = App.newDocument(a.get("name") or "DAO")
+        return _rebind(doc)
+
+    def _doc_open(a):
+        doc = App.openDocument(a["path"])
+        out = _rebind(doc)
+        out["path"] = getattr(doc, "FileName", a["path"])
+        return out
+
+    def _doc_close(a):
+        name = a.get("name") or state.doc.Name
+        App.closeDocument(name)
+        doc = App.ActiveDocument or App.newDocument("DAO")
+        out = _rebind(doc)
+        out["closed"] = name
+        return out
+
+    def _doc_list(a):
+        active = App.ActiveDocument.Name if App.ActiveDocument else None
+        return {"documents": [{"name": d.Name,
+                               "path": getattr(d, "FileName", ""),
+                               "objects": len(d.Objects),
+                               "active": d.Name == active}
+                              for d in App.listDocuments().values()],
+                "bound": state.doc.Name}
+
+    def _doc_undo(a):
+        steps = int(a.get("steps", 1))
+        done = 0
+        for _ in range(steps):
+            if not state.doc.UndoCount:
+                break
+            state.doc.undo()
+            done += 1
+        state.doc.recompute()
+        state.sync_from_doc()
+        return {"undone": done, "undo_depth": state.doc.UndoCount,
+                "redo_depth": state.doc.RedoCount}
+
+    def _doc_redo(a):
+        steps = int(a.get("steps", 1))
+        done = 0
+        for _ in range(steps):
+            if not state.doc.RedoCount:
+                break
+            state.doc.redo()
+            done += 1
+        state.doc.recompute()
+        state.sync_from_doc()
+        return {"redone": done, "undo_depth": state.doc.UndoCount,
+                "redo_depth": state.doc.RedoCount}
+
+    handlers["doc.new"] = _doc_new
+    handlers["doc.open"] = _doc_open
+    handlers["doc.close"] = _doc_close
+    handlers["doc.list"] = _doc_list
+    handlers["doc.undo"] = _doc_undo
+    handlers["doc.redo"] = _doc_redo
     return handlers
 
 
