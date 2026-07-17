@@ -536,7 +536,8 @@ def register(state):
         radians, default 0.5).
         """
         import MeshPart
-        shape = _named_shape(a.get("name", a.get("source")), "mesh.from_shape 'name'")
+        shape = _named_shape(a.get("name") or a.get("source") or a.get("object"),
+                             "mesh.from_shape 'name'")
         out = a.get("out", "Tessellated")
         if not isinstance(out, str) or not out.strip():
             raise ValueError("mesh.from_shape 'out' must be a non-empty string")

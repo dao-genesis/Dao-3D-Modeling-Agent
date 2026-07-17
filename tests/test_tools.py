@@ -80,3 +80,24 @@ def test_manifest():
     m = reg.manifest()
     assert m[0]["name"] == "solid.box" and m[0]["group"] == "solid"
     assert m[0]["summary"] == "make a box"
+
+
+def test_gui_state_mirrors_kernel_state_surface():
+    """dao_engine.GuiState must expose the same bookkeeping attributes as the
+    kernel State (mates included) or GUI-bridge ops like asm.dof crash with
+    AttributeError."""
+    import ast
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = os.path.join(root, "freecad", "DAO", "dao_engine.py")
+    tree = ast.parse(open(path, encoding="utf-8").read())
+    cls = next(n for n in ast.walk(tree)
+               if isinstance(n, ast.ClassDef) and n.name == "GuiState")
+    init = next(n for n in cls.body
+                if isinstance(n, ast.FunctionDef) and n.name == "__init__")
+    attrs = {t.attr for stmt in ast.walk(init) if isinstance(stmt, ast.Assign)
+             for t in stmt.targets
+             if isinstance(t, ast.Attribute) and isinstance(t.value, ast.Name)
+             and t.value.id == "self"}
+    for required in ("shapes", "bodies", "params", "assembly",
+                     "components", "joints", "mates", "_undo"):
+        assert required in attrs, "GuiState.__init__ missing self.%s" % required

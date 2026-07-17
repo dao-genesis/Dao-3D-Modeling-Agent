@@ -156,6 +156,62 @@ class TestAdvanced:
 
 
 @requires_freecad
+class TestCatalogAliases:
+    """The curated tool_catalog contracts must be accepted by the ops
+    themselves (object/dx/dy/dz, asm.add{object}, asm.coaxial{a,b}, ...) so an
+    AI driving the /toolspec surface never hits a KeyError on a documented
+    argument."""
+
+    def test_translate_catalog_spelling(self, freecad_session):
+        s = freecad_session
+        s.act("solid.box", {"name": "albox", "length": 10, "width": 10, "height": 10})
+        r = s.act("solid.translate", {"object": "albox", "dx": 5, "dy": -3, "dz": 2})
+        assert r.ok, r.error
+        bb = s.act("analyze.bbox", {"name": "albox"})
+        assert bb.data["min"] == [5.0, -3.0, 2.0], bb.data
+
+    def test_fillet_chamfer_object_alias(self, freecad_session):
+        s = freecad_session
+        s.act("solid.box", {"name": "alfil", "length": 20, "width": 20, "height": 20})
+        assert s.act("solid.fillet", {"object": "alfil", "radius": 2}).ok
+        s.act("solid.box", {"name": "alcha", "length": 20, "width": 20, "height": 20})
+        assert s.act("solid.chamfer", {"object": "alcha", "size": 2}).ok
+
+    def test_asm_add_object_alias_and_coaxial_ab(self, freecad_session):
+        s = freecad_session
+        s.act("param.body", {"name": "AlPlate"})
+        s.act("param.pad", {"body": "AlPlate", "feature": "AlSlab",
+                            "profile": {"rect": [60, 60]}, "length": 30})
+        s.act("param.pocket", {"body": "AlPlate", "feature": "AlBore",
+                               "profile": {"circle": 12, "at": [0, 0]},
+                               "length": 30, "through": True})
+        s.act("solid.cylinder", {"name": "AlPin", "radius": 10, "height": 80})
+        assert s.act("asm.create", {"name": "AlAsm"}).ok
+        # catalog spelling: only 'object', no explicit component name
+        r1 = s.act("asm.add", {"object": "AlPlate", "fixed": True})
+        assert r1.ok and r1.data["component"] == "AlPlate", r1.error
+        assert s.act("asm.add", {"object": "AlPin"}).ok
+        # catalog spelling: a/b instead of hole/pin
+        assert s.act("asm.coaxial", {"a": "AlPlate", "b": "AlPin"}).ok
+
+    def test_measure_com_whole_object(self, freecad_session):
+        # 0.21's Measurement.com() rejects whole-object references; the op must
+        # fall back to Shape.CenterOfMass instead of leaking a kernel error.
+        s = freecad_session
+        s.act("solid.box", {"name": "alcom", "length": 10, "width": 20, "height": 30})
+        r = s.act("measure.com", {"object": "alcom"})
+        assert r.ok, r.error
+        assert r.data["com"] == [5.0, 10.0, 15.0], r.data
+
+    def test_mesh_from_shape_object_alias(self, freecad_session):
+        s = freecad_session
+        s.act("solid.box", {"name": "almsh", "length": 10, "width": 10, "height": 10})
+        r = s.act("mesh.from_shape", {"object": "almsh", "out": "almshm"})
+        assert r.ok, r.error
+        assert r.data["facets"] > 0
+
+
+@requires_freecad
 class TestFem:
     def test_cantilever_matches_beam_theory(self, freecad_session):
         s = freecad_session

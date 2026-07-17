@@ -93,11 +93,15 @@ def register(state):
         obj_name = a.get("object") or a.get("name")
         if not isinstance(obj_name, str) or not obj_name:
             raise ValueError("measure.com 'object' must be an object name string")
-        _get_obj(obj_name)
-        m = Measurement()
-        m.addReference3D(obj_name, "")
-        val = m.com()
-        m.clear()
+        obj = _get_obj(obj_name)
+        try:
+            m = Measurement()
+            m.addReference3D(obj_name, "")
+            val = m.com()
+            m.clear()
+        except Exception:
+            # 0.21 的 Measurement.com() 对整对象引用抛 "Unsupported sub-shape type"
+            val = obj.Shape.CenterOfMass
         return {"object": obj_name, "com": _vec_out(val)}
 
     def angle(a):

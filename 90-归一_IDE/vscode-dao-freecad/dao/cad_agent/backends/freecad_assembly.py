@@ -125,6 +125,16 @@ def register(state):
         return {"assembly": asm.Name, "container": container}
 
     def op_add(a):
+        # Accept the catalog-contract spelling: add{object[,x,y,z]} == add{body,name}.
+        if "body" not in a and "object" in a:
+            a = dict(a); a["body"] = a["object"]
+        if "body" not in a:
+            raise ValueError("asm.add needs 'body' (source part name; alias: 'object')")
+        if "name" not in a:
+            a = dict(a); a["name"] = a["body"]
+        if "placement" not in a and any(k in a for k in ("x", "y", "z")):
+            a = dict(a)
+            a["placement"] = {"pos": [a.get("x", 0), a.get("y", 0), a.get("z", 0)]}
         if state.assembly is None:
             op_create({"name": "Assembly"})
         asm = doc.getObject(state.assembly)
@@ -251,6 +261,13 @@ def register(state):
         face coordinate. ``hole_pick``/``pin_pick`` ('min'|'max') choose which
         cylinder when a part has several. ``offset`` then slides the part along
         the shared axis (so two coaxial parts can interleave, e.g. hinge knuckles)."""
+        # Accept the catalog-contract spelling: coaxial{a,b} == coaxial{hole,pin}.
+        if "hole" not in a and "pin" not in a and "a" in a and "b" in a:
+            a = dict(a)
+            a["hole"], a["pin"] = a["a"], a["b"]
+        if "hole" not in a or "pin" not in a:
+            raise ValueError(
+                "asm.coaxial needs 'hole' and 'pin' component names (aliases: 'a'/'b')")
         hint = a.get("axis")
         hr, hc, haxis = _cyl_of(_global_shape(a["hole"]), a.get("hole_pick", "min"), hint)
         # the pin's cylinder is read in its own (source-local) frame so we can
