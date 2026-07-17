@@ -8,6 +8,7 @@
  */
 const vscode = require("vscode");
 const http = require("http");
+const net = require("net");
 const cp = require("child_process");
 const fs = require("fs");
 const os = require("os");
@@ -70,6 +71,17 @@ async function ensureDisplayRoute() {
     if (await portAlive(XPRA_PORT, "/index.html")) return true;
   }
   return false;
+}
+
+// 端口层探活（纯 TCP）：桥接进程在而 HTTP 忙（GUI 模态框/工作台加载阻塞 /status）时，
+// ping 会超时假死；此时端口仍被占用，不得再 spawn 第二个内核（绑定失败 + 空窗抢占 xpra 前台）。
+function portOccupied(port) {
+  return new Promise((resolve) => {
+    const s = net.connect({ host: "127.0.0.1", port, timeout: 1200 });
+    s.once("connect", () => { s.destroy(); resolve(true); });
+    s.once("timeout", () => { s.destroy(); resolve(false); });
+    s.once("error", () => resolve(false));
+  });
 }
 
 function ping() {
@@ -208,6 +220,16 @@ async function ensureBridge(quiet) {
   if (bridgeStarting) return false; // 单飞：避免并发重复拉起内核
   bridgeStarting = true;
   try {
+    // 双检：HTTP 失联但端口仍被占用 = 内核在而 GUI 忙，等其回应而非再拉一个
+    if (await portOccupied(Number(cfg().get("port")))) {
+      vscode.window.setStatusBarMessage("DAO FreeCAD: 桥接忙(GUI 模态/加载中), 等待回应…", 8000);
+      for (let i = 0; i < 20; i++) {
+        await new Promise((r) => setTimeout(r, 1500));
+        if (await ping()) return true;
+      }
+      if (!quiet) vscode.window.showWarningMessage("DAO FreeCAD: 端口 " + cfg().get("port") + " 被占用且 /status 无回应 —— 可能有 GUI 模态框待确认, 或残留进程需手动清理");
+      return false;
+    }
     const script = findServerScript();
     if (!script) {
       if (!quiet) vscode.window.showErrorMessage("DAO FreeCAD: 找不到 _fc_remote_server.py（可在设置 dao-freecad.serverScript 指定）");
@@ -607,13 +629,20 @@ async function ensureShell() {
         const wb = a && a.wb;
         if (!wb || !/^[A-Za-z]+Workbench$/.test(wb)) throw new Error("非法工作台: " + wb);
         if (!(await ensureBridge(true))) throw new Error("桥接离线, 先启动/重启桥接");
-        const body = await postJSON("/exec", { code:
-          "import FreeCADGui as Gui\nGui.activateWorkbench(" + JSON.stringify(wb) + ")" });
-        let r = null;
-        try { r = JSON.parse(body); } catch (_) {}
-        if (!r || r.ok === false)
-          throw new Error((r && r.error) || "切换失败(桥接响应异常): " + String(body).slice(0, 200));
-        return wb + " 已激活";
+        // 版本回退链：0.21 基础安装无 BIM(外置插件)/Assembly(1.0 起内置), 逐级退到最近同类工作台
+        const FALLBACKS = { BIMWorkbench: ["ArchWorkbench"], AssemblyWorkbench: ["A2plusWorkbench", "Assembly4Workbench"] };
+        const chain = [wb].concat(FALLBACKS[wb] || []);
+        let lastErr = "";
+        for (const w of chain) {
+          const body = await postJSON("/exec", { code:
+            "import FreeCADGui as Gui\nGui.activateWorkbench(" + JSON.stringify(w) + ")" });
+          let r = null;
+          try { r = JSON.parse(body); } catch (_) {}
+          if (r && r.ok !== false) return w === wb ? wb + " 已激活" : w + " 已激活(替代 " + wb + ", 本机未装)";
+          lastErr = (r && r.error) || "切换失败(桥接响应异常): " + String(body).slice(0, 200);
+          if (!/no such workbench/i.test(lastErr)) break; // 非缺装错误不回退, 如实上报
+        }
+        throw new Error(lastErr);
       },
     },
   }, (m) => console.log("[dao-shell] " + m));

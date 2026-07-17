@@ -266,8 +266,8 @@ fetch("/api/action",{method:"POST",headers:{"Content-Type":"application/json"},
   body:JSON.stringify({op:"workbench",wb:${JSON.stringify(wb[2])}})})
   .then(function(r){return r.json();})
   .then(function(j){document.getElementById("tip").textContent=
-    ${JSON.stringify(wb[0] + " " + wb[1])} + (j.ok ? " · 已切入" : " · 切换失败: " + (j.error||""));
-    setTimeout(function(){document.getElementById("tip").style.display="none";}, 4000);})
+    ${JSON.stringify(wb[0] + " " + wb[1])} + (j.ok ? " · 已切入" + (j.result&&j.result.indexOf&&j.result.indexOf("替代")>=0?"("+j.result+")":"") : " · 切换失败: " + (j.error||""));
+    if(j.ok) setTimeout(function(){document.getElementById("tip").style.display="none";}, 4000);})
   .catch(function(e){document.getElementById("tip").textContent="切换失败: "+e;});
 </script></body></html>`;
 }
