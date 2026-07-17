@@ -133,19 +133,27 @@ def register(state):
         if not isinstance(name, str):
             raise ValueError(
                 "ss.create 'name' must be a string (got %r)" % (name,))
-        sheet = doc.getObject(state.__dict__.get("_sheet", "")) if state.__dict__.get("_sheet") else None
+        # Honor the requested name: reuse only the sheet actually named so
+        # (silently returning a previously-cached different sheet used to
+        # ignore 'name' entirely and restart cell numbering over old cells).
+        sheet = doc.getObject(name)
+        if sheet is not None and sheet.TypeId != "Spreadsheet::Sheet":
+            raise ValueError(
+                "ss.create: object %r exists and is not a spreadsheet" % name)
         if sheet is None:
             sheet = doc.addObject("Spreadsheet::Sheet", name)
-            state._sheet = sheet.Name
-            state._cells = {}
+        state._sheet = sheet.Name
+        cells_by_sheet = state.__dict__.setdefault("_cells_by_sheet", {})
+        cells = cells_by_sheet.setdefault(sheet.Name, {})
+        state._cells = cells
         col = "A"
-        for i, (alias, value) in enumerate(a.get("cells", {}).items(), start=1):
-            cell = "%s%d" % (col, i)
+        for alias, value in a.get("cells", {}).items():
+            cell = cells.get(alias) or "%s%d" % (col, len(cells) + 1)
             sheet.set(cell, str(value))
             sheet.setAlias(cell, alias)
-            state._cells[alias] = cell
+            cells[alias] = cell
         doc.recompute()
-        return {"spreadsheet": sheet.Name, "aliases": list(state._cells.keys())}
+        return {"spreadsheet": sheet.Name, "aliases": list(cells.keys())}
 
     def op_ss_bind(a):
         """Bind a registered param to a spreadsheet alias via the ExpressionEngine."""
@@ -688,6 +696,77 @@ def register(state):
                 out["export_error"] = str(exc)
         return out
 
+    def op_draw_dimension(a):
+        """Add a true TechDraw dimension to a drawing view: type Distance/
+        DistanceX/DistanceY/Radius/Diameter/Angle, referencing view edges or
+        vertices by subelement name (e.g. ['Edge0'] or ['Vertex0','Vertex1'])."""
+        view = doc.getObject(a["view"])
+        if view is None:
+            raise ValueError("draw.dimension: no such view: %s" % a["view"])
+        page = None
+        for o in doc.Objects:
+            if o.TypeId == "TechDraw::DrawPage" and view in o.Views:
+                page = o
+                break
+        if page is None:
+            raise ValueError("draw.dimension: view %s is on no page" % view.Name)
+        dtype = a.get("type", "Distance")
+        refs = a.get("references") or []
+        if not refs:
+            raise ValueError("draw.dimension needs 'references' like "
+                             "['Edge0'] or ['Vertex0','Vertex1']")
+        dim = doc.addObject("TechDraw::DrawViewDimension", "Dim")
+        dim.Type = dtype
+        dim.References2D = [(view, str(r)) for r in refs]
+        if dtype in ("Distance", "DistanceX", "DistanceY"):
+            dim.MeasureType = "Projected"
+        else:
+            dim.MeasureType = "True"
+        page.addView(dim)
+        if "x" in a:
+            dim.X = float(a["x"])
+        if "y" in a:
+            dim.Y = float(a["y"])
+        doc.recompute()
+        out = {"dimension": dim.Name, "type": dtype, "view": view.Name,
+               "page": page.Name}
+        for meth in ("getDimValue", "getRawValue"):
+            try:
+                out["value"] = round(float(getattr(dim, meth)()), 4)
+                break
+            except Exception:
+                continue
+        return out
+
+    def op_draw_export(a):
+        """Export a TechDraw page to SVG/DXF/PDF by extension."""
+        page = doc.getObject(a.get("page", "Page"))
+        if page is None or page.TypeId != "TechDraw::DrawPage":
+            pages = [o.Name for o in doc.Objects
+                     if o.TypeId == "TechDraw::DrawPage"]
+            raise ValueError("draw.export: no such page: %s; pages: %s"
+                             % (a.get("page"), pages))
+        path = a["path"]
+        ext = path.rsplit(".", 1)[-1].lower()
+        import TechDraw
+        if ext == "dxf":
+            TechDraw.writeDXFPage(page, path)
+        elif ext == "svg":
+            try:
+                import TechDrawGui
+                TechDrawGui.exportPageAsSvg(page, path)
+            except ImportError:
+                raise ValueError("draw.export svg needs the GUI bridge "
+                                 "(TechDrawGui); use dxf headless")
+        elif ext == "pdf":
+            import TechDrawGui
+            TechDrawGui.exportPageAsPdf(page, path)
+        else:
+            raise ValueError("draw.export: unsupported extension %r "
+                             "(svg/dxf/pdf)" % ext)
+        return {"page": page.Name, "path": path,
+                "bytes": os.path.getsize(path) if os.path.exists(path) else 0}
+
     def op_draw_project(a):
         """Project a solid to 2D visible/hidden edges (page-free line drawing).
 
@@ -764,4 +843,5 @@ def register(state):
         "mesh.repair": op_mesh_repair, "mesh.decimate": op_mesh_decimate,
         "mesh.import": op_mesh_import, "mesh.from_shape": op_mesh_from_shape,
         "draw.techdraw": op_techdraw, "draw.project": op_draw_project,
+        "draw.dimension": op_draw_dimension, "draw.export": op_draw_export,
     }
