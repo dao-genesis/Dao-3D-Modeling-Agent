@@ -911,6 +911,97 @@ def register(state):
             raise RuntimeError("shell produced invalid shape")
         return {"feature": feat, "opened_faces": refs, **_metrics(body.Tip.Shape)}
 
+    def op_hole(a):
+        """Official PartDesign Hole: circles sketched at 'positions' become
+        drilled/counterbored/countersunk (optionally threaded) holes."""
+        body = _body(a["body"])
+        feat = _check_feature_name(a.get("feature", "Hole"))
+        positions = a.get("positions")
+        if isinstance(positions, (str, bytes)) or not isinstance(positions, (list, tuple)) \
+                or not positions:
+            raise ValueError("hole 'positions' must be a non-empty list of "
+                             "[x, y] points (got %r)" % (positions,))
+        dia = _num(a, "diameter", 5, "hole diameter")
+        sk = body.newObject("Sketcher::SketchObject", feat + "_sk")
+        _attach(sk, _origin_plane(body, a.get("plane", "XY")))
+        sk.MapMode = "FlatFace"
+        if a.get("offset"):
+            sk.AttachmentOffset = App.Placement(
+                V(0, 0, float(a["offset"])), App.Rotation())
+        for p in positions:
+            x, y = _pt2(p, "hole position")
+            gi = sk.addGeometry(Part.Circle(V(x, y, 0), V(0, 0, 1), dia / 2.0), False)
+            sk.addConstraint(Sketcher.Constraint("Radius", gi, dia / 2.0))
+        sk.Visibility = False
+        doc.recompute()
+        f = body.newObject("PartDesign::Hole", feat)
+        _reg_feature(a["body"], feat, f)
+        f.Profile = sk
+        f.Diameter = dia
+        if a.get("through", True) and "DepthType" in f.PropertiesList:
+            f.DepthType = "ThroughAll"
+        elif a.get("depth") is not None:
+            f.DepthType = "Dimension"
+            f.Depth = _num(a, "depth", label="hole depth")
+        htype = (a.get("type") or "none").lower()
+        if htype in ("counterbore", "countersink"):
+            f.HoleCutType = "Counterbore" if htype == "counterbore" else "Countersink"
+            if a.get("cut_diameter"):
+                f.HoleCutDiameter = _num(a, "cut_diameter", label="cut diameter")
+            if htype == "counterbore" and a.get("cut_depth"):
+                f.HoleCutDepth = _num(a, "cut_depth", label="cut depth")
+        if a.get("threaded"):
+            f.Threaded = True
+        doc.recompute()
+        if f.Shape.isNull() or not f.Shape.isValid():
+            raise RuntimeError("hole produced invalid shape")
+        _reg_param(feat, "diameter", f, "prop", "Diameter", a["body"])
+        return {"feature": feat, "holes": len(positions), "diameter": dia,
+                **_metrics(body.Tip.Shape)}
+
+    def op_draft_angle(a):
+        """Official PartDesign Draft (拔模): tilt the given faces by 'angle'
+        degrees about a neutral plane face (default: bottom -Z planar face)."""
+        body = _body(a["body"])
+        feat = _check_feature_name(a.get("feature", "DraftFace"))
+        tip = body.Tip
+        if tip is None:
+            raise ValueError("body %r has no feature to draft" % (a["body"],))
+        faces = a.get("faces")
+        nf = len(tip.Shape.Faces)
+        if isinstance(faces, (str, bytes)) or not isinstance(faces, (list, tuple)) \
+                or not faces:
+            raise ValueError("draft 'faces' must be a non-empty list of integer "
+                             "face indices (got %r)" % (faces,))
+        bad = [i for i in faces if isinstance(i, bool) or not isinstance(i, int)
+               or i < 0 or i >= nf]
+        if bad:
+            raise ValueError("face indices %s out of range (tip has %d faces "
+                             "0..%d)" % (bad, nf, nf - 1))
+        neutral = a.get("neutral")
+        if neutral is None:
+            down = V(0, 0, -1)
+            for i, fc in enumerate(tip.Shape.Faces):
+                if fc.Surface.__class__.__name__ == "Plane" \
+                        and abs(fc.normalAt(0, 0).dot(down) - 1) < 1e-3:
+                    neutral = i
+                    break
+            if neutral is None:
+                raise ValueError("no bottom planar face found; pass 'neutral' "
+                                 "face index explicitly")
+        f = body.newObject("PartDesign::Draft", feat)
+        _reg_feature(a["body"], feat, f)
+        f.Base = (tip, ["Face%d" % (i + 1) for i in faces])
+        f.NeutralPlane = (tip, ["Face%d" % (int(neutral) + 1)])
+        f.Angle = _num(a, "angle", 3, "draft angle")
+        f.Reversed = bool(a.get("reversed", False))
+        doc.recompute()
+        if f.Shape.isNull() or not f.Shape.isValid():
+            raise RuntimeError("draft produced invalid shape")
+        _reg_param(feat, "angle", f, "prop", "Angle", a["body"])
+        return {"feature": feat, "faces": faces, "neutral": int(neutral),
+                **_metrics(body.Tip.Shape)}
+
     # ---- transformed feature patterns ------------------------------------ #
     def _originals(body, a):
         """Resolve the feature(s) to replicate; default to the body tip."""
@@ -1120,6 +1211,7 @@ def register(state):
         "param.loft": op_loft, "param.sweep": op_sweep,
         "param.helical": op_helical, "param.bevel": op_bevel,
         "param.fillet": op_fillet, "param.chamfer": op_chamfer, "param.shell": op_shell,
+        "param.hole": op_hole, "param.draft": op_draft_angle,
         "param.pattern_polar": op_pattern_polar, "param.pattern_linear": op_pattern_linear,
         "param.mirror": op_pattern_mirror,
         "param.params": op_params, "param.set": op_set,
