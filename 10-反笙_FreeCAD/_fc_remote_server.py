@@ -1066,7 +1066,16 @@ def _handle_tool(body):
         fn = eng.handlers.get(op)
         if fn is None:
             return {"ok": False, "error": "unknown op: %s" % op}
-        data = fn(args)
+        try:
+            data = fn(args)
+        except KeyError as exc:
+            # A bare a["key"] access on a missing argument otherwise surfaces as
+            # a cryptic KeyError; mirror the kernel's guided message. Descriptive
+            # KeyErrors ("no such solid: X") pass through as-is.
+            key = exc.args[0] if exc.args else None
+            if isinstance(key, str) and key and all(c.isalnum() or c == "_" for c in key):
+                return {"ok": False, "error": "%s missing required argument '%s'" % (op, key)}
+            raise
         if not isinstance(data, dict):
             data = {"value": data}
         return {"ok": True, "op": op, "data": data}

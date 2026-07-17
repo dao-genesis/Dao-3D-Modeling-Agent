@@ -203,6 +203,26 @@ class TestCatalogAliases:
         assert r.ok, r.error
         assert r.data["com"] == [5.0, 10.0, 15.0], r.data
 
+    def test_param_tree_no_args(self, freecad_session):
+        # catalog declares param.tree{} — with no body it must report all trees.
+        s = freecad_session
+        s.act("param.body", {"name": "TrB"})
+        s.act("param.pad", {"body": "TrB", "feature": "TrPad",
+                            "profile": {"rect": [10, 10]}, "length": 5})
+        r = s.act("param.tree", {})
+        assert r.ok, r.error
+        assert any(b["body"] == "TrB" for b in r.data["bodies"])
+        r1 = s.act("param.tree", {"body": "TrB"})
+        assert r1.ok and r1.data["features"], r1.error
+
+    def test_param_sketch_geometry_list(self, freecad_session):
+        # catalog declares param.sketch{body,plane,geometry:[...]}.
+        s = freecad_session
+        s.act("param.body", {"name": "SkB"})
+        r = s.act("param.sketch", {"body": "SkB", "plane": "XY",
+                                   "geometry": [{"rect": [30, 20]}]})
+        assert r.ok, r.error
+
     def test_mesh_from_shape_object_alias(self, freecad_session):
         s = freecad_session
         s.act("solid.box", {"name": "almsh", "length": 10, "width": 10, "height": 10})

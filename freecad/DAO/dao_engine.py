@@ -90,7 +90,9 @@ def _build_handlers(state):
     for modname in ("freecad_parametric", "freecad_assembly",
                     "freecad_perceive", "freecad_advanced",
                     "freecad_measure", "freecad_percept",
-                    "freecad_project", "freecad_resource"):
+                    "freecad_project", "freecad_resource",
+                    "freecad_fem", "freecad_path", "freecad_surface",
+                    "freecad_arch", "freecad_bop", "freecad_code"):
         try:
             mod = importlib.import_module(modname)
             handlers.update(mod.register(state))
