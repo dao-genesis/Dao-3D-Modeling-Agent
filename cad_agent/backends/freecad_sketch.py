@@ -127,6 +127,12 @@ def register(state):
             out["dof"] = sk.getDoF() if hasattr(sk, "getDoF") else None
         except Exception:
             pass
+        try:
+            out["fully_constrained"] = bool(sk.FullyConstrained)
+            if out["dof"] is None and out["fully_constrained"]:
+                out["dof"] = 0
+        except Exception:
+            pass
         for attr, key in (("ConflictingConstraints", "conflicting"),
                           ("RedundantConstraints", "redundant")):
             try:
@@ -155,6 +161,41 @@ def register(state):
         sk = _sk(a)
         return {"sketch": sk.Name, **_dof(sk)}
 
+    def op_external(a):
+        """Add external geometry: project an edge/vertex of another object
+        (e.g. 'Pad', 'Edge3') into the sketch as reference geometry."""
+        sk = _sk(a)
+        obj = state.doc.getObject(a["object"])
+        if obj is None:
+            raise ValueError("sketch.external: no such object: %s" % a["object"])
+        sk.addExternal(obj.Name, a["sub"])
+        state.doc.recompute()
+        return {"sketch": sk.Name, "object": obj.Name, "sub": a["sub"],
+                "external_count": len(sk.ExternalGeometry)}
+
+    def op_expression(a):
+        """Bind an expression to a named datum constraint
+        (e.g. name='width', expr='Params.len*2'); empty expr clears it."""
+        sk = _sk(a)
+        path = "Constraints.%s" % a["name"]
+        expr = a.get("expr")
+        try:
+            sk.setExpression(path, expr if expr else None)
+        except Exception as exc:
+            if "parse" in str(exc).lower():
+                raise ValueError(
+                    "expression parse failed for %r = %r; note single-letter "
+                    "identifiers like W/P/A collide with unit tokens in the "
+                    "official grammar -- use longer constraint/alias names "
+                    "(e.g. 'width')" % (path, expr))
+            raise
+        state.doc.recompute()
+        # engine stores the path with a leading dot (".Constraints.width")
+        bound = dict((str(p).lstrip("."), str(e))
+                     for p, e in (sk.ExpressionEngine or []))
+        return {"sketch": sk.Name, "constraint": a["name"],
+                "expression": bound.get(path), "dof": _dof(sk)}
+
     def op_remove(a):
         sk = _sk(a)
         idx = int(a["index"])
@@ -175,4 +216,6 @@ def register(state):
         "sketch.constraints": op_constraints,
         "sketch.dof": op_dof,
         "sketch.remove": op_remove,
+        "sketch.external": op_external,
+        "sketch.expression": op_expression,
     }

@@ -86,6 +86,70 @@ def register(state):
         Gui.SendMsgToActiveView("ViewFit")
         return {"fit": True}
 
+    # ---- appearance: the official ViewObject surface --------------------- #
+    def op_appearance(a):
+        """Read/write an object's visual state (ViewObject): visibility, shape
+        color [r,g,b] 0-1, transparency 0-100, line width, display mode."""
+        o = doc.getObject(a["object"])
+        if o is None:
+            raise ValueError("gui.appearance: no such object: %s" % a["object"])
+        vo = o.ViewObject
+        if "visible" in a:
+            vo.Visibility = bool(a["visible"])
+        if "color" in a:
+            c = a["color"]
+            vo.ShapeColor = (float(c[0]), float(c[1]), float(c[2]))
+        if "transparency" in a:
+            vo.Transparency = int(a["transparency"])
+        if "line_width" in a:
+            vo.LineWidth = float(a["line_width"])
+        if "display_mode" in a:
+            vo.DisplayMode = str(a["display_mode"])
+        out = {"object": o.Name, "visible": bool(vo.Visibility)}
+        try:
+            out["color"] = [_round(x) for x in vo.ShapeColor[:3]]
+            out["transparency"] = int(vo.Transparency)
+        except Exception:
+            pass
+        try:
+            out["display_mode"] = str(vo.DisplayMode)
+            out["display_modes"] = list(vo.listDisplayModes())
+        except Exception:
+            pass
+        return out
+
+    def op_camera(a):
+        """Read or set the live camera: position/orientation/focal distance;
+        orthographic|perspective; or zoom onto one object."""
+        av = _active_view()
+        if a.get("projection"):
+            av.setCameraType("Orthographic"
+                             if a["projection"].lower().startswith("ortho")
+                             else "Perspective")
+        if a.get("focus"):
+            o = doc.getObject(a["focus"])
+            if o is None:
+                raise ValueError("gui.camera: no such object: %s" % a["focus"])
+            Gui.Selection.clearSelection()
+            Gui.Selection.addSelection(o)
+            Gui.SendMsgToActiveView("ViewSelection")
+            Gui.Selection.clearSelection()
+        cam = av.getCameraNode()
+        if a.get("position"):
+            p = a["position"]
+            cam.position.setValue(float(p[0]), float(p[1]), float(p[2]))
+        if a.get("orientation"):
+            q = a["orientation"]
+            cam.orientation.setValue(float(q[0]), float(q[1]),
+                                     float(q[2]), float(q[3]))
+        if a.get("fit"):
+            Gui.SendMsgToActiveView("ViewFit")
+        pos = cam.position.getValue()
+        rot = cam.orientation.getValue().getValue()
+        return {"type": av.getCameraType(),
+                "position": [_round(pos[0]), _round(pos[1]), _round(pos[2])],
+                "orientation": [_round(x) for x in rot]}
+
     # ---- structured understanding of the whole document ----------------- #
     def _describe(o):
         d = {"name": o.Name, "label": o.Label, "type": getattr(o, "TypeId", "")}
@@ -273,6 +337,8 @@ def register(state):
         "gui.workbench": op_workbench,
         "gui.view": op_view,
         "gui.fit": op_fit,
+        "gui.appearance": op_appearance,
+        "gui.camera": op_camera,
         "gui.scene": op_scene,
         "gui.selection": op_selection,
         "gui.select": op_select,

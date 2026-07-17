@@ -222,6 +222,60 @@ def register(state):
             g.SetString(a["name"], str(v))
         return {"path": a["path"], "name": a["name"], "value": v}
 
+    def op_export(a):
+        """Export named objects to any supported format by extension:
+        STEP/IGES/BREP via Import, STL/OBJ/PLY via Mesh, else App export."""
+        import os as _os
+        path = a["path"]
+        names = a.get("objects") or ([a["object"]] if a.get("object") else None)
+        if names is None:
+            objs = [o for o in state.doc.Objects
+                    if getattr(o, "Shape", None) is not None]
+        else:
+            objs = []
+            for n in names:
+                o = state.doc.getObject(n)
+                if o is None:
+                    raise ValueError("doc.export: no such object: %s" % n)
+                objs.append(o)
+        if not objs:
+            raise ValueError("doc.export: nothing to export")
+        ext = path.rsplit(".", 1)[-1].lower()
+        if ext in ("step", "stp", "iges", "igs", "brep", "brp"):
+            import Import
+            Import.export(objs, path)
+        elif ext in ("stl", "obj", "ply", "ast", "off", "amf"):
+            import Mesh
+            Mesh.export(objs, path)
+        else:
+            App.ActiveDocument = state.doc
+            import importlib
+            mod = None
+            for cand in ("importDXF", "importSVG"):
+                if ext in ("dxf",) and cand == "importDXF":
+                    mod = importlib.import_module(cand)
+                elif ext in ("svg",) and cand == "importSVG":
+                    mod = importlib.import_module(cand)
+            if mod is None:
+                raise ValueError("doc.export: unsupported extension %r" % ext)
+            mod.export(objs, path)
+        return {"path": path, "objects": [o.Name for o in objs],
+                "bytes": _os.path.getsize(path) if _os.path.isfile(path) else 0}
+
+    def op_expressions(a):
+        """Document-wide expression census: every property bound to the
+        expression engine, across all objects."""
+        out = []
+        for o in state.doc.Objects:
+            try:
+                exprs = o.ExpressionEngine or []
+            except Exception:
+                continue
+            for pth, ex in exprs:
+                out.append({"object": o.Name, "label": o.Label,
+                            "property": str(pth), "expression": str(ex)})
+        return {"expressions": out, "count": len(out)}
+
     # ---- official quantity/unit engine ----------------------------------- #
     def op_units_parse(a):
         q = App.Units.Quantity(a["quantity"])
@@ -242,6 +296,8 @@ def register(state):
         "obj.copy": op_copy,
         "obj.expr": op_expr,
         "doc.import": op_import,
+        "doc.export": op_export,
+        "obj.expressions": op_expressions,
         "pref.list": op_pref_list,
         "pref.get": op_pref_get,
         "pref.set": op_pref_set,

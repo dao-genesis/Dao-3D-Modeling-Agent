@@ -189,3 +189,33 @@ def test_engine_has_doc_lifecycle_and_command_dispatch():
                encoding="utf-8").read()
     for op in ('"gui.commands"', '"gui.command"', '"gui.workbench"'):
         assert op in per, "dao_perceive missing %s" % op
+
+
+def test_wave6_appearance_camera_draw_export_expressions():
+    """Wave-6: appearance/camera on the live GUI surface, true TechDraw
+    dimensions + page export, generic doc.export, expression census, external
+    sketch geometry, and ss.create honoring its requested name."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    per = open(os.path.join(root, "freecad", "DAO", "dao_perceive.py"),
+               encoding="utf-8").read()
+    assert '"gui.appearance"' in per and '"gui.camera"' in per
+    adv = open(os.path.join(root, "cad_agent", "backends",
+                            "freecad_advanced.py"), encoding="utf-8").read()
+    assert '"draw.dimension"' in adv and '"draw.export"' in adv
+    # ss.create must honor its requested name instead of a cached singleton
+    assert "doc.getObject(name)" in adv
+    objmod = open(os.path.join(root, "cad_agent", "backends",
+                               "freecad_object.py"), encoding="utf-8").read()
+    assert '"doc.export"' in objmod and '"obj.expressions"' in objmod
+    sk = open(os.path.join(root, "cad_agent", "backends",
+                           "freecad_sketch.py"), encoding="utf-8").read()
+    assert '"sketch.external"' in sk and '"sketch.expression"' in sk
+    # the expression parse guidance for unit-token collisions must exist
+    assert "unit tokens" in sk
+    sys.path.insert(0, root)
+    from cad_agent import tool_catalog
+    for op in ("gui.appearance", "gui.camera", "draw.dimension",
+               "draw.export", "doc.export", "obj.expressions",
+               "sketch.external", "sketch.expression"):
+        spec = tool_catalog.spec_for(op)
+        assert spec, "no catalog spec for %s" % op
