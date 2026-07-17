@@ -389,10 +389,20 @@ def register(state):
         else:  # FreeCAD 0.21: PostProcessor.load(name) + buildPostList(job)
             from Path.Post.Command import buildPostList
             pp = Proc.PostProcessor.load(post)
+            # 0.21 上游缺陷: 脚本以 open.__module__ in ("__builtin__","io") 判定
+            # 是否定义 pythonopen, 而 py3.12 为 "_io" → NameError. 补上.
+            if getattr(pp, "script", None) is not None \
+                    and not hasattr(pp.script, "pythonopen"):
+                pp.script.pythonopen = open
+            tmpd = tempfile.mkdtemp(prefix="daocam_post_")
             parts = []
-            for _sub, postables in buildPostList(j):
-                out = pp.export(postables, "-", "--no-show-editor")
-                if isinstance(out, str):
+            for i, (_sub, postables) in enumerate(buildPostList(j)):
+                seg_path = os.path.join(tmpd, "seg%d.nc" % i)
+                out = pp.export(postables, seg_path, "--no-show-editor")
+                if os.path.exists(seg_path):
+                    with open(seg_path) as fh:
+                        parts.append(fh.read())
+                elif isinstance(out, str):
                     parts.append(out)
                 elif out:
                     parts.append("\n".join(seg[1] for seg in out))
