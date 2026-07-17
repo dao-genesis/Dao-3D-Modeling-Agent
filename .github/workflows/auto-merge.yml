@@ -1,7 +1,8 @@
 name: Auto-merge clean PRs
 
 # 道法自然 · 无为而无不为：无冲突的 PR 自动合并，有冲突的留待人工解决。
-# 触发：PR 开启/更新/重开/转就绪 时自动判定；定时扫描兜底（每 6 小时），
+# 触发：PR 开启/更新/重开/转就绪 时自动判定；CI 工作流跑完即再扫（workflow_run，
+# 消除「PR 事件时检查未完 → 只能等定时兜底」的合并延迟）；定时扫描兜底（每 6 小时），
 # 确保滞留的可合并 PR 不依赖任何人工触发；亦可手动 workflow_dispatch。
 # 若配置了 DAO_PAT 密钥，则用它合并（可合入改动 .github/workflows/ 的 PR，
 # 如 dependabot 的 action 升级）；否则回退到 GITHUB_TOKEN。
@@ -9,6 +10,9 @@ name: Auto-merge clean PRs
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review]
+  workflow_run:
+    workflows: ["closed-loop-ci", "dao-ci", "DAO PR Flow"]
+    types: [completed]
   schedule:
     - cron: '23 */6 * * *'
   workflow_dispatch:
@@ -27,6 +31,7 @@ jobs:
     if: >
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'schedule' ||
+      github.event_name == 'workflow_run' ||
       (github.event.pull_request.draft == false &&
        github.event.pull_request.head.repo.full_name == github.repository)
     steps:
