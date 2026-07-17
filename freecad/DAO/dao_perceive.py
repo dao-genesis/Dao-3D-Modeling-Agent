@@ -166,6 +166,29 @@ def register(state):
                         "picked": picked})
         return {"selected": out, "count": len(out)}
 
+    def op_select(a):
+        """Drive the official selection: add objects (with optional
+        sub-element names like Face3/Edge1) or clear when nothing given."""
+        if not a.get("objects") and not a.get("object"):
+            Gui.Selection.clearSelection()
+            return {"selected": [], "count": 0}
+        if a.get("clear", True):
+            Gui.Selection.clearSelection()
+        items = a.get("objects") or [{"object": a["object"],
+                                      "subs": a.get("subs") or []}]
+        for it in items:
+            name = it["object"] if isinstance(it, dict) else it
+            subs = (it.get("subs") or []) if isinstance(it, dict) else []
+            o = doc.getObject(name)
+            if o is None:
+                raise ValueError("gui.select: no such object: %s" % name)
+            if subs:
+                for s in subs:
+                    Gui.Selection.addSelection(o, s)
+            else:
+                Gui.Selection.addSelection(o)
+        return op_selection({})
+
     def op_status(a):
         """One cheap call -> the live IDE heartbeat: document, counts,
         selection, active workbench, undo depth. No tessellation, no render;
@@ -252,6 +275,7 @@ def register(state):
         "gui.fit": op_fit,
         "gui.scene": op_scene,
         "gui.selection": op_selection,
+        "gui.select": op_select,
         "gui.status": op_status,
         "gui.errors": op_errors,
     }

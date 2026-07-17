@@ -94,7 +94,7 @@ def _build_handlers(state):
                     "freecad_fem", "freecad_path", "freecad_surface",
                     "freecad_arch", "freecad_bop", "freecad_code",
                     "freecad_reflect", "freecad_verify", "freecad_wire",
-                    "freecad_object"):
+                    "freecad_object", "freecad_sketch"):
         try:
             mod = importlib.import_module(modname)
             handlers.update(mod.register(state))

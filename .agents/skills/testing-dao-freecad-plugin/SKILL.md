@@ -21,7 +21,12 @@ description: Test the vscode-dao-freecad plugin (归一工作台/整窗归一) a
 - **0.21 基础安装无 AssemblyWorkbench/BIMWorkbench**（BIM 是外置插件，仅有 ArchWorkbench），装配/BIM 标签预期报「No such workbench」；切 CAM(Path) 首次会弹官方单位制 Warning 模态框，需点 Ok，模态期间 /exec 阻塞。
 - **外壳测试更宜用 Chrome 直开 `http://127.0.0.1:9920/shell`**（与 IDE 面板同源同 UI），录屏更清晰；`/api/status`、`GET :18920/status` 的 active_workbench 可做切换佐证。
 
-## 统一协议 /tool 直调（PR #29 起 245 op）
+## MCP 桥代理模式（wave-5 起）
+- `python3 -m cad_agent.mcp_server` 优先探测活桥(:18920, `DAO_BRIDGE_URL` 可改)成功则代理 /toolspec+/tool——MCP 客户端与 GUI 同文档；桥离线才回落 freecadcmd 内核。
+- MCP 工具名点号已净化为下划线(`solid.box`→`solid_box`)，两种拼法调用都收。
+- `verify.audit` 无 OCP 时自动降级 freecad-native 三层审(有效性/水密/体积窗)，返回 `engine:"freecad-native"`。
+
+## 统一协议 /tool 直调（PR #29 起 245 op, wave-5 后 266 op）
 - 单工具直调走 `POST :18920/tool`，body 必须是 `{"op":"solid.box","args":{...}}`（字段名是 `op` 不是 `tool`，参数名以 `/toolspec` 为准，如 box 用 length/width/height 而非 dx/dy/dz）。
 - 变更类 op 已包官方事务：`doc.undo`/`doc.redo` 一步对应一次工具调用，可视化验证撤销/重做（视口对象消失/恢复）。
 - `gui.workbench {name}` 切工作台、`gui.commands/gui.command {name}` 枚举/调度官方命令（如 Std_New）、`reflect.call/get/free`（free 需 `ref` 或 `all:true`）触达任意官方 API。

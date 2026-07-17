@@ -441,6 +441,12 @@ function fetchToolspec() {
 
 function fcCatalogBlock(spec) {
   const lines = [];
+  if (Array.isArray(spec.core) && spec.core.length) {
+    lines.push("## 核心七元组(先掌握这七组, 即可触达一切; 其余为其便捷层)");
+    for (const c of spec.core)
+      lines.push("- **" + c.meta + "** (" + c.count + " op) — " + (c.why || ""));
+    lines.push("");
+  }
   for (const g of spec.groups || []) {
     lines.push("## " + (g.title || g.group) + " (" + g.group + ".*) — " + (g.desc || ""));
     for (const t of g.tools || []) {

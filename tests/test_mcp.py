@@ -20,9 +20,21 @@ def test_initialize():
 def test_tools_list():
     r = _srv().handle({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
     names = [t["name"] for t in r["result"]["tools"]]
-    assert "solid.box" in names
+    # MCP clients require [a-zA-Z0-9_-] tool names: dots are published as "_".
+    assert "solid_box" in names
+    assert not any("." in n for n in names)
     for t in r["result"]["tools"]:
         assert t["inputSchema"]["type"] == "object"
+
+
+def test_tools_call_accepts_sanitized_name():
+    s = _srv()
+    s.handle({"jsonrpc": "2.0", "id": 20, "method": "tools/list"})
+    r = s.handle({"jsonrpc": "2.0", "id": 21, "method": "tools/call",
+                  "params": {"name": "solid_box",
+                             "arguments": {"name": "b2", "length": 3,
+                                           "width": 1, "height": 1}}})
+    assert r["result"]["isError"] is False
 
 
 def test_tools_call_success():
