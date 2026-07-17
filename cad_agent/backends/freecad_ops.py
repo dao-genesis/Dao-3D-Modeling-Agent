@@ -240,6 +240,8 @@ def register(state):
         return _metrics(s)
 
     def op_shell(a):
+        if "name" not in a and "object" in a:
+            a = dict(a); a["name"] = a["object"]
         if "name" not in a or "thickness" not in a:
             raise ValueError("shell needs 'name' and 'thickness'")
         obj = _get(a["name"])
@@ -313,6 +315,13 @@ def register(state):
 
     # ---- transforms ------------------------------------------------------- #
     def op_translate(a):
+        # Accept the catalog-contract spellings alongside the bare form:
+        # translate{object,dx,dy,dz} == translate{name,vector}.
+        a = dict(a)
+        if "name" not in a and "object" in a:
+            a["name"] = a["object"]
+        if "vector" not in a and any(k in a for k in ("dx", "dy", "dz")):
+            a["vector"] = [a.get("dx", 0), a.get("dy", 0), a.get("dz", 0)]
         if "vector" not in a:
             raise ValueError("translate needs 'vector' ([dx, dy, dz])")
         obj = _get(a["name"])
@@ -322,6 +331,8 @@ def register(state):
         return _metrics(s)
 
     def op_rotate(a):
+        if "name" not in a and "object" in a:
+            a = dict(a); a["name"] = a["object"]
         obj = _get(a["name"])
         axis = _vec(a.get("axis", (0, 0, 1)), label="axis")
         # a zero rotation axis leaks a bare OCCError gp_Dir() zero norm.
@@ -468,6 +479,8 @@ def register(state):
         return picked
 
     def op_fillet(a):
+        if "name" not in a and "object" in a:
+            a = dict(a); a["name"] = a["object"]
         if "name" not in a or "radius" not in a:
             raise ValueError("fillet needs 'name' (solid) and 'radius'")
         obj = _get(a["name"])
@@ -487,6 +500,8 @@ def register(state):
         return _metrics(s)
 
     def op_chamfer(a):
+        if "name" not in a and "object" in a:
+            a = dict(a); a["name"] = a["object"]
         if "name" not in a or "size" not in a:
             raise ValueError("chamfer needs 'name' (solid) and 'size'")
         obj = _get(a["name"])

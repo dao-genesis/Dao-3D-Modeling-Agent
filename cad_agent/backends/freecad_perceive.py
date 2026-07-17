@@ -17,6 +17,9 @@ def _plt():
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    # importing art3d alone does not register the '3d' projection class;
+    # Axes3D must be imported or add_subplot(projection='3d') fails.
+    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
     from mpl_toolkits.mplot3d.art3d import Poly3DCollection
     return plt, Poly3DCollection
 
