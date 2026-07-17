@@ -1043,10 +1043,13 @@ def _handle_toolspec():
     """GET /toolspec — Devin-Desktop 式工具目录: 每个 op 的描述 + 参数契约 + 分组."""
     def _fn():
         eng = _get_engine()
-        repo = str(_dao_root())
-        if repo not in sys.path:
-            sys.path.insert(0, repo)
-        from cad_agent import tool_catalog
+        # Load by file path: another cad_agent package (80-智体_Agent) may
+        # already occupy sys.modules and it has no tool_catalog.
+        import importlib.util
+        path = os.path.join(str(_dao_root()), "cad_agent", "tool_catalog.py")
+        spec = importlib.util.spec_from_file_location("_dao_tool_catalog", path)
+        tool_catalog = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(tool_catalog)
         cat = tool_catalog.build_catalog(eng.ops())
         cat["ok"] = True
         return cat
@@ -1065,7 +1068,7 @@ def _handle_tool(body):
     # document lifecycle and the undo/redo ops themselves stay outside it.
     _no_txn = ("gui.", "doc.", "reflect.roots", "reflect.methods",
                "reflect.help", "reflect.get", "reflect.free", "verify.",
-               "measure.", "view.")
+               "measure.", "view.", "pref.", "units.", "obj.list", "obj.get")
 
     def _fn():
         eng = _get_engine()

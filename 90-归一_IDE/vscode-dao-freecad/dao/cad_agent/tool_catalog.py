@@ -54,6 +54,16 @@ CATEGORIES: Dict[str, Dict[str, str]] = {
            "desc": "电子表格驱动参数：建表/绑定/取值，一处改处处变。"},
     "view": {"title": "渲染视图 View",
              "desc": "触发场景刷新/离屏渲染/多视角。"},
+    "obj": {"title": "对象协议 Object",
+            "desc": "任意文档对象的官方属性系统：列举/读/写属性、按类型建对象、删除/复制、表达式引擎绑定 — 属性编辑器的全部能力。"},
+    "pref": {"title": "偏好参数 Preference",
+             "desc": "App.ParamGet 偏好树读写 — 单位制、网格精度等一切官方设置。"},
+    "units": {"title": "单位量纲 Units",
+              "desc": "官方量纲引擎：解析 '5 mm'/'3 in' 并跨单位换算。"},
+    "reflect": {"title": "万能反射 Reflect",
+                "desc": "整个 FreeCAD Python 面一个闸门：call/get/set 任意 API，$ref 句柄可链式调用 — 精选工具不够时的兜底。"},
+    "wire": {"title": "线框 Wire 2D",
+             "desc": "免草图 2D 轮廓：点造线、偏置、圆角、求交、镜像、法线。"},
 }
 
 # --------------------------------------------------------------------------- #
@@ -261,6 +271,32 @@ _CURATED: Dict[str, Dict[str, Any]] = {
                                        "specs": {"type": "object"},
                                        "intent": {"type": "object"},
                                        "process": _STR}, ["object"])},
+    # ── obj.* 对象协议 ──────────────────────────────────────────────
+    "obj.list": {"desc": "列举文档全部对象(名/标签/类型/可见性)，可按 type 前缀或 query 过滤。",
+                 "params": _schema({"type": _STR, "query": _STR})},
+    "obj.get": {"desc": "读某对象的官方属性全表(值+类型+组+枚举域)，props 可选定子集。",
+                "params": _schema({"name": _STR, "props": {"type": "array", "items": _STR}}, ["name"])},
+    "obj.set": {"desc": "像属性编辑器一样写任意属性。props 为 {属性:值}；[x,y,z] 自动成 Vector，{base,rotation} 成 Placement，{$obj:名} 成链接。",
+                "params": _schema({"name": _STR, "props": {"type": "object"}}, ["name", "props"])},
+    "obj.add": {"desc": "按官方类型串新建任意对象(Part::Box、Sketcher::SketchObject、App::Link…)，可同时置属性。",
+                "params": _schema({"type": _STR, "name": _STR, "props": {"type": "object"}}, ["type"])},
+    "obj.delete": {"desc": "删除对象(name 单个或 names 批量)。",
+                   "params": _schema({"name": _STR, "names": {"type": "array", "items": _STR}})},
+    "obj.copy": {"desc": "文档内复制对象，可带依赖与新标签。",
+                 "params": _schema({"name": _STR, "with_dependencies": _BOOL, "new_label": _STR}, ["name"])},
+    "obj.expr": {"desc": "表达式引擎：expression 给字符串则绑定该属性(如 'Spreadsheet.L*2')，给 null 则清除；不给则只读当前绑定。",
+                 "params": _schema({"name": _STR, "prop": _STR, "expression": {}}, ["name"])},
+    # ── pref.* 偏好参数 ─────────────────────────────────────────────
+    "pref.list": {"desc": "列出偏好树某组的子组与键值(path 如 'Preferences/Units')。",
+                  "params": _schema({"path": _STR}, ["path"])},
+    "pref.get": {"desc": "读偏好键。", "params": _schema({"path": _STR, "name": _STR}, ["path", "name"])},
+    "pref.set": {"desc": "写偏好键(按值类型自动选 Int/Float/Bool/String)。",
+                 "params": _schema({"path": _STR, "name": _STR, "value": {}}, ["path", "name", "value"])},
+    # ── units.* 单位量纲 ────────────────────────────────────────────
+    "units.parse": {"desc": "解析量纲串('5 mm'/'3 in'/'9.81 m/s^2')为值+单位。",
+                    "params": _schema({"quantity": _STR}, ["quantity"])},
+    "units.convert": {"desc": "跨单位换算：quantity 串换算到 to 单位。",
+                      "params": _schema({"quantity": _STR, "to": _STR}, ["quantity", "to"])},
 }
 
 
@@ -307,8 +343,35 @@ def build_catalog(ops: List[str]) -> Dict[str, Any]:
         g["tools"].append(spec_for(op))
         if op in _CURATED:
             curated += 1
-    return {"count": len(ops), "curated": curated,
+    return {"count": len(ops), "curated": curated, "core": core_protocol(ops),
             "groups": [groups[k] for k in sorted(groups)]}
+
+
+# --------------------------------------------------------------------------- #
+# 闻道日损 — 最少最精的元工具协议
+# --------------------------------------------------------------------------- #
+#: 七个元组即可触达 FreeCAD 的一切：其余 op 都是这七组之上的便捷层。
+CORE_PROTOCOL: Dict[str, str] = {
+    "obj": "对象即数据：任意对象的官方属性系统读写/建/删/表达式 — 属性编辑器的全部。",
+    "gui.command": "命令即操作：枚举并按名调度官方全部 GUI 命令 — 人能点的按钮 AI 都能按。",
+    "reflect": "API 即闸门：call/get/set 整个 FreeCAD Python 面，$ref 句柄链式调用。",
+    "code.run": "代码即建模：CadQuery/build123d 通用脚本直落文档。",
+    "doc": "文档即状态：生命周期/保存/开关/undo-redo/差异 — 一切可回溯。",
+    "percept": "感知即闭环：拓扑/特征/关系/剖面 — 每步操作后审视真实状态。",
+    "verify": "核审即交付：八层核审门，交付前必过。",
+}
+
+
+def core_protocol(ops: List[str]) -> List[Dict[str, Any]]:
+    """The reduction: the minimal meta-tool set that spans everything."""
+    out = []
+    for key, why in CORE_PROTOCOL.items():
+        members = [o for o in sorted(ops)
+                   if o == key or o.startswith(key + ".")
+                   or ("." in key and o.startswith(key))]
+        out.append({"meta": key, "why": why, "ops": members,
+                    "count": len(members)})
+    return out
 
 
 def prompt_block(ops: List[str], max_per_group: int | None = None) -> str:

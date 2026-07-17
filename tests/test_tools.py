@@ -115,7 +115,8 @@ def test_gui_engine_registers_kernel_module_surface():
                 "freecad_project", "freecad_resource", "freecad_fem",
                 "freecad_path", "freecad_surface", "freecad_arch",
                 "freecad_bop", "freecad_code",
-                "freecad_reflect", "freecad_verify", "freecad_wire"):
+                "freecad_reflect", "freecad_verify", "freecad_wire",
+                "freecad_object"):
         assert '"%s"' % mod in src, "dao_engine missing module %s" % mod
 
 
@@ -126,6 +127,26 @@ def test_bridge_tool_keyerror_is_guided():
     src = open(os.path.join(root, "10-反笙_FreeCAD", "_fc_remote_server.py"),
                encoding="utf-8").read()
     assert "missing required argument" in src
+
+
+def test_object_protocol_ops_registered():
+    """The generic object protocol (property system / expressions / prefs /
+    units) must be registered in the kernel backend and self-described in the
+    tool catalog."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(root, "cad_agent", "backends", "freecad_object.py"),
+               encoding="utf-8").read()
+    for op in ('"obj.list"', '"obj.get"', '"obj.set"', '"obj.add"',
+               '"obj.delete"', '"obj.copy"', '"obj.expr"',
+               '"pref.list"', '"pref.get"', '"pref.set"',
+               '"units.parse"', '"units.convert"'):
+        assert op in src, "freecad_object missing %s" % op
+    sys.path.insert(0, root)
+    from cad_agent import tool_catalog
+    for op in ("obj.set", "obj.expr", "pref.set", "units.convert"):
+        spec = tool_catalog.spec_for(op)
+        assert spec["parameters"]["properties"], "no schema for %s" % op
+    assert "obj" in tool_catalog.CATEGORIES
 
 
 def test_engine_has_doc_lifecycle_and_command_dispatch():

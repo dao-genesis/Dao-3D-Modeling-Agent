@@ -305,6 +305,11 @@ def _build_handlers(state):
     except Exception as exc:  # reflective universal dispatch is optional
         sys.stderr.write("reflect load failed: %r\n" % (exc,))
     try:
+        import freecad_object
+        handlers.update(freecad_object.register(state))
+    except Exception as exc:  # generic object protocol is optional
+        sys.stderr.write("object load failed: %r\n" % (exc,))
+    try:
         import freecad_arch
         handlers.update(freecad_arch.register(state))
     except Exception as exc:  # BIM/Arch is optional
