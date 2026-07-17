@@ -382,9 +382,21 @@ def register(state):
         if not state.cam.get("ops"):
             raise ValueError("no operations to post; add path.profile/path.pocket first")
         post = a.get("postprocessor") or state.cam.get("post", "grbl")
-        pp = Proc.PostProcessorFactory.get_post_processor(j, post)
-        out = pp.export()
-        txt = out if isinstance(out, str) else "\n".join(seg[1] for seg in out)
+        if hasattr(Proc, "PostProcessorFactory"):  # FreeCAD 1.x
+            pp = Proc.PostProcessorFactory.get_post_processor(j, post)
+            out = pp.export()
+            txt = out if isinstance(out, str) else "\n".join(seg[1] for seg in out)
+        else:  # FreeCAD 0.21: PostProcessor.load(name) + buildPostList(job)
+            from Path.Post.Command import buildPostList
+            pp = Proc.PostProcessor.load(post)
+            parts = []
+            for _sub, postables in buildPostList(j):
+                out = pp.export(postables, "-", "--no-show-editor")
+                if isinstance(out, str):
+                    parts.append(out)
+                elif out:
+                    parts.append("\n".join(seg[1] for seg in out))
+            txt = "\n".join(parts)
         path = a.get("path") or os.path.join(tempfile.mkdtemp(prefix="daocam_"), "out.nc")
         d = os.path.dirname(path)
         if d:
