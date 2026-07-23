@@ -1,9 +1,0 @@
-name: _rtest
-on:
-  push:
-    paths: ['.github/workflows/_rtest.yml']
-jobs:
-  t:
-    runs-on: [self-hosted, vps]
-    steps:
-      - run: echo "OK on $(hostname) uid=$(id -un)"
