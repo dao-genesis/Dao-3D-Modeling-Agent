@@ -20,7 +20,7 @@ jobs:
   sanity:
     name: 自检 (sanity)
     if: github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
@@ -39,7 +39,7 @@ jobs:
 
   triage:
     name: 自动打标 (auto-label)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - name: Label by size & area
         uses: actions/github-script@v9
@@ -69,7 +69,7 @@ jobs:
     name: 自动合并 (dao-auto)
     needs: [sanity]
     if: contains(github.event.pull_request.labels.*.name, 'dao-auto')
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - name: Enable auto-merge
         env:
