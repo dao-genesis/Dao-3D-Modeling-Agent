@@ -5,9 +5,13 @@ on:
     branches: ["**"]
   pull_request:
 
+concurrency:
+  group: closed-loop-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   closure:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     env:
       PYTHONUTF8: "1"
       PYTHONIOENCODING: "utf-8"
@@ -80,7 +84,7 @@ jobs:
   freecad-real:
     # 实机 FreeCAD 门: ubuntu-latest apt FreeCAD (1.x 系) 上跑核心建模/装配/反演回归,
     # 与 VM 的 FreeCAD 0.19 形成双版本覆盖。
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     env:
       PYTHONUTF8: "1"
       PYTHONIOENCODING: "utf-8"
